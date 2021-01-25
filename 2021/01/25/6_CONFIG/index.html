@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>Hexo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="CONFIG由于配置文件广泛应用在REDIS中，,因此这一节主要讲述下REDIS的配置文件。 配置文件中共有五种配置类型数据:bool、string、enum和numeric， BoolboolConfigData123456typedef struct boolConfigData &amp;#123;    int* config;					  			   &#x2F;&#x2F; 指向变量              c">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Hexo">
+<meta property="og:url" content="https://szza.github.io/2021/01/25/6_CONFIG/index.html">
+<meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="CONFIG由于配置文件广泛应用在REDIS中，,因此这一节主要讲述下REDIS的配置文件。 配置文件中共有五种配置类型数据:bool、string、enum和numeric， BoolboolConfigData123456typedef struct boolConfigData &amp;#123;    int* config;					  			   &#x2F;&#x2F; 指向变量              c">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-01-25T12:38:43.043Z">
+<meta property="article:modified_time" content="2021-01-24T13:01:00.845Z">
+<meta property="article:author" content="szza">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="Hexo" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="/favicon.png">
+  
+  
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/typeface-source-code-pro@0.0.71/index.min.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+<meta name="generator" content="Hexo 5.3.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">Hexo</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="https://szza.github.io"></form>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-6_CONFIG" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-meta">
+    <a href="/2021/01/25/6_CONFIG/" class="article-date">
+  <time class="dt-published" datetime="2021-01-25T12:38:43.043Z" itemprop="datePublished">2021-01-25</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h1 id="CONFIG"><a href="#CONFIG" class="headerlink" title="CONFIG"></a>CONFIG</h1><p>由于配置文件广泛应用在REDIS中，,因此这一节主要讲述下REDIS的配置文件。</p>
+<p>配置文件中共有五种配置类型数据:<code>bool</code>、<code>string</code>、<code>enum</code>和<code>numeric</code>，</p>
+<h3 id="Bool"><a href="#Bool" class="headerlink" title="Bool"></a>Bool</h3><h4 id="boolConfigData"><a href="#boolConfigData" class="headerlink" title="boolConfigData"></a>boolConfigData</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">boolConfigData</span> &#123;</span></span><br><span class="line">    <span class="keyword">int</span>* config;					  			   <span class="comment">// 指向变量          </span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">int</span> default_value; 		   				<span class="comment">// 该变量的默认值 </span></span><br><span class="line">    <span class="keyword">int</span> (*is_valid_fn)(<span class="keyword">int</span> val, <span class="keyword">char</span> **err);  		 <span class="comment">// 校验该变量是否有效的函数指针。返回1则有效，0则无效</span></span><br><span class="line">    <span class="keyword">int</span> (*update_fn)(<span class="keyword">int</span> val, <span class="keyword">int</span> prev, <span class="keyword">char</span> **err);  <span class="comment">// 更新该变量值的函数指针。返回1则有效，0则无效</span></span><br><span class="line">&#125; boolConfigData;</span><br></pre></td></tr></table></figure>
+<h4 id="typeData"><a href="#typeData" class="headerlink" title="typeData"></a>typeData</h4><p><code>typeData</code>是个联合体，表示某种数据类型</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">union</span> <span class="title">typeData</span> &#123;</span></span><br><span class="line">    boolConfigData      yesno;	<span class="comment">// bool类型的数据</span></span><br><span class="line">    stringConfigData    <span class="built_in">string</span>;        </span><br><span class="line">    enumConfigData      enumd;</span><br><span class="line">    numericConfigData   numeric;</span><br><span class="line">&#125; typeData;</span><br></pre></td></tr></table></figure>
+<h4 id="typeInterface"><a href="#typeInterface" class="headerlink" title="typeInterface"></a>typeInterface</h4><p>而 <code>typeInterface</code> 是操作<code>typeData</code>对象的接口，</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 操作类型的接口</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">typeInterface</span> &#123;</span></span><br><span class="line">    <span class="keyword">void</span> (*init)(typeData data);</span><br><span class="line">    <span class="keyword">int</span>  (*load)(typeData data, sds *argc, <span class="keyword">int</span> argv, <span class="keyword">char</span> **err);</span><br><span class="line">    <span class="keyword">int</span>  (*<span class="built_in">set</span>)(typeData data, sds value, <span class="keyword">int</span> update, <span class="keyword">char</span> **err);</span><br><span class="line">    <span class="keyword">void</span> (*get)(client *c, typeData data);</span><br><span class="line">    <span class="keyword">void</span> (*rewrite)(typeData data, <span class="keyword">const</span> <span class="keyword">char</span> *name, struct rewriteConfigState *state);</span><br><span class="line">&#125; typeInterface;</span><br></pre></td></tr></table></figure>
+<h5 id="boolConfigInit"><a href="#boolConfigInit" class="headerlink" title="boolConfigInit"></a>boolConfigInit</h5><p><code>boolConfigInit</code>函数，即 <code>typeInterface::init</code> 字段，用来初始化的BOOL类型数据实体的默认值 <code>data.yesno.default_value</code></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">boolConfigInit</span><span class="params">(typeData data)</span> </span>&#123;</span><br><span class="line">    *data.yesno.config = data.yesno.default_value;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h5 id="boolConfigSet"><a href="#boolConfigSet" class="headerlink" title="boolConfigSet"></a>boolConfigSet</h5><p><code>boolConfigSet</code>函数，即<code>typeInterface::set</code>字段的函数指针，用于将输入参数<code>value</code>赋值给<code>data.yesno.config</code>。如果发生错误，<code>data</code>中的值不变。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">///@brief 将 @c value 转为后赋值给 data中的数据实体</span></span><br><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">int</span> <span class="title">boolConfigSet</span><span class="params">(typeData data, sds value, <span class="keyword">int</span> update, <span class="keyword">char</span> **err)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">int</span> yn = yesnotoi(value);</span><br><span class="line">    <span class="keyword">if</span> (yn == <span class="number">-1</span>) &#123;</span><br><span class="line">        *err = <span class="string">&quot;argument must be &#x27;yes&#x27; or &#x27;no&#x27;&quot;</span>;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (data.yesno.is_valid_fn &amp;&amp; !data.yesno.is_valid_fn(yn, err))</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span> prev = *(data.yesno.config);    <span class="comment">// 之前的值</span></span><br><span class="line">    *(data.yesno.config) = yn; </span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (update &amp;&amp; data.yesno.update_fn &amp;&amp; !data.yesno.update_fn(yn, prev, err)) &#123;</span><br><span class="line">        <span class="comment">// 如果发生错误则回复</span></span><br><span class="line">        *(data.yesno.config) = prev;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h5 id="boolConfigGet"><a href="#boolConfigGet" class="headerlink" title="boolConfigGet"></a>boolConfigGet</h5><p>将<code>data</code>的数据实体回复给客户端</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">boolConfigGet</span><span class="params">(client *c, typeData data)</span> </span>&#123;</span><br><span class="line">    addReplyBulkCString(c, *data.yesno.config ? <span class="string">&quot;yes&quot;</span> : <span class="string">&quot;no&quot;</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h5 id="boolConfigRewrite"><a href="#boolConfigRewrite" class="headerlink" title="boolConfigRewrite"></a>boolConfigRewrite</h5><p>重写配置文件</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">static</span> <span class="keyword">void</span> <span class="title">boolConfigRewrite</span><span class="params">(typeData data, <span class="keyword">const</span> <span class="keyword">char</span> *name, struct rewriteConfigState *state)</span> </span>&#123;</span><br><span class="line">    rewriteConfigYesNoOption(state, name,*(data.yesno.config), data.yesno.default_value);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="standardConfig"><a href="#standardConfig" class="headerlink" title="standardConfig"></a>standardConfig</h4><p><code>standardConfig</code>结构定义了一个完整的对象</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 配置数据</span></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">standardConfig</span> &#123;</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span>*   name;         <span class="comment">// 这个变量在配置文件中的名字</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">char</span>*   alias;        <span class="comment">// 别名</span></span><br><span class="line">    <span class="keyword">const</span> <span class="keyword">int</span>     modifiable;   <span class="comment">// 这个变量是否可修改</span></span><br><span class="line">    typeInterface interface;    <span class="comment">// 操作这个变量的接口</span></span><br><span class="line">    typeData      data;         <span class="comment">// 数据实体</span></span><br><span class="line">&#125; standardConfig;</span><br></pre></td></tr></table></figure>
+<p>REDIS定义了一个 <code>standardConfig</code>类型的数组，存储四种不同的变量的配置数据</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">standardConfig configs[];</span><br></pre></td></tr></table></figure>
+<h5 id="createBoolConfig"><a href="#createBoolConfig" class="headerlink" title="createBoolConfig"></a>createBoolConfig</h5><p>REDIS使用了一个宏定义<code>createBoolConfig</code> 来创建 <code>standardConfig</code>对象：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="meta-keyword">define</span> createBoolConfig(name, alias, modifiable, config_addr, default, is_valid, update) &#123; \</span></span><br><span class="line">    embedCommonConfig(name, alias, modifiable) \</span><br><span class="line">    embedConfigInterface(boolConfigInit, boolConfigSet, boolConfigGet, boolConfigRewrite) \</span><br><span class="line">    .data.yesno = &#123; \</span><br><span class="line">        .config        = &amp;(config_addr), \</span><br><span class="line">        .default_value = (<span class="keyword">default</span>), \</span><br><span class="line">        .is_valid_fn   = (is_valid), \</span><br><span class="line">        .update_fn     = (update), \</span><br><span class="line">    &#125; \</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>该宏定义展开如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//  createBoolConfig(name, alias, modifiable, config_addr, default, is_valid, update)</span></span><br><span class="line"><span class="comment">//  等价于 </span></span><br><span class="line"> &#123;</span><br><span class="line">   .name       = (config_name),  </span><br><span class="line">   .alias      = (config_alias), </span><br><span class="line">   .modifiable = (is_modifiable),</span><br><span class="line">   .interface  = &#123; </span><br><span class="line">                   .init       = (initfn),    </span><br><span class="line">                   .<span class="built_in">set</span>        = (setfn),     </span><br><span class="line">                   .get        = (getfn),     </span><br><span class="line">                   .rewrite    = (rewritefn)  </span><br><span class="line">                 &#125;</span><br><span class="line">  .data.yesno = &#123; </span><br><span class="line">                   .config        = &amp;(config_addr), </span><br><span class="line">                   .default_value = (<span class="keyword">default</span>), </span><br><span class="line">                   .is_valid_fn   = (is_valid), </span><br><span class="line">                   .update_fn     = (update), </span><br><span class="line">               &#125; </span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<p>因此，通过宏定义 <code>createBoolConfig</code> 即使创建BOOL类型的对象、给予初始默认值以及校验函数和更新函数。</p>
+<h4 id="config-set-bool-field"><a href="#config-set-bool-field" class="headerlink" title="config_set_bool_field"></a>config_set_bool_field</h4><p><code>config_set_bool_field</code>宏，将名为<code>_name</code>的变量值修改为<code>_var</code></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// @brief 将 @c _name 对应的值赋给 @c _var </span></span><br><span class="line"><span class="comment">// CONFIG SET NAME VALUE</span></span><br><span class="line"><span class="meta">#<span class="meta-keyword">define</span> config_set_bool_field(_name,_var)            \</span></span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!strcasecmp(c-&gt;argv[<span class="number">2</span>]-&gt;ptr,_name)) &#123; \</span><br><span class="line">        <span class="keyword">int</span> yn = yesnotoi(o-&gt;ptr);                   \</span><br><span class="line">        <span class="keyword">if</span> (yn == <span class="number">-1</span>) <span class="keyword">goto</span> badfmt;                   \</span><br><span class="line">        _var = yn;</span><br></pre></td></tr></table></figure>
+<p>配置其余类型的变量类似，不再赘叙</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="https://szza.github.io/2021/01/25/6_CONFIG/" data-id="ckkck4ncd0002akds9n8qdjxr" data-title="" class="article-share-link">Share</a>
+      
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2021/01/25/README/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          (no title)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2021/01/25/0_Redis%E4%B8%8Egdb/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title"></div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/01/">January 2021</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2021/01/25/README/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/6_CONFIG/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/0_Redis%E4%B8%8Egdb/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/1_EventLoop/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/3_InutBuffer/">(no title)</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      
+      &copy; 2021 szza<br>
+      Powered by <a href="https://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+
+  </div>
+</body>
+</html>

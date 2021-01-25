@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  
+  <title>Hexo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="GDB &amp; REdis顺着bt去阅读 开启侦听过程 socket bind listen     在源码中找到这个函数的位置，加上断点。比如找到 listen的所在的函數位置， 12(gdb) break anetListen  Breakpoint 1 at 0x8040457: file anet.c, line 455. 然後重啓： 1(gdb) run  就会进入该断点位置： 12">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Hexo">
+<meta property="og:url" content="https://szza.github.io/2021/01/25/0_Redis%E4%B8%8Egdb/index.html">
+<meta property="og:site_name" content="Hexo">
+<meta property="og:description" content="GDB &amp; REdis顺着bt去阅读 开启侦听过程 socket bind listen     在源码中找到这个函数的位置，加上断点。比如找到 listen的所在的函數位置， 12(gdb) break anetListen  Breakpoint 1 at 0x8040457: file anet.c, line 455. 然後重啓： 1(gdb) run  就会进入该断点位置： 12">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-01-25T12:38:43.027Z">
+<meta property="article:modified_time" content="2021-01-14T08:53:24.658Z">
+<meta property="article:author" content="szza">
+<meta name="twitter:card" content="summary">
+  
+    <link rel="alternate" href="/atom.xml" title="Hexo" type="application/atom+xml">
+  
+  
+    <link rel="shortcut icon" href="/favicon.png">
+  
+  
+    
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/typeface-source-code-pro@0.0.71/index.min.css">
+
+  
+  
+<link rel="stylesheet" href="/css/style.css">
+
+  
+    
+<link rel="stylesheet" href="/fancybox/jquery.fancybox.min.css">
+
+  
+<meta name="generator" content="Hexo 5.3.0"></head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">Hexo</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="https://szza.github.io"></form>
+      </div>
+    </div>
+  </div>
+</header>
+
+      <div class="outer">
+        <section id="main"><article id="post-0_Redis与gdb" class="h-entry article article-type-post" itemprop="blogPost" itemscope itemtype="https://schema.org/BlogPosting">
+  <div class="article-meta">
+    <a href="/2021/01/25/0_Redis%E4%B8%8Egdb/" class="article-date">
+  <time class="dt-published" datetime="2021-01-25T12:38:43.027Z" itemprop="datePublished">2021-01-25</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+    <div class="e-content article-entry" itemprop="articleBody">
+      
+        <h1 id="GDB-amp-REdis"><a href="#GDB-amp-REdis" class="headerlink" title="GDB &amp; REdis"></a>GDB &amp; REdis</h1><p>顺着bt去阅读</p>
+<h3 id="开启侦听过程"><a href="#开启侦听过程" class="headerlink" title="开启侦听过程"></a>开启侦听过程</h3><ul>
+<li>socket</li>
+<li>bind</li>
+<li>listen   </li>
+</ul>
+<p>在源码中找到这个函数的位置，加上断点。比如找到 <code>listen</code>的所在的函數位置，</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">(gdb) <span class="keyword">break</span> anetListen</span><br><span class="line">  Breakpoint <span class="number">1</span> at <span class="number">0x8040457</span>: file anet.c, line <span class="number">455.</span></span><br></pre></td></tr></table></figure>
+<p>然後重啓：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">(gdb) run </span><br></pre></td></tr></table></figure>
+<p>就会进入该断点位置：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Breakpoint <span class="number">1</span>, anetListen (err=<span class="number">0x8809e68</span> &lt;server+<span class="number">680</span>&gt; <span class="string">&quot;&quot;</span>, s=<span class="number">6</span>, sa=<span class="number">0x8c1e980</span>, len=<span class="number">28</span>, backlog=<span class="number">511</span>)</span><br><span class="line">at anet.c:<span class="number">455</span></span><br><span class="line"><span class="number">455</span>         <span class="keyword">if</span> (bind(s,sa,len) == <span class="number">-1</span>) &#123;</span><br><span class="line">(gdb) </span><br></pre></td></tr></table></figure>
+<p>bind绑定了本地的任何一个可用的地址。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (p = servinfo; p != <span class="literal">NULL</span>; p = p-&gt;ai_next) &#123;</span><br><span class="line">    <span class="keyword">if</span> ((s = socket(p-&gt;ai_family,p-&gt;ai_socktype,p-&gt;ai_protocol)) == <span class="number">-1</span>)</span><br><span class="line">        <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (af == AF_INET6 &amp;&amp; anetV6Only(err,s) == ANET_ERR) <span class="keyword">goto</span> error;</span><br><span class="line">    <span class="keyword">if</span> (anetSetReuseAddr(err,s) == ANET_ERR) <span class="keyword">goto</span> error;</span><br><span class="line">    <span class="keyword">if</span> (anetListen(err,s,p-&gt;ai_addr,p-&gt;ai_addrlen,backlog) == ANET_ERR) s = ANET_ERR;</span><br><span class="line">    <span class="keyword">goto</span> end; <span class="comment">//有一个可用的就退出</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>值得学习。</p>
+<h4 id="epollFd-的创建"><a href="#epollFd-的创建" class="headerlink" title="epollFd 的创建"></a>epollFd 的创建</h4><p>搜索 epoll_create</p>
+<p>加上断点，重启就到了断点处，</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">#<span class="number">0</span>  aeApiCreate (eventLoop=<span class="number">0x7ffffe20b480</span>) at ae_epoll.c:<span class="number">40</span></span><br><span class="line">#<span class="number">1</span>  <span class="number">0x000000000803e3b7</span> <span class="function">in <span class="title">aeCreateEventLoop</span> <span class="params">(setsize=<span class="number">10128</span>)</span> at ae.c:80</span></span><br><span class="line">#2  0x00000000080474ec in initServer () at server.c:2780</span><br><span class="line">#<span class="number">3</span>  <span class="number">0x000000000804da49</span> <span class="function">in <span class="title">main</span> <span class="params">(argc=<span class="number">1</span>, argv=<span class="number">0x7ffffffedf68</span>)</span> at server.c:5126</span></span><br></pre></td></tr></table></figure>
+<h4 id="把listenfd-挂在到-epollfd-上"><a href="#把listenfd-挂在到-epollfd-上" class="headerlink" title="把listenfd 挂在到 epollfd 上"></a>把listenfd 挂在到 epollfd 上</h4><p>搜索 <code>epoll_ctl</code>，定位到 <code>aeApiAddEvent</code>，加上断点</p>
+<p>在 <code>anetListen</code>的输入参数中 <code>s</code> 就是 <code>epollfd</code>。</p>
+<p>运行到<code>aeApiAddEvent</code>，查看<code>bt</code></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">(gdb) bt</span><br><span class="line">#0  aeApiAddEvent (eventLoop&#x3D;0x7ffffe20b480, fd&#x3D;6, mask&#x3D;1) at ae_epoll.c:73</span><br><span class="line">#1  0x000000000803e66f in aeCreateFileEvent (eventLoop&#x3D;0x7ffffe20b480, fd&#x3D;6, mask&#x3D;1, proc&#x3D;0x8059dce &lt;acceptTcpHandler&gt;, clientData&#x3D;0x0)</span><br><span class="line">    at ae.c:162</span><br><span class="line">#2  0x0000000008047b1e in initServer () at server.c:2885</span><br><span class="line">#3  0x000000000804da49 in main (argc&#x3D;1, argv&#x3D;0x7ffffffedf68) at server.c:5126</span><br></pre></td></tr></table></figure>
+
+<p>完成上述准备工作就进入epoll开始主循环。</p>
+<p>listenfd 关注可读事件，接受新的连接，产生 clientfd –&gt; 搜索accept–&gt;位置：anetGenericAccept(…)，加上断点</p>
+<p>删除之前的断点，加上新的这个断点</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">delete</span> </span><br><span class="line"><span class="keyword">break</span> anetGenericAccept</span><br></pre></td></tr></table></figure>
+<p>启动一个客户端，此时就会触发刚才设置的断点</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Thread <span class="number">1</span> <span class="string">&quot;redis-server&quot;</span> hit Breakpoint <span class="number">5</span>, anetGenericAccept (err=<span class="number">0x8809e68</span> &lt;server+<span class="number">680</span>&gt; <span class="string">&quot;&quot;</span>, s=<span class="number">7</span>, sa=<span class="number">0x7ffffffedc40</span>, len=<span class="number">0x7ffffffedc28</span>)</span><br><span class="line">at anet.c:<span class="number">548</span></span><br><span class="line"><span class="number">548</span>             fd = accept(s,sa,len);</span><br></pre></td></tr></table></figure>
+<p>查看此时的bt</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">(gdb) bt</span><br><span class="line">#<span class="number">0</span>  anetGenericAccept (err=<span class="number">0x8809e68</span> &lt;server+<span class="number">680</span>&gt; <span class="string">&quot;&quot;</span>, s=<span class="number">7</span>, sa=<span class="number">0x7ffffffedc40</span>, len=<span class="number">0x7ffffffedc28</span>) at anet.c:<span class="number">548</span></span><br><span class="line">#<span class="number">1</span>  <span class="number">0x00000000080409e4</span> <span class="function">in <span class="title">anetTcpAccept</span> <span class="params">(err=<span class="number">0x8809e68</span> &lt;server+<span class="number">680</span>&gt; <span class="string">&quot;&quot;</span>, s=<span class="number">7</span>, ip=<span class="number">0x7ffffffedd10</span> <span class="string">&quot;`\337\376\377\377\177&quot;</span>, ip_len=<span class="number">46</span>, port=<span class="number">0x7ffffffedd04</span>)</span> at anet.c:566</span></span><br><span class="line">#2  0x0000000008059e20 in acceptTcpHandler (el=0x7ffffe20b480, fd=7, privdata=0x0, mask=1) at networking.c:955</span><br><span class="line">#<span class="number">3</span>  <span class="number">0x000000000803f08f</span> <span class="function">in <span class="title">aeProcessEvents</span> <span class="params">(eventLoop=<span class="number">0x7ffffe20b480</span>, flags=<span class="number">27</span>)</span> at ae.c:479</span></span><br><span class="line">#4  0x000000000803f2bd in aeMain (eventLoop=0x7ffffe20b480) at ae.c:539</span><br><span class="line">#<span class="number">5</span>  <span class="number">0x000000000804dbea</span> <span class="function">in <span class="title">main</span> <span class="params">(argc=<span class="number">1</span>, argv=<span class="number">0x7ffffffedf68</span>)</span> at server.c:5173</span></span><br></pre></td></tr></table></figure>
+<p>可以查看之前对于接受clientfd 时候的回调：</p>
+<figure class="highlight"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">(gdb) f <span class="number">3</span></span><br><span class="line">#<span class="number">3</span>  <span class="number">0x000000000803f08f</span> <span class="function">in <span class="title">aeProcessEvents</span> <span class="params">(eventLoop=<span class="number">0x7ffffe20b480</span>, flags=<span class="number">27</span>)</span> at ae.c:479</span></span><br><span class="line"><span class="function">warning: Source file is more recent than executable.</span></span><br><span class="line">479                     fe-&gt;rfileProc(eventLoop,fd,fe-&gt;clientData,mask);</span><br></pre></td></tr></table></figure>
+<p>这个 <code>fe-&gt;rfileProc</code> 回调调的是  <code>acceptTcpHandler</code></p>
+<p>那么，什么时候设置的这个回调函数呢？经过搜索发现在 <code>initServer</code> 中</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (j = <span class="number">0</span>; j &lt; server.tlsfd_count; j++) &#123;</span><br><span class="line"><span class="keyword">if</span> (aeCreateFileEvent(server.el, server.tlsfd[j], AE_READABLE, acceptTLSHandler,<span class="literal">NULL</span>) == AE_ERR)</span><br><span class="line">    &#123;</span><br><span class="line">        serverPanic(</span><br><span class="line">            <span class="string">&quot;Unrecoverable error creating server.tlsfd file event.&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这个指针的赋值<code>rfileProc</code></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">aeCreateFileEvent</span><span class="params">(aeEventLoop *eventLoop, <span class="keyword">int</span> fd, <span class="keyword">int</span> mask, aeFileProc *proc, <span class="keyword">void</span> *clientData)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (fd &gt;= eventLoop-&gt;setsize) &#123;</span><br><span class="line">        errno = ERANGE;</span><br><span class="line">        <span class="keyword">return</span> AE_ERR;</span><br><span class="line">    &#125;</span><br><span class="line">    aeFileEvent *fe = &amp;eventLoop-&gt;events[fd];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (aeApiAddEvent(eventLoop, fd, mask) == <span class="number">-1</span>)</span><br><span class="line">        <span class="keyword">return</span> AE_ERR;</span><br><span class="line">    fe-&gt;mask |= mask;</span><br><span class="line">    <span class="keyword">if</span> (mask &amp; AE_READABLE) fe-&gt;rfileProc = proc;</span><br><span class="line">    <span class="keyword">if</span> (mask &amp; AE_WRITABLE) fe-&gt;wfileProc = proc;</span><br><span class="line">    fe-&gt;clientData = clientData;</span><br><span class="line">    <span class="keyword">if</span> (fd &gt; eventLoop-&gt;maxfd)</span><br><span class="line">        eventLoop-&gt;maxfd = fd;</span><br><span class="line">    <span class="keyword">return</span> AE_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>查看怎么运行到一个函数，就在这个函数处加上断点，触发这个断点后 <code>bt</code>，查看信息即可。</p>
+<p>因此，listenfd 的处理函数就是 <code>acceptTcpHandler</code></p>
+<h3 id="将clientFd-挂到-epllfd"><a href="#将clientFd-挂到-epllfd" class="headerlink" title="将clientFd 挂到 epllfd"></a>将clientFd 挂到 epllfd</h3><p>因为redis是单线程，因此需要把他也挂在 listenfd 所在的 epollfd 上，而在redis中，所有的函数都是在 <code>aeApiAddEvent</code> 中完成的</p>
+<p><code>acceptCommonHandler(connCreateAcceptedSocket(cfd),0,cip);</code>函数在 </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">connection *<span class="title">connCreateAcceptedSocket</span><span class="params">(<span class="keyword">int</span> fd)</span> </span>&#123;</span><br><span class="line">    connection *conn = connCreateSocket();</span><br><span class="line">    conn-&gt;fd = fd;</span><br><span class="line">    conn-&gt;state = CONN_STATE_ACCEPTING;</span><br><span class="line">    <span class="keyword">return</span> conn;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>创建一个 <code>conn</code> 对象，设置 <code>clintfd</code></p>
+<h3 id="redis-通信协议"><a href="#redis-通信协议" class="headerlink" title="redis 通信协议"></a>redis 通信协议</h3><p><code>clientfd</code>的读取与发送数据： </p>
+<p><code>clientfd</code> 的读取回调函数 <code>readQueryFromClient</code> 中处理协议</p>
+<ul>
+<li>先分配接受缓冲区</li>
+<li><code>connRead</code> –&gt; <code>read</code></li>
+</ul>
+<p>解包过程，放在while循环里</p>
+<p>redis 多线程处理</p>
+<p>一个请求到来时候的惊群问题</p>
+<p>当 io 繁忙的时候定时器不一定精确了，需要更新。redis对于耗时的任务开了个新的线程去执行</p>
+<p>获取系统时间是系统调用，耗时<br>根据定时器的时间来确定 epoll_wait 的阻塞时间，使其不必阻塞太久</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="https://szza.github.io/2021/01/25/0_Redis%E4%B8%8Egdb/" data-id="ckkck4ncd0000akdsg8fc4xjv" data-title="" class="article-share-link">Share</a>
+      
+      
+      
+    </footer>
+  </div>
+  
+    
+<nav id="article-nav">
+  
+    <a href="/2021/01/25/6_CONFIG/" id="article-nav-newer" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Newer</strong>
+      <div class="article-nav-title">
+        
+          (no title)
+        
+      </div>
+    </a>
+  
+  
+    <a href="/2021/01/25/1_EventLoop/" id="article-nav-older" class="article-nav-link-wrap">
+      <strong class="article-nav-caption">Older</strong>
+      <div class="article-nav-title"></div>
+    </a>
+  
+</nav>
+
+  
+</article>
+
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2021/01/">January 2021</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2021/01/25/README/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/6_CONFIG/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/0_Redis%E4%B8%8Egdb/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/1_EventLoop/">(no title)</a>
+          </li>
+        
+          <li>
+            <a href="/2021/01/25/3_InutBuffer/">(no title)</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      
+      &copy; 2021 szza<br>
+      Powered by <a href="https://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+
+<script src="/js/jquery-3.4.1.min.js"></script>
+
+
+
+  
+<script src="/fancybox/jquery.fancybox.min.js"></script>
+
+
+
+
+<script src="/js/script.js"></script>
+
+
+
+
+
+  </div>
+</body>
+</html>
