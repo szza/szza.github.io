@@ -28,7 +28,7 @@
 <meta property="og:description" content="本节介绍对客户端的封装以及服务器处理客户端连接请求的过程。  客户端的封装 服务器处理客户端的连接请求">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-01-26T06:13:20.000Z">
-<meta property="article:modified_time" content="2021-01-26T06:22:40.021Z">
+<meta property="article:modified_time" content="2021-01-26T06:44:44.231Z">
 <meta property="article:author" content="szza">
 <meta property="article:tag" content="Redis">
 <meta name="twitter:card" content="summary">
@@ -125,7 +125,7 @@
   </li>
         <li class="menu-item menu-item-categories">
 
-    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">2</span></a>
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">1</span></a>
 
   </li>
   </ul>
@@ -180,7 +180,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2021-01-26 14:13:20 / Modified: 14:22:40" itemprop="dateCreated datePublished" datetime="2021-01-26T14:13:20+08:00">2021-01-26</time>
+              <time title="Created: 2021-01-26 14:13:20 / Modified: 14:44:44" itemprop="dateCreated datePublished" datetime="2021-01-26T14:13:20+08:00">2021-01-26</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -207,9 +207,10 @@
 <ul>
 <li>客户端的封装</li>
 <li>服务器处理客户端的连接请求<a id="more"></a>
-<h3 id="Connection"><a href="#Connection" class="headerlink" title="Connection"></a>Connection</h3></li>
+
+</li>
 </ul>
-<p>为了维护客户端的一些状态及其一些读写操作，需要为每个客户端封装一个连接对象<code>conn</code>，结构体如下。</p>
+<h2 id="Connection"><a href="#Connection" class="headerlink" title="Connection"></a>Connection</h2><p>为了维护客户端的一些状态及其一些读写操作，需要为每个客户端封装一个连接对象<code>conn</code>，结构体如下。</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">connection</span> &#123;</span></span><br><span class="line">      ConnectionType* type;  <span class="comment">// 操作 connection 中的函数指针</span></span><br><span class="line">      ConnectionState state; <span class="comment">// 是一个 enum，表示连接的状态</span></span><br><span class="line">      <span class="keyword">short</span> <span class="keyword">int</span> flags;       <span class="comment">// CONN_FLAG_CLOSE_SCHEDULED 或者 CONN_FLAG_WRITE_BARRIER</span></span><br><span class="line">      <span class="keyword">short</span> <span class="keyword">int</span> refs;        <span class="comment">//引用计数，控制着这个连接对象生命周期</span></span><br><span class="line">      <span class="keyword">int</span> last_errno;        <span class="comment">// 最近一次的错误类型</span></span><br><span class="line">      <span class="keyword">void</span> *private_data;    <span class="comment">// 保存的是这个连接对应的客户端 client</span></span><br><span class="line">      ConnectionCallbackFunc conn_handler;  <span class="comment">// 连接回调</span></span><br><span class="line">      ConnectionCallbackFunc write_handler; <span class="comment">// 写回调</span></span><br><span class="line">      ConnectionCallbackFunc read_handler;  <span class="comment">// 读回调</span></span><br><span class="line">      <span class="keyword">int</span> fd;               <span class="comment">// cfd</span></span><br><span class="line">  &#125;;</span><br></pre></td></tr></table></figure>
 <ul>
 <li><p><code>state</code>：客户端的连接状态如下</p>
@@ -338,8 +339,8 @@
       <i class="fa fa-chevron-left"></i> 剖析REDIS的事件循环
     </a></div>
       <div class="post-nav-item">
-    <a href="/2021/01/26/InputBuffer/" rel="next" title="剖析REDIS的输入缓冲区InputBuffer">
-      剖析REDIS的输入缓冲区InputBuffer <i class="fa fa-chevron-right"></i>
+    <a href="/2021/01/26/OutputBuffer/" rel="next" title="剖析REDIS的输出缓冲区">
+      剖析REDIS的输出缓冲区 <i class="fa fa-chevron-right"></i>
     </a></div>
     </div>
       </footer>
@@ -399,7 +400,7 @@
 
       <!--noindex-->
       <div class="post-toc-wrap sidebar-panel">
-          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-3"><a class="nav-link" href="#Connection"><span class="nav-number">1.</span> <span class="nav-text">Connection</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#ConnectionType"><span class="nav-number">2.</span> <span class="nav-text">ConnectionType</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketEventHandler"><span class="nav-number">2.1.</span> <span class="nav-text">connSocketEventHandler</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketWrite"><span class="nav-number">2.2.</span> <span class="nav-text">connSocketWrite</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketRead"><span class="nav-number">2.3.</span> <span class="nav-text">connSocketRead</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketClose"><span class="nav-number">2.4.</span> <span class="nav-text">connSocketClose</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketSetWriteHandler"><span class="nav-number">2.5.</span> <span class="nav-text">connSocketSetWriteHandler</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketSetReadHandler"><span class="nav-number">2.6.</span> <span class="nav-text">connSocketSetReadHandler</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Accept"><span class="nav-number"></span> <span class="nav-text">Accept</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#acceptTcpHandler"><span class="nav-number">1.</span> <span class="nav-text">acceptTcpHandler</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#connCreateAcceptedSocket"><span class="nav-number">2.</span> <span class="nav-text">connCreateAcceptedSocket</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#acceptCommonHandler"><span class="nav-number">3.</span> <span class="nav-text">acceptCommonHandler</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#createClient"><span class="nav-number">3.1.</span> <span class="nav-text">createClient</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#connEnableTcpNoDelay"><span class="nav-number">3.1.1.</span> <span class="nav-text">connEnableTcpNoDelay</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#connNonBlock"><span class="nav-number">3.1.2.</span> <span class="nav-text">connNonBlock</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#connKeepAlive"><span class="nav-number">3.1.3.</span> <span class="nav-text">connKeepAlive</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connAccept"><span class="nav-number">3.2.</span> <span class="nav-text">connAccept</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#clientAcceptHandler"><span class="nav-number">3.3.</span> <span class="nav-text">clientAcceptHandler</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#callHandler"><span class="nav-number">3.4.</span> <span class="nav-text">callHandler</span></a></li></ol></li></ol></div>
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#Connection"><span class="nav-number">1.</span> <span class="nav-text">Connection</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#ConnectionType"><span class="nav-number">1.1.</span> <span class="nav-text">ConnectionType</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketEventHandler"><span class="nav-number">1.1.1.</span> <span class="nav-text">connSocketEventHandler</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketWrite"><span class="nav-number">1.1.2.</span> <span class="nav-text">connSocketWrite</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketRead"><span class="nav-number">1.1.3.</span> <span class="nav-text">connSocketRead</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketClose"><span class="nav-number">1.1.4.</span> <span class="nav-text">connSocketClose</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketSetWriteHandler"><span class="nav-number">1.1.5.</span> <span class="nav-text">connSocketSetWriteHandler</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connSocketSetReadHandler"><span class="nav-number">1.1.6.</span> <span class="nav-text">connSocketSetReadHandler</span></a></li></ol></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#Accept"><span class="nav-number">2.</span> <span class="nav-text">Accept</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#acceptTcpHandler"><span class="nav-number">2.1.</span> <span class="nav-text">acceptTcpHandler</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#connCreateAcceptedSocket"><span class="nav-number">2.2.</span> <span class="nav-text">connCreateAcceptedSocket</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#acceptCommonHandler"><span class="nav-number">2.3.</span> <span class="nav-text">acceptCommonHandler</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#createClient"><span class="nav-number">2.3.1.</span> <span class="nav-text">createClient</span></a><ol class="nav-child"><li class="nav-item nav-level-5"><a class="nav-link" href="#connEnableTcpNoDelay"><span class="nav-number">2.3.1.1.</span> <span class="nav-text">connEnableTcpNoDelay</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#connNonBlock"><span class="nav-number">2.3.1.2.</span> <span class="nav-text">connNonBlock</span></a></li><li class="nav-item nav-level-5"><a class="nav-link" href="#connKeepAlive"><span class="nav-number">2.3.1.3.</span> <span class="nav-text">connKeepAlive</span></a></li></ol></li><li class="nav-item nav-level-4"><a class="nav-link" href="#connAccept"><span class="nav-number">2.3.2.</span> <span class="nav-text">connAccept</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#clientAcceptHandler"><span class="nav-number">2.3.3.</span> <span class="nav-text">clientAcceptHandler</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#callHandler"><span class="nav-number">2.3.4.</span> <span class="nav-text">callHandler</span></a></li></ol></li></ol></li></ol></div>
       </div>
       <!--/noindex-->
 
@@ -414,14 +415,14 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
           <a href="/archives">
-          <span class="site-state-item-count">5</span>
+          <span class="site-state-item-count">4</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
       <div class="site-state-item site-state-categories">
             <a href="/categories/">
           
-        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-count">1</span>
         <span class="site-state-item-name">categories</span></a>
       </div>
       <div class="site-state-item site-state-tags">

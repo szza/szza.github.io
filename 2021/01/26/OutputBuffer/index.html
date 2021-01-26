@@ -28,7 +28,7 @@
 <meta property="og:description" content="本节分析服务端的发送缓存区OutputBUffer设计  将回复客户端的数据添加到Outputbuffer 发送数据">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-01-26T06:18:24.000Z">
-<meta property="article:modified_time" content="2021-01-26T06:22:46.489Z">
+<meta property="article:modified_time" content="2021-01-26T06:41:01.683Z">
 <meta property="article:author" content="szza">
 <meta property="article:tag" content="Redis">
 <meta name="twitter:card" content="summary">
@@ -125,7 +125,7 @@
   </li>
         <li class="menu-item menu-item-categories">
 
-    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">2</span></a>
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">1</span></a>
 
   </li>
   </ul>
@@ -180,7 +180,7 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2021-01-26 14:18:24 / Modified: 14:22:46" itemprop="dateCreated datePublished" datetime="2021-01-26T14:18:24+08:00">2021-01-26</time>
+              <time title="Created: 2021-01-26 14:18:24 / Modified: 14:41:01" itemprop="dateCreated datePublished" datetime="2021-01-26T14:18:24+08:00">2021-01-26</time>
             </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
@@ -239,9 +239,11 @@
 <li><code>unlinkClient</code></li>
 <li><code>handleClientsWithPendingWrites</code></li>
 <li><code>handleClientsWithPendingWritesUsingThreads</code><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">clientInstallWriteHandler</span><span class="params">(client *c)</span> </span>&#123;</span><br><span class="line">    <span class="comment">/* Schedule the client to write the output buffers to the socket only</span></span><br><span class="line"><span class="comment">     * if not already done and, for slaves, if the slave can actually receive</span></span><br><span class="line"><span class="comment">     * writes at this stage. */</span></span><br><span class="line">    <span class="keyword">if</span> (!(c-&gt;flags &amp; CLIENT_PENDING_WRITE) &amp;&amp;</span><br><span class="line">        (c-&gt;replstate == REPL_STATE_NONE || (c-&gt;replstate == SLAVE_STATE_ONLINE &amp;&amp; !c-&gt;repl_put_online_on_ack)))</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">/* Here instead of installing the write handler, we just flag the</span></span><br><span class="line"><span class="comment">         * client and put it into a list of clients that have something</span></span><br><span class="line"><span class="comment">         * to write to the socket.</span></span><br><span class="line"><span class="comment">         * </span></span><br><span class="line"><span class="comment">         * 这里没有注册可写事件，而是设置了可写标志位：CLIENT_PENDING_WRITE，</span></span><br><span class="line"><span class="comment">         * 并将客户端 c 加入了待写的链表 server.clients_pending_write 中</span></span><br><span class="line"><span class="comment">         *</span></span><br><span class="line"><span class="comment">         * This way before re-entering the event loop, </span></span><br><span class="line"><span class="comment">         * we can try to directly write to the client sockets avoiding a system call. </span></span><br><span class="line"><span class="comment">         * We&#x27;ll only really install the write handler </span></span><br><span class="line"><span class="comment">         * if we&#x27;ll not be able to write the whole reply at once. */</span></span><br><span class="line">        c-&gt;flags |= CLIENT_PENDING_WRITE; </span><br><span class="line">        listAddNodeHead(server.clients_pending_write, c);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h5 id="clientHasPendingReplies"><a href="#clientHasPendingReplies" class="headerlink" title="clientHasPendingReplies"></a>clientHasPendingReplies</h5></li>
+
+
+</li>
 </ul>
-<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 发送缓冲区中是否有数据</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">clientHasPendingReplies</span><span class="params">(client *c)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> c-&gt;bufpos || listLength(c-&gt;reply);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h5 id="clientHasPendingReplies"><a href="#clientHasPendingReplies" class="headerlink" title="clientHasPendingReplies"></a>clientHasPendingReplies</h5><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 发送缓冲区中是否有数据</span></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">clientHasPendingReplies</span><span class="params">(client *c)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> c-&gt;bufpos || listLength(c-&gt;reply);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <h4 id="addReplySds"><a href="#addReplySds" class="headerlink" title="addReplySds"></a>addReplySds</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 直接添加 sds 格式的字符串到输出缓冲区，其中 s 会被释放</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">addReplySds</span><span class="params">(client *c, sds s)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (prepareClientToWrite(c) != C_OK) &#123;</span><br><span class="line">        <span class="comment">/* The caller expects the sds to be free&#x27;d. */</span></span><br><span class="line">        sdsfree(s); </span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (_addReplyToBuffer(c,s,sdslen(s)) != C_OK)</span><br><span class="line">        _addReplyProtoToList(c,s,sdslen(s));</span><br><span class="line">    sdsfree(s);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <h4 id="addReplyProto"><a href="#addReplyProto" class="headerlink" title="addReplyProto"></a>addReplyProto</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 直接添加指定长度的字符串</span></span><br><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">addReplyProto</span><span class="params">(client *c, <span class="keyword">const</span> <span class="keyword">char</span> *s, <span class="keyword">size_t</span> len)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (prepareClientToWrite(c) != C_OK) <span class="keyword">return</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (_addReplyToBuffer(c,s,len) != C_OK)</span><br><span class="line">        _addReplyProtoToList(c,s,len);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <hr>
@@ -327,8 +329,8 @@
         
     <div class="post-nav">
       <div class="post-nav-item">
-    <a href="/2021/01/26/InputBuffer/" rel="prev" title="剖析REDIS的输入缓冲区InputBuffer">
-      <i class="fa fa-chevron-left"></i> 剖析REDIS的输入缓冲区InputBuffer
+    <a href="/2021/01/26/Networking/" rel="prev" title="剖析REDIS网络层设计">
+      <i class="fa fa-chevron-left"></i> 剖析REDIS网络层设计
     </a></div>
       <div class="post-nav-item">
     <a href="/2021/01/26/Threads/" rel="next" title="剖析REDIS的多线程设计">
@@ -407,14 +409,14 @@
   <nav class="site-state">
       <div class="site-state-item site-state-posts">
           <a href="/archives">
-          <span class="site-state-item-count">5</span>
+          <span class="site-state-item-count">4</span>
           <span class="site-state-item-name">posts</span>
         </a>
       </div>
       <div class="site-state-item site-state-categories">
             <a href="/categories/">
           
-        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-count">1</span>
         <span class="site-state-item-name">categories</span></a>
       </div>
       <div class="site-state-item site-state-tags">
