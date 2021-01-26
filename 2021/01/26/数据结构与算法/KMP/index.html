@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2">
+<meta name="theme-color" content="#222">
+<meta name="generator" content="Hexo 5.3.0">
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png">
+  <link rel="mask-icon" href="/images/logo.svg" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+<script id="hexo-configurations">
+    var NexT = window.NexT || {};
+    var CONFIG = {"hostname":"szza.github.io","root":"/","scheme":"Gemini","version":"7.8.0","exturl":false,"sidebar":{"position":"left","display":"always","padding":18,"offset":12,"onmobile":true},"copycode":{"enable":false,"show_result":false,"style":"mac"},"back2top":{"enable":true,"sidebar":false,"scrollpercent":true},"bookmark":{"enable":false,"color":"#222","save":"auto"},"fancybox":false,"mediumzoom":false,"lazyload":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"algolia":{"hits":{"per_page":10},"labels":{"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}},"localsearch":{"enable":false,"trigger":"auto","top_n_per_article":1,"unescape":false,"preload":false},"motion":{"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}}};
+  </script>
+
+  <meta name="description" content="KMP解决的是字符串字串匹配的问题。子序列是不连续的，而子数组&#x2F;子串是连续的。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="KMP">
+<meta property="og:url" content="https://szza.github.io/2021/01/26/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/KMP/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="KMP解决的是字符串字串匹配的问题。子序列是不连续的，而子数组&#x2F;子串是连续的。">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://szza.github.io/2021/01/26/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/KMP/img/KMP.png">
+<meta property="article:published_time" content="2021-01-26T07:11:15.000Z">
+<meta property="article:modified_time" content="2021-01-26T07:19:59.951Z">
+<meta property="article:author" content="szza">
+<meta property="article:tag" content="Leetcode">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://szza.github.io/2021/01/26/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/KMP/img/KMP.png">
+
+<link rel="canonical" href="https://szza.github.io/2021/01/26/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/KMP/">
+
+
+<script id="page-configurations">
+  // https://hexo.io/docs/variables.html
+  CONFIG.page = {
+    sidebar: "",
+    isHome : false,
+    isPost : true,
+    lang   : 'en'
+  };
+</script>
+
+  <title>KMP | szza</title>
+  
+
+
+
+
+
+
+  <noscript>
+  <style>
+  .use-motion .brand,
+  .use-motion .menu-item,
+  .sidebar-inner,
+  .use-motion .post-block,
+  .use-motion .pagination,
+  .use-motion .comments,
+  .use-motion .post-header,
+  .use-motion .post-body,
+  .use-motion .collection-header { opacity: initial; }
+
+  .use-motion .site-title,
+  .use-motion .site-subtitle {
+    opacity: initial;
+    top: initial;
+  }
+
+  .use-motion .logo-line-before i { left: initial; }
+  .use-motion .logo-line-after i { right: initial; }
+  </style>
+</noscript>
+
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage">
+  <div class="container use-motion">
+    <div class="headband"></div>
+
+    <header class="header" itemscope itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="Toggle navigation bar">
+      <span class="toggle-line toggle-line-first"></span>
+      <span class="toggle-line toggle-line-middle"></span>
+      <span class="toggle-line toggle-line-last"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <span class="logo-line-before"><i></i></span>
+      <h1 class="site-title">szza</h1>
+      <span class="logo-line-after"><i></i></span>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger">
+    </div>
+  </div>
+</div>
+
+
+
+
+<nav class="site-nav">
+  <ul id="menu" class="main-menu menu">
+        <li class="menu-item menu-item-home">
+
+    <a href="/" rel="section"><i class="fa fa-home fa-fw"></i>Home</a>
+
+  </li>
+        <li class="menu-item menu-item-tags">
+
+    <a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>Tags<span class="badge">2</span></a>
+
+  </li>
+        <li class="menu-item menu-item-categories">
+
+    <a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>Categories<span class="badge">2</span></a>
+
+  </li>
+  </ul>
+</nav>
+
+
+
+
+</div>
+    </header>
+
+    
+  <div class="back-to-top">
+    <i class="fa fa-arrow-up"></i>
+    <span>0%</span>
+  </div>
+
+
+    <main class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          
+
+          <div class="content post posts-expand">
+            
+
+    
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://szza.github.io/2021/01/26/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/KMP/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="szza">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="szza">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          KMP
+        </h1>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+              
+
+              <time title="Created: 2021-01-26 15:11:15 / Modified: 15:19:59" itemprop="dateCreated datePublished" datetime="2021-01-26T15:11:15+08:00">2021-01-26</time>
+            </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Leetcode%E6%80%BB%E7%BB%93/" itemprop="url" rel="index"><span itemprop="name">Leetcode总结</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+        <p><code>KMP</code>解决的是字符串字串匹配的问题。子序列是不连续的，而子数组/子串是连续的。</p>
+<a id="more"></a>
+
+<h2 id="原理"><a href="#原理" class="headerlink" title="原理"></a>原理</h2><h4 id="最长前缀和最长后缀"><a href="#最长前缀和最长后缀" class="headerlink" title="最长前缀和最长后缀"></a>最长前缀和最长后缀</h4><p><code>KMP</code>算法中，使用了一个概念来标记一个字符的信息：使用其前面的字符串中相等部分的最长前缀和最长后缀。</p>
+<p>具体地，对于<code>0&lt;= i &lt;= i+1 &lt; n</code> ，起始于<code>i</code>的<code>k</code>个连续字符组成的字串，记作<code>S.substr(i, k) = S[i,k]</code>。有两个特殊的的字串，前缀<code>prefix(0,k)</code>和后缀<code>suffix(n-k, k)</code>。如果一个字符串，位于<code>i</code>位置前面的字符串中，存在某个一个<code>k</code>使得 <code>prefix(0,k) = suffix(i-k, k)</code> 。<code>k</code>的最大值，就是这个<code>i</code>位置字符的标记信息。</p>
+<blockquote>
+<p>比如，字符串<code>ababac</code>各个位置的<code>k</code>值是<code>[-1, 0, 0, 1, 2, 3]</code>。第一个位置规定是-1。</p>
+</blockquote>
+<p>如下图，在字符串<code>T(target)</code>中寻找子串<code>P(pattern)</code>。如果<code>T[i] != P[j]</code>。那么就可以确定是<code>P[0,j) = T[i-j, i)</code>，即在位置<code>j</code>的前<code>j-1</code>个字符二者是相等的。如果字串<code>P</code>经过适当右移后，能够与<code>T</code>的某一个子串匹配，则必要条件就是<code>P[0,t) = T[i-t, i) = P[j-t, j)</code>，其中<code>t</code>就是前面说的字符<code>j</code>的最大前缀。将<code>P[0]</code>移到<code>T[i-t]</code>的位置，重新匹配<code>P[t]</code>是否与<code>T[i]</code>相等。</p>
+<ul>
+<li>不匹配，则对于<code>P[0,t)</code>重复上述步骤（求<code>t</code>的最大前缀，然后右移）</li>
+<li>相等：继续匹配，直到结束或者下次不匹配时，重复上述步骤</li>
+</ul>
+<p><img src="./img/KMP.png" alt="kmp"></p>
+<p>稍微修改就可以去解决leetcode上的<a target="_blank" rel="noopener" href="https://leetcode-cn.com/problems/implement-strstr/comments/">实现strStr</a>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> &#123;</span> </span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="function"><span class="keyword">int</span> <span class="title">match</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span>* P, <span class="keyword">const</span> <span class="keyword">char</span>* T)</span>  </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">int</span>* next = buildNext(P); <span class="comment">// 构造Next表格</span></span><br><span class="line">    </span><br><span class="line">    <span class="keyword">int</span> n = <span class="built_in">strlen</span>(T), i =<span class="number">0</span>;</span><br><span class="line">    <span class="keyword">int</span> m = <span class="built_in">strlen</span>(P), j =<span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span>(j &lt;m  &amp;&amp; i &lt;n) </span><br><span class="line">    &#123; </span><br><span class="line">      <span class="comment">// j ==-1, 可以认为 那是一个哨兵，通配符</span></span><br><span class="line">      <span class="keyword">if</span>(j &lt; <span class="number">0</span> || P[j] == T[i])  <span class="comment">// j==-1时候，表示字串已经移动到左侧了 ++j是0，</span></span><br><span class="line">      &#123; </span><br><span class="line">        ++i;</span><br><span class="line">        ++j;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">else</span> </span><br><span class="line">      &#123;</span><br><span class="line">        <span class="comment">// T[i] != P[j]</span></span><br><span class="line">        j = next[j]; <span class="comment">// j左右，去往最大前缀处，继续匹配</span></span><br><span class="line">      &#125;</span><br><span class="line">    &#125;  </span><br><span class="line"></span><br><span class="line">    <span class="keyword">delete</span>[] next;</span><br><span class="line">    <span class="keyword">return</span>  j == m ? i-j : <span class="number">-1</span>;</span><br><span class="line">  &#125;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  <span class="comment">// 构造next表，动态规划思想</span></span><br><span class="line">  <span class="function"><span class="keyword">int</span>* <span class="title">buildNext</span><span class="params">(<span class="keyword">const</span> <span class="keyword">char</span>* P)</span> </span>&#123; </span><br><span class="line">    <span class="keyword">size_t</span> m = <span class="built_in">strlen</span>(P), curr=<span class="number">0</span>;</span><br><span class="line">    <span class="keyword">int</span>* Next = <span class="keyword">new</span> <span class="keyword">int</span>[m]; <span class="comment">// next指针</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">/** @brief: 索引为-1的哨兵，可以看作是一个通配符号，能与任何字符相匹配。</span></span><br><span class="line"><span class="comment">     *  </span></span><br><span class="line"><span class="comment">     *       因此，当 t &lt;0 ，其含义就等价于 p[t] == p[curr].</span></span><br><span class="line"><span class="comment">     *        </span></span><br><span class="line"><span class="comment">     *        ++curr; </span></span><br><span class="line"><span class="comment">     *        ++t;</span></span><br><span class="line"><span class="comment">     *        next[curr] = t; // 就是把当前计算的前缀长度当作下一个字符的next值</span></span><br><span class="line"><span class="comment">     * </span></span><br><span class="line"><span class="comment">     *      </span></span><br><span class="line"><span class="comment">     *      如果没有匹配，那么 t = next[t]，即从上一个相等的位置向前找。 看 P[next[t]] == P[curr] ?</span></span><br><span class="line"><span class="comment">     *      这里也是用了kmp的思想。不是直接从头开始继续查找，而是从不相等的继续查找：</span></span><br><span class="line"><span class="comment">     * </span></span><br><span class="line"><span class="comment">     *        a  b  a  b  a  c  d </span></span><br><span class="line"><span class="comment">     *        ^  ^  ^  ^  ^  ^  ^ </span></span><br><span class="line"><span class="comment">     *        -1 0  0  1  2  3  0</span></span><br><span class="line"><span class="comment">     *                 t    curr</span></span><br><span class="line"><span class="comment">     *          </span></span><br><span class="line"><span class="comment">     *        当计算完 &#x27;c&#x27; 的前缀，curr 就指向了 &#x27;c&#x27;，t指向了&#x27;b&#x27;，下次循环 P[t] != P[curr]，t = next[t],就是如下</span></span><br><span class="line"><span class="comment">     *        a  b  a  b  a  c  d </span></span><br><span class="line"><span class="comment">     *        ^  ^  ^  ^  ^  ^  ^ </span></span><br><span class="line"><span class="comment">     *        -1 0  0  1  2  3  0</span></span><br><span class="line"><span class="comment">     *           t           curr</span></span><br><span class="line"><span class="comment">     * </span></span><br><span class="line"><span class="comment">     *         因为之前已经计算过，&#x27;b&#x27;的前缀，那么如果next[t]就是`b`的前缀最后一个位置，如果此时 P[t] == P[curr]，那么d的前缀就是 t的值，</span></span><br><span class="line"><span class="comment">     *    否则，就是需要继续去往&#x27;b&#x27;的next[t]位置处。直到 t变成-1.此时 这个哨兵能与仍和字符匹配。使得P[curr]=0</span></span><br><span class="line"><span class="comment">     *  </span></span><br><span class="line"><span class="comment">    */</span></span><br><span class="line">    <span class="keyword">int</span> t = Next[<span class="number">0</span>] = <span class="number">-1</span>; </span><br><span class="line"></span><br><span class="line">    <span class="comment">// 因为最后一个不计算，整个长度就变成 m-1</span></span><br><span class="line">    <span class="comment">//  next[m-1] 是前 m-1个字符的前缀</span></span><br><span class="line">    <span class="keyword">while</span>(curr &lt; m<span class="number">-1</span>) &#123; </span><br><span class="line">      <span class="keyword">if</span>(t &lt;<span class="number">0</span> || P[t] == P[curr]) </span><br><span class="line">      &#123; </span><br><span class="line">        ++curr;</span><br><span class="line">        ++t;</span><br><span class="line">        Next[curr] = t;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">else</span> </span><br><span class="line">      &#123;</span><br><span class="line">        <span class="comment">// P[curr] != P[prefix] </span></span><br><span class="line">        t = Next[t];</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> Next;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h4 id="一颗树T1是否包含另一个树T2"><a href="#一颗树T1是否包含另一个树T2" class="headerlink" title="一颗树T1是否包含另一个树T2"></a><a target="_blank" rel="noopener" href="https://leetcode-cn.com/problems/subtree-of-another-tree/description/">一颗树T1是否包含另一个树T2</a></h4><p>思路：</p>
+<ul>
+<li>先将两个树都使用先序遍历序列化</li>
+<li>然后在<code>T1</code>的序列化中寻找<code>T2</code>的序列化</li>
+</ul>
+<p>注意：使用数字<code>int</code>类型存储序列化结果，因为如果使用字符。遇到如下情况，将无法区分:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[12] --&gt; 12##</span><br><span class="line">[2]  --&gt;  2##</span><br></pre></td></tr></table></figure>
+<p>尽管T2不是t1的子树，但是也能匹配成功。因此使用数字存储。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> &#123;</span></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">bool</span> <span class="title">isSubtree</span><span class="params">(TreeNode* s, TreeNode* t)</span> </span>&#123;</span><br><span class="line">        <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="keyword">int</span>&gt; src, target;</span><br><span class="line"></span><br><span class="line">        __serialize(src, s);</span><br><span class="line">        __serialize(target, t);</span><br><span class="line">        <span class="keyword">return</span> __KMP(src, target);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  <span class="keyword">void</span> __serialize(<span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="keyword">int</span>&gt;&amp; result, TreeNode* root) &#123; </span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">stack</span>&lt;TreeNode*&gt; path;</span><br><span class="line">    path.push(root);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 最简单的先序遍历代码</span></span><br><span class="line">    <span class="keyword">while</span>(!path.empty()) &#123; </span><br><span class="line">      root = path.top(); path.pop();</span><br><span class="line"></span><br><span class="line">      <span class="keyword">while</span>(root) &#123; </span><br><span class="line">        path.push(root-&gt;right);</span><br><span class="line">        result.push_back(root-&gt;val);</span><br><span class="line"></span><br><span class="line">        root = root-&gt;left;</span><br><span class="line">      &#125;</span><br><span class="line">      </span><br><span class="line">      result.push_back(<span class="string">&#x27;#&#x27;</span>); <span class="comment">// 只是为了区分</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125; </span><br><span class="line"></span><br><span class="line">  <span class="keyword">bool</span> __KMP(<span class="keyword">const</span> <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="keyword">int</span>&gt;&amp; src, <span class="keyword">const</span> <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="keyword">int</span>&gt;&amp; target) &#123; </span><br><span class="line">    </span><br><span class="line">    <span class="keyword">int</span> m = target.size();</span><br><span class="line">    <span class="keyword">int</span> n = src.size();</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="keyword">int</span>&gt; <span class="title">Next</span><span class="params">(m)</span></span>;</span><br><span class="line">    __buildNext(target, Next); <span class="comment">// 建立 next 表</span></span><br><span class="line">    <span class="keyword">int</span> i=<span class="number">0</span>, j=<span class="number">0</span>; </span><br><span class="line">    <span class="keyword">while</span>(i &lt; n &amp;&amp; j &lt;m ) &#123; </span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span>(j &lt;<span class="number">0</span> || target[j] == src[i]) &#123; </span><br><span class="line">        ++i;</span><br><span class="line">        ++j;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">else</span> </span><br><span class="line">      &#123;</span><br><span class="line">        j = Next[j];</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> j ==m;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">void</span> __buildNext(<span class="keyword">const</span> <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="keyword">int</span>&gt;&amp; pattern, <span class="built_in">std</span>::<span class="built_in">vector</span>&lt;<span class="keyword">int</span>&gt;&amp; Next) &#123; </span><br><span class="line">      <span class="keyword">int</span> t=<span class="number">-1</span>;</span><br><span class="line">      <span class="keyword">int</span> i=<span class="number">0</span>;</span><br><span class="line">      Next[<span class="number">0</span>] =<span class="number">-1</span>;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">while</span>(i &lt; pattern.size()<span class="number">-1</span>) &#123; </span><br><span class="line">        <span class="keyword">if</span>(t &lt; <span class="number">0</span> || pattern[t] == pattern[i]) &#123; </span><br><span class="line">          ++t;</span><br><span class="line">          ++i;</span><br><span class="line">          Next[i] = t;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">else</span> </span><br><span class="line">        &#123;</span><br><span class="line">          t = Next[t];</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h4 id="树的子结构"><a href="#树的子结构" class="headerlink" title="树的子结构"></a><a target="_blank" rel="noopener" href="https://leetcode-cn.com/problems/shu-de-zi-jie-gou-lcof/">树的子结构</a></h4><p>这道题不是用KMP，只因和上一道题相似。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">class</span> <span class="title">Solution</span> &#123;</span></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">bool</span> <span class="title">isSubStructure</span><span class="params">(TreeNode* A, TreeNode* B)</span> </span>&#123;  </span><br><span class="line">        <span class="keyword">if</span>(A ==<span class="literal">nullptr</span> || B ==<span class="literal">nullptr</span>) <span class="keyword">return</span> <span class="literal">false</span>;      </span><br><span class="line">        <span class="comment">//  二重递归，对于每个节点进行遍历并判断是否满足条件 </span></span><br><span class="line">        <span class="keyword">if</span>(A-&gt;val == B-&gt;val &amp;&amp;  __isSubTree(A, B))</span><br><span class="line">          <span class="keyword">return</span> <span class="literal">true</span>; </span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> isSubStructure(A-&gt;left,  B) || </span><br><span class="line">               isSubStructure(A-&gt;right, B);</span><br><span class="line">    &#125;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="keyword">bool</span> __isSubTree(TreeNode* big, TreeNode* small) &#123; </span><br><span class="line">        <span class="keyword">if</span>(small ==<span class="literal">nullptr</span>) <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">        <span class="keyword">if</span>(big   ==<span class="literal">nullptr</span>) <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">            </span><br><span class="line">        <span class="keyword">return</span> big-&gt;val == small-&gt;val               &amp;&amp;</span><br><span class="line">               __isSubTree(big-&gt;left,  small-&gt;left) &amp;&amp;</span><br><span class="line">               __isSubTree(big-&gt;right, small-&gt;right);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+      <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Leetcode/" rel="tag"># Leetcode</a>
+          </div>
+
+        
+
+
+        
+    <div class="post-nav">
+      <div class="post-nav-item">
+    <a href="/2021/01/26/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E6%95%B0%E5%AD%A6/" rel="prev" title="数学">
+      <i class="fa fa-chevron-left"></i> 数学
+    </a></div>
+      <div class="post-nav-item">
+    <a href="/2021/01/26/%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95/%E5%9B%9E%E6%96%87/" rel="next" title="回文">
+      回文 <i class="fa fa-chevron-right"></i>
+    </a></div>
+    </div>
+      </footer>
+    
+  </article>
+  
+  
+  
+
+
+
+          </div>
+          
+
+<script>
+  window.addEventListener('tabs:register', () => {
+    let { activeClass } = CONFIG.comments;
+    if (CONFIG.comments.storage) {
+      activeClass = localStorage.getItem('comments_active') || activeClass;
+    }
+    if (activeClass) {
+      let activeTab = document.querySelector(`a[href="#comment-${activeClass}"]`);
+      if (activeTab) {
+        activeTab.click();
+      }
+    }
+  });
+  if (CONFIG.comments.storage) {
+    window.addEventListener('tabs:click', event => {
+      if (!event.target.matches('.tabs-comment .tab-content .tab-pane')) return;
+      let commentClass = event.target.classList[1];
+      localStorage.setItem('comments_active', commentClass);
+    });
+  }
+</script>
+
+        </div>
+          
+  
+  <div class="toggle sidebar-toggle">
+    <span class="toggle-line toggle-line-first"></span>
+    <span class="toggle-line toggle-line-middle"></span>
+    <span class="toggle-line toggle-line-last"></span>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-inner">
+
+      <ul class="sidebar-nav motion-element">
+        <li class="sidebar-nav-toc">
+          Table of Contents
+        </li>
+        <li class="sidebar-nav-overview">
+          Overview
+        </li>
+      </ul>
+
+      <!--noindex-->
+      <div class="post-toc-wrap sidebar-panel">
+          <div class="post-toc motion-element"><ol class="nav"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8E%9F%E7%90%86"><span class="nav-number">1.</span> <span class="nav-text">原理</span></a><ol class="nav-child"><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%9C%80%E9%95%BF%E5%89%8D%E7%BC%80%E5%92%8C%E6%9C%80%E9%95%BF%E5%90%8E%E7%BC%80"><span class="nav-number">1.0.1.</span> <span class="nav-text">最长前缀和最长后缀</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E4%B8%80%E9%A2%97%E6%A0%91T1%E6%98%AF%E5%90%A6%E5%8C%85%E5%90%AB%E5%8F%A6%E4%B8%80%E4%B8%AA%E6%A0%91T2"><span class="nav-number">1.0.2.</span> <span class="nav-text">一颗树T1是否包含另一个树T2</span></a></li><li class="nav-item nav-level-4"><a class="nav-link" href="#%E6%A0%91%E7%9A%84%E5%AD%90%E7%BB%93%E6%9E%84"><span class="nav-number">1.0.3.</span> <span class="nav-text">树的子结构</span></a></li></ol></li></ol></li></ol></div>
+      </div>
+      <!--/noindex-->
+
+      <div class="site-overview-wrap sidebar-panel">
+        <div class="site-author motion-element" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="szza"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">szza</p>
+  <div class="site-description" itemprop="description"></div>
+</div>
+<div class="site-state-wrap motion-element">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+          <a href="/archives">
+          <span class="site-state-item-count">8</span>
+          <span class="site-state-item-name">posts</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+            <a href="/categories/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">categories</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+            <a href="/tags/">
+          
+        <span class="site-state-item-count">2</span>
+        <span class="site-state-item-name">tags</span></a>
+      </div>
+  </nav>
+</div>
+
+
+
+      </div>
+
+    </div>
+  </aside>
+  <div id="sidebar-dimmer"></div>
+
+
+      </div>
+    </main>
+
+    <footer class="footer">
+      <div class="footer-inner">
+        
+
+        
+
+<div class="copyright">
+  
+  &copy; 
+  <span itemprop="copyrightYear">2021</span>
+  <span class="with-love">
+    <i class="fa fa-heart"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">szza</span>
+</div>
+  <div class="powered-by">Powered by <a href="https://hexo.io/" class="theme-link" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.org/" class="theme-link" rel="noopener" target="_blank">NexT.Gemini</a>
+  </div>
+
+        
+
+
+
+
+
+
+
+
+      </div>
+    </footer>
+  </div>
+
+  
+  <script size="300" alpha="0.6" zIndex="-1" src="/lib/canvas-ribbon/canvas-ribbon.js"></script>
+  <script src="/lib/anime.min.js"></script>
+  <script src="/lib/velocity/velocity.min.js"></script>
+  <script src="/lib/velocity/velocity.ui.min.js"></script>
+
+<script src="/js/utils.js"></script>
+
+<script src="/js/motion.js"></script>
+
+
+<script src="/js/schemes/pisces.js"></script>
+
+
+<script src="/js/next-boot.js"></script>
+
+
+  <script defer src="/lib/three/three.min.js"></script>
+    <script defer src="/lib/three/canvas_lines.min.js"></script>
+    <script defer src="/lib/three/canvas_sphere.min.js"></script>
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+  
+
+</body>
+</html>
