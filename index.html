@@ -243,7 +243,7 @@
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
           
-            <a href="/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/" class="post-title-link" itemprop="url">replication</a>
+            <a href="/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/" class="post-title-link" itemprop="url">剖析REDIS的replication设计</a>
         </h2>
 
         <div class="post-meta">
@@ -252,10 +252,16 @@
                 <i class="far fa-calendar"></i>
               </span>
               <span class="post-meta-item-text">Posted on</span>
-              
 
-              <time title="Created: 2021-01-27 16:36:18 / Modified: 16:39:10" itemprop="dateCreated datePublished" datetime="2021-01-27T16:36:18+08:00">2021-01-27</time>
+              <time title="Created: 2021-01-27 16:36:18" itemprop="dateCreated datePublished" datetime="2021-01-27T16:36:18+08:00">2021-01-27</time>
             </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2021-01-29 20:04:28" itemprop="dateModified" datetime="2021-01-29T20:04:28+08:00">2021-01-29</time>
+              </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
                 <i class="far fa-folder"></i>
@@ -277,7 +283,19 @@
     <div class="post-body" itemprop="articleBody">
 
       
-          
+          <p>为保证主从一致，replication主要实现了两件事：</p>
+<ul>
+<li>同步：将master的数据同步到slaves，此时主从一致</li>
+<li>传播：将导致master的数据库发生改变的操作传播到slaves，使得主从仍旧一致</li>
+</ul>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
       
     </div>
 
