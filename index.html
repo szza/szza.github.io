@@ -150,7 +150,7 @@
   
   
   <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
-    <link itemprop="mainEntityOfPage" href="https://szza.github.io/2021/01/29/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/">
+    <link itemprop="mainEntityOfPage" href="https://szza.github.io/2021/01/29/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/">
 
     <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
       <meta itemprop="image" content="/images/avatar.jpg">
@@ -164,7 +164,7 @@
       <header class="post-header">
         <h2 class="post-title" itemprop="name headline">
           
-            <a href="/2021/01/29/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/" class="post-title-link" itemprop="url">剖析REDIS的文件流RIO设计</a>
+            <a href="/2021/01/29/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/" class="post-title-link" itemprop="url">剖析REDIS的replication设计</a>
         </h2>
 
         <div class="post-meta">
@@ -175,93 +175,8 @@
               <span class="post-meta-item-text">Posted on</span>
               
 
-              <time title="Created: 2021-01-29 19:34:38 / Modified: 19:57:06" itemprop="dateCreated datePublished" datetime="2021-01-29T19:34:38+08:00">2021-01-29</time>
+              <time title="Created: 2021-01-29 19:34:38 / Modified: 20:06:16" itemprop="dateCreated datePublished" datetime="2021-01-29T19:34:38+08:00">2021-01-29</time>
             </span>
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-folder"></i>
-              </span>
-              <span class="post-meta-item-text">In</span>
-                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
-                  <a href="/categories/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/" itemprop="url" rel="index"><span itemprop="name">Redis源码解析</span></a>
-                </span>
-            </span>
-
-          
-
-        </div>
-      </header>
-
-    
-    
-    
-    <div class="post-body" itemprop="articleBody">
-
-      
-          <p>RIO为读写流提供了统一的接口</p>
-<ul>
-<li>不仅可以用于读写RDB、AOF，实现持久化</li>
-<li>也可以用于读写socket与pipe，实现主从同步任务</li>
-</ul>
-          <!--noindex-->
-            <div class="post-button">
-              <a class="btn" href="/2021/01/29/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/#more" rel="contents">
-                Read more &raquo;
-              </a>
-            </div>
-          <!--/noindex-->
-        
-      
-    </div>
-
-    
-    
-    
-      <footer class="post-footer">
-        <div class="post-eof"></div>
-      </footer>
-  </article>
-  
-  
-  
-
-      
-  
-  
-  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
-    <link itemprop="mainEntityOfPage" href="https://szza.github.io/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/">
-
-    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
-      <meta itemprop="image" content="/images/avatar.jpg">
-      <meta itemprop="name" content="szza">
-      <meta itemprop="description" content="">
-    </span>
-
-    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
-      <meta itemprop="name" content="szza">
-    </span>
-      <header class="post-header">
-        <h2 class="post-title" itemprop="name headline">
-          
-            <a href="/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/" class="post-title-link" itemprop="url">剖析REDIS的replication设计</a>
-        </h2>
-
-        <div class="post-meta">
-            <span class="post-meta-item">
-              <span class="post-meta-item-icon">
-                <i class="far fa-calendar"></i>
-              </span>
-              <span class="post-meta-item-text">Posted on</span>
-
-              <time title="Created: 2021-01-27 16:36:18" itemprop="dateCreated datePublished" datetime="2021-01-27T16:36:18+08:00">2021-01-27</time>
-            </span>
-              <span class="post-meta-item">
-                <span class="post-meta-item-icon">
-                  <i class="far fa-calendar-check"></i>
-                </span>
-                <span class="post-meta-item-text">Edited on</span>
-                <time title="Modified: 2021-01-29 20:04:28" itemprop="dateModified" datetime="2021-01-29T20:04:28+08:00">2021-01-29</time>
-              </span>
             <span class="post-meta-item">
               <span class="post-meta-item-icon">
                 <i class="far fa-folder"></i>
@@ -290,7 +205,92 @@
 </ul>
           <!--noindex-->
             <div class="post-button">
-              <a class="btn" href="/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/#more" rel="contents">
+              <a class="btn" href="/2021/01/29/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E5%88%86%E5%B8%83%E5%BC%8F/replication/#more" rel="contents">
+                Read more &raquo;
+              </a>
+            </div>
+          <!--/noindex-->
+        
+      
+    </div>
+
+    
+    
+    
+      <footer class="post-footer">
+        <div class="post-eof"></div>
+      </footer>
+  </article>
+  
+  
+  
+
+      
+  
+  
+  <article itemscope itemtype="http://schema.org/Article" class="post-block" lang="en">
+    <link itemprop="mainEntityOfPage" href="https://szza.github.io/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="szza">
+      <meta itemprop="description" content="">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="szza">
+    </span>
+      <header class="post-header">
+        <h2 class="post-title" itemprop="name headline">
+          
+            <a href="/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/" class="post-title-link" itemprop="url">剖析REDIS的文件流RIO设计</a>
+        </h2>
+
+        <div class="post-meta">
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-calendar"></i>
+              </span>
+              <span class="post-meta-item-text">Posted on</span>
+
+              <time title="Created: 2021-01-27 16:36:18" itemprop="dateCreated datePublished" datetime="2021-01-27T16:36:18+08:00">2021-01-27</time>
+            </span>
+              <span class="post-meta-item">
+                <span class="post-meta-item-icon">
+                  <i class="far fa-calendar-check"></i>
+                </span>
+                <span class="post-meta-item-text">Edited on</span>
+                <time title="Modified: 2021-01-29 20:06:23" itemprop="dateModified" datetime="2021-01-29T20:06:23+08:00">2021-01-29</time>
+              </span>
+            <span class="post-meta-item">
+              <span class="post-meta-item-icon">
+                <i class="far fa-folder"></i>
+              </span>
+              <span class="post-meta-item-text">In</span>
+                <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+                  <a href="/categories/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/" itemprop="url" rel="index"><span itemprop="name">Redis源码解析</span></a>
+                </span>
+            </span>
+
+          
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+          <p>RIO为读写流提供了统一的接口</p>
+<ul>
+<li>不仅可以用于读写RDB、AOF，实现持久化</li>
+<li>也可以用于读写socket与pipe，实现主从同步任务</li>
+</ul>
+          <!--noindex-->
+            <div class="post-button">
+              <a class="btn" href="/2021/01/27/Redis%E6%BA%90%E7%A0%81%E8%A7%A3%E6%9E%90/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/#more" rel="contents">
                 Read more &raquo;
               </a>
             </div>
