@@ -8,14 +8,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="本期讲解下C++11中引入的 std::unordered_map的设计原理。 std::unordered_map里面has-a哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述std::unordered_map。">
 <meta property="og:type" content="article">
-<meta property="og:title" content="剖析 std::unordered_map 具有O(1)时间复杂度的原理">
+<meta property="og:title" content="剖析 std::unordered_map O(1)时间复杂度的原理">
 <meta property="og:url" content="https://szza.github.io/2021/03/01/C++/1_/index.html">
 <meta property="og:site_name" content="szza 的后端成长之路">
 <meta property="og:description" content="本期讲解下C++11中引入的 std::unordered_map的设计原理。 std::unordered_map里面has-a哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述std::unordered_map。">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="https://szza.github.io/2021/03/01/C++/1_/images/unordered_map_1.jpg">
 <meta property="article:published_time" content="2021-03-01T06:09:54.000Z">
-<meta property="article:modified_time" content="2021-03-01T07:19:34.763Z">
+<meta property="article:modified_time" content="2021-03-01T08:09:53.671Z">
 <meta property="article:author" content="szza">
 <meta property="article:tag" content="Modern C++">
 <meta name="twitter:card" content="summary">
@@ -39,7 +39,7 @@
       
     
     <!-- title -->
-    <title>剖析 std::unordered_map 具有O(1)时间复杂度的原理</title>
+    <title>剖析 std::unordered_map O(1)时间复杂度的原理</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -94,17 +94,17 @@
     <div id="share" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/C++/1_/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/1_/&text=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/1_/&is_video=false&description=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map 具有O(1)时间复杂度的原理&body=Check out this article: https://szza.github.io/2021/03/01/C++/1_/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/1_/&name=剖析 std::unordered_map 具有O(1)时间复杂度的原理&description=&lt;p&gt;本期讲解下C++11中引入的 &lt;code&gt;std::unordered_map&lt;/code&gt;的设计原理。&lt;/p&gt;
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/1_/&text=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/1_/&is_video=false&description=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map O(1)时间复杂度的原理&body=Check out this article: https://szza.github.io/2021/03/01/C++/1_/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/1_/&name=剖析 std::unordered_map O(1)时间复杂度的原理&description=&lt;p&gt;本期讲解下C++11中引入的 &lt;code&gt;std::unordered_map&lt;/code&gt;的设计原理。&lt;/p&gt;
 &lt;p&gt;&lt;code&gt;std::unordered_map&lt;/code&gt;里面&lt;code&gt;has-a&lt;/code&gt;哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述&lt;code&gt;std::unordered_map&lt;/code&gt;。&lt;/p&gt;"><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/1_/&t=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/1_/&t=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -121,7 +121,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        剖析 std::unordered_map 具有O(1)时间复杂度的原理
+        剖析 std::unordered_map O(1)时间复杂度的原理
     </h1>
 
 
@@ -235,17 +235,17 @@
     <div id="share-footer" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/C++/1_/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/1_/&text=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/1_/&is_video=false&description=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map 具有O(1)时间复杂度的原理&body=Check out this article: https://szza.github.io/2021/03/01/C++/1_/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/1_/&name=剖析 std::unordered_map 具有O(1)时间复杂度的原理&description=&lt;p&gt;本期讲解下C++11中引入的 &lt;code&gt;std::unordered_map&lt;/code&gt;的设计原理。&lt;/p&gt;
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/1_/&text=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/1_/&is_video=false&description=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map O(1)时间复杂度的原理&body=Check out this article: https://szza.github.io/2021/03/01/C++/1_/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/1_/&title=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/1_/&name=剖析 std::unordered_map O(1)时间复杂度的原理&description=&lt;p&gt;本期讲解下C++11中引入的 &lt;code&gt;std::unordered_map&lt;/code&gt;的设计原理。&lt;/p&gt;
 &lt;p&gt;&lt;code&gt;std::unordered_map&lt;/code&gt;里面&lt;code&gt;has-a&lt;/code&gt;哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述&lt;code&gt;std::unordered_map&lt;/code&gt;。&lt;/p&gt;"><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/1_/&t=剖析 std::unordered_map 具有O(1)时间复杂度的原理"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/1_/&t=剖析 std::unordered_map O(1)时间复杂度的原理"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
