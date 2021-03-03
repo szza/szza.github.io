@@ -6,15 +6,15 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="HandheldFriendly" content="True">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-    <meta name="description" content="Copy elision、URVO、NRVO 观前提醒，小屏手机横屏有助于提升阅读体验  C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：  函数返回的是值语义时 函数参数是值语义时  返回值优化返回值优化RVO（Return Value Optimization，RV">
+    <meta name="description" content="C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：  函数返回的是值语义时 函数参数是值语义时  返回值优化返回值优化RVO（Return Value Optimization，RVO），即避免返回过程触发复制 &#x2F; 移动构造函数。根据返回的值是否是匿名对象，可以分为两类：">
 <meta property="og:type" content="article">
 <meta property="og:title" content="编译器优化之Copy elison、RVO">
 <meta property="og:url" content="https://szza.github.io/2021/03/03/C++/RVO/index.html">
 <meta property="og:site_name" content="szza 的后端成长之路">
-<meta property="og:description" content="Copy elision、URVO、NRVO 观前提醒，小屏手机横屏有助于提升阅读体验  C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：  函数返回的是值语义时 函数参数是值语义时  返回值优化返回值优化RVO（Return Value Optimization，RV">
+<meta property="og:description" content="C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：  函数返回的是值语义时 函数参数是值语义时  返回值优化返回值优化RVO（Return Value Optimization，RVO），即避免返回过程触发复制 &#x2F; 移动构造函数。根据返回的值是否是匿名对象，可以分为两类：">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-03-03T04:47:23.000Z">
-<meta property="article:modified_time" content="2021-03-03T04:50:04.983Z">
+<meta property="article:modified_time" content="2021-03-03T04:52:12.857Z">
 <meta property="article:author" content="szza">
 <meta property="article:tag" content="Modern C++">
 <meta name="twitter:card" content="summary">
@@ -104,7 +104,7 @@
 
     </div>
     <div id="toc">
-      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Copy-elision%E3%80%81URVO%E3%80%81NRVO"><span class="toc-number">1.</span> <span class="toc-text">Copy elision、URVO、NRVO</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%80%BC%E4%BC%98%E5%8C%96"><span class="toc-number">1.1.</span> <span class="toc-text">返回值优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO"><span class="toc-number">1.1.1.</span> <span class="toc-text">URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#NRVO"><span class="toc-number">1.1.2.</span> <span class="toc-text">NRVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#C-17%E5%BC%BA%E5%88%B6%E7%BC%96%E8%AF%91%E5%99%A8%E5%AE%9E%E7%8E%B0-URVO"><span class="toc-number">1.1.3.</span> <span class="toc-text">C++17强制编译器实现 URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO-%E5%BA%94%E7%94%A8"><span class="toc-number">1.1.4.</span> <span class="toc-text">URVO 应用</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.2.</span> <span class="toc-text">函数值传递</span></a></li></ol></li></ol>
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%80%BC%E4%BC%98%E5%8C%96"><span class="toc-number">1.</span> <span class="toc-text">返回值优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO"><span class="toc-number">1.1.</span> <span class="toc-text">URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#NRVO"><span class="toc-number">1.2.</span> <span class="toc-text">NRVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#C-17%E5%BC%BA%E5%88%B6%E7%BC%96%E8%AF%91%E5%99%A8%E5%AE%9E%E7%8E%B0-URVO"><span class="toc-number">1.3.</span> <span class="toc-text">C++17强制编译器实现 URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO-%E5%BA%94%E7%94%A8"><span class="toc-number">1.4.</span> <span class="toc-text">URVO 应用</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">函数值传递</span></a></li></ol>
     </div>
   </span>
 </div>
@@ -153,10 +153,7 @@
   
 
   <div class="content" itemprop="articleBody">
-    <h2 id="Copy-elision、URVO、NRVO"><a href="#Copy-elision、URVO、NRVO" class="headerlink" title="Copy elision、URVO、NRVO"></a>Copy elision、URVO、NRVO</h2><blockquote>
-<p>观前提醒，小屏手机横屏有助于提升阅读体验</p>
-</blockquote>
-<p>C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：</p>
+    <p>C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：</p>
 <ul>
 <li>函数返回的是值语义时</li>
 <li>函数参数是值语义时</li>
@@ -231,7 +228,7 @@
 <li><p><code>std::atomic</code>：同时禁止了<code>ctor</code>、<code>mtor</code>，因此必须等到 C++17，<code>make_instance</code>函数才能为<code>std::atmoic</code>创建对象。</p>
 </li>
 </ul>
-<h3 id="函数值传递"><a href="#函数值传递" class="headerlink" title="函数值传递"></a>函数值传递</h3><p>在【再探值与引用】一文中，深度讲解了函数模板基于值传递和引用传递的优劣。在讲值传递时，未必总是发生复制行为：<code>pass_by_value</code>函数传入右值时，也会发生copy elision 行为，即使禁止编译器的copy elision 行为，也是优先调用对象的<code>mtor</code>。</p>
+<h3 id="函数值传递"><a href="#函数值传递" class="headerlink" title="函数值传递"></a>函数值传递</h3><p>在 <a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s?__biz=MzkyMjIxMzIxNA==&mid=2247483974&idx=1&sn=2be406fac97ff57e7a864bf8a509b1f1&chksm=c1f68c77f6810561412366b292a567882b4dcfc178fe9d7fc206a88f9f22c2e05d498cce5d5b&token=1808555143&lang=zh_CN#rd">再探值与引用</a> 一文中，深度讲解了函数模板基于值传递和引用传递的优劣。在讲值传递时，未必总是发生复制行为：<code>pass_by_value</code>函数传入右值时，也会发生copy elision 行为，即使禁止编译器的copy elision 行为，也是优先调用对象的<code>mtor</code>。</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">void</span> <span class="title">pass_by_value</span><span class="params">(Foo foo)</span> </span>&#123; </span><br><span class="line">  <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">int</span> <span class="title">main</span><span class="params">(<span class="keyword">int</span> argc, <span class="keyword">char</span> <span class="keyword">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span> x = return_urvo_value();</span><br><span class="line">  <span class="keyword">auto</span> y = return_nrvo_value(); </span><br><span class="line"></span><br><span class="line">  pass_by_value(Foo&#123;&#125;);</span><br><span class="line">  pass_by_value(<span class="built_in">std</span>::move(x));</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p>最终的输出也是调用默认三次构造函数：</p>
 <figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -std&#x3D;c++11  rvo.cc  -o rvo &amp;&amp; .&#x2F;rvo</span><br><span class="line">default</span><br><span class="line">default</span><br><span class="line">default</span><br></pre></td></tr></table></figure>
@@ -261,7 +258,7 @@
     </div>
 
     <div id="toc-footer" style="display: none">
-      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Copy-elision%E3%80%81URVO%E3%80%81NRVO"><span class="toc-number">1.</span> <span class="toc-text">Copy elision、URVO、NRVO</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%80%BC%E4%BC%98%E5%8C%96"><span class="toc-number">1.1.</span> <span class="toc-text">返回值优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO"><span class="toc-number">1.1.1.</span> <span class="toc-text">URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#NRVO"><span class="toc-number">1.1.2.</span> <span class="toc-text">NRVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#C-17%E5%BC%BA%E5%88%B6%E7%BC%96%E8%AF%91%E5%99%A8%E5%AE%9E%E7%8E%B0-URVO"><span class="toc-number">1.1.3.</span> <span class="toc-text">C++17强制编译器实现 URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO-%E5%BA%94%E7%94%A8"><span class="toc-number">1.1.4.</span> <span class="toc-text">URVO 应用</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.2.</span> <span class="toc-text">函数值传递</span></a></li></ol></li></ol>
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%80%BC%E4%BC%98%E5%8C%96"><span class="toc-number">1.</span> <span class="toc-text">返回值优化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO"><span class="toc-number">1.1.</span> <span class="toc-text">URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#NRVO"><span class="toc-number">1.2.</span> <span class="toc-text">NRVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#C-17%E5%BC%BA%E5%88%B6%E7%BC%96%E8%AF%91%E5%99%A8%E5%AE%9E%E7%8E%B0-URVO"><span class="toc-number">1.3.</span> <span class="toc-text">C++17强制编译器实现 URVO</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#URVO-%E5%BA%94%E7%94%A8"><span class="toc-number">1.4.</span> <span class="toc-text">URVO 应用</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">函数值传递</span></a></li></ol>
     </div>
 
     <div id="share-footer" style="display: none">
