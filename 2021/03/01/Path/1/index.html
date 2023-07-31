@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="我是2019年8月全面开始学习C++，之前只是有一点C++的基础，仅看过《C++ prime Plus 第六版》，2020年参加7月参加校招，并且取得几个大厂的Offer，下面是我几个月的学习路线。 C++，相对别的语言学习门槛会高一点，主要原因是学习路线不明确，没有像Java那么多资料。但在大厂里C++岗位不比java少多少，比如腾讯、百度、阿里云、网易、华为等。下面介绍下自己学习C++ &amp;am">
+<meta property="og:type" content="article">
+<meta property="og:title" content="C++ &amp; Linux 后端：进BAT的学习路线">
+<meta property="og:url" content="https://szza.github.io/2021/03/01/Path/1/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="我是2019年8月全面开始学习C++，之前只是有一点C++的基础，仅看过《C++ prime Plus 第六版》，2020年参加7月参加校招，并且取得几个大厂的Offer，下面是我几个月的学习路线。 C++，相对别的语言学习门槛会高一点，主要原因是学习路线不明确，没有像Java那么多资料。但在大厂里C++岗位不比java少多少，比如腾讯、百度、阿里云、网易、华为等。下面介绍下自己学习C++ &amp;am">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-03-01T07:29:46.000Z">
+<meta property="article:modified_time" content="2022-02-14T13:29:38.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="后端路线">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>C++ &amp; Linux 后端：进BAT的学习路线</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.3.0"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/categories/">categories</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2021/03/01/Path/2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/03/01/thread/thread/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/Path/1/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/Path/1/&text=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/Path/1/&is_video=false&description=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=C++ &amp; Linux 后端：进BAT的学习路线&body=Check out this article: https://szza.github.io/2021/03/01/Path/1/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/Path/1/&name=C++ &amp; Linux 后端：进BAT的学习路线&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/Path/1/&t=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#C-%E5%9F%BA%E7%A1%80"><span class="toc-number">1.</span> <span class="toc-text">C++基础</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#C-11"><span class="toc-number">2.</span> <span class="toc-text">C++11</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#C-%E8%BF%9B%E9%98%B6"><span class="toc-number">3.</span> <span class="toc-text">C++进阶</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OS"><span class="toc-number">4.</span> <span class="toc-text">OS</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Linux"><span class="toc-number">5.</span> <span class="toc-text">Linux</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF"><span class="toc-number">6.</span> <span class="toc-text">后端</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF%E8%BF%9B%E9%98%B6"><span class="toc-number">7.</span> <span class="toc-text">后端进阶</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RPC"><span class="toc-number">7.1.</span> <span class="toc-text">RPC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Redis"><span class="toc-number">7.2.</span> <span class="toc-text">Redis</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95"><span class="toc-number">8.</span> <span class="toc-text">数据结构与算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%97%E6%B3%95"><span class="toc-number">8.1.</span> <span class="toc-text">算法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#leetcode-%E5%88%B7%E9%A2%98"><span class="toc-number">8.2.</span> <span class="toc-text">leetcode 刷题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C"><span class="toc-number">9.</span> <span class="toc-text">计算机网络</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7"><span class="toc-number">10.</span> <span class="toc-text">工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E5%90%8E%E5%87%A0%E7%82%B9%E5%BB%BA%E8%AE%AE"><span class="toc-number">11.</span> <span class="toc-text">最后几点建议</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        C++ &amp; Linux 后端：进BAT的学习路线
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-03-01T07:29:46.000Z" itemprop="datePublished">2021-03-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/%E5%90%8E%E7%AB%AF%E8%B7%AF%E7%BA%BF/" rel="tag">后端路线</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>我是2019年8月全面开始学习C++，之前只是有一点C++的基础，仅看过《C++ prime Plus 第六版》，2020年参加7月参加校招，并且取得几个大厂的Offer，下面是我几个月的学习路线。</p>
+<p>C++，相对别的语言学习门槛会高一点，主要原因是学习路线不明确，没有像Java那么多资料。但<strong>在大厂里</strong>C++岗位不比java少多少，比如腾讯、百度、阿里云、网易、华为等。下面介绍下自己学习C++ &amp; Linux 后端的路线，以及自己的看书方式，供参考。</p>
+<p>Cpper雄起！！！</p>
+<h2 id="C-基础"><a href="#C-基础" class="headerlink" title="C++基础"></a>C++基础</h2><p>如果刚接触C++，建议去B站搜C++视频辅助《C++ prime 第五版》一起学习。</p>
+<ul>
+<li>b站黑马程序员的C++学习视频</li>
+<li>《C++ prime 第五版》</li>
+</ul>
+<p>关于《C++ prime 第五版》与 《C++ prime <strong>Plus</strong> 第六版》的选择问题：如果只能选择一本，个人建议选《C++ prime 第五版》。</p>
+<ul>
+<li>《C++ prime 第五版》：这本书对于刚入门的学生可能有点难，因为有些章节的知识存在一些跳跃性。但是讲解的比较透彻、深入，因此需要配合视频一起学习。但是，看完一遍后就可以将其作为字典、工具书，以后遇到不懂的地方来看，总是能给你启发。</li>
+<li>《C++ prime <strong>Plus</strong> 第六版》：这本书，讲解比较连贯，没有跳跃性。但是主体基本是以C++98/03进行讲解，而关于C++11的知识大都在附录，且属于一笔带过存在，讲解的不够透彻。当时自己看完这本书，后来又重新买了本《C++ prime 第五版》，看完才算C++入门了。</li>
+</ul>
+<p>根据自身喜好选一本，无论哪本都建议配合视频，因为光看书太枯燥了。而且如果时间不充足，不建议逐章节阅读，比如你之前有C语言基础，那么就可以直接从C++部分开始。</p>
+<h2 id="C-11"><a href="#C-11" class="headerlink" title="C++11"></a>C++11</h2><p>C++11对C++进行了较大的更新，不仅能帮助你更安全、更方便地使用C++，而且校招考察的也较多，建议看看、学习下。关于C++11的知识建议阅读下面三本书：</p>
+<ul>
+<li>《深入理解C++11：C++11新特性解析与应用》</li>
+<li>《Effective Modern C++》</li>
+<li>《modern C++ tutorials》</li>
+</ul>
+<p>注意，如果时间不充足，看书不用按照顺序看，可以先把重要的知识点看完，再看别的小的点。</p>
+<h2 id="C-进阶"><a href="#C-进阶" class="headerlink" title="C++进阶"></a>C++进阶</h2><p>下面这三本书，主要是关于C++的对象模型、C++的使用建议、STL底层实现等方面，用于提升C++内功：</p>
+<ul>
+<li><p>《深度探索C++对象模型》 </p>
+<p>这本书虽然是很早的书，但是里面的内容依然适用，能极大地提升C++的内功。时间不够，可只看前四章。</p>
+</li>
+<li><p>《effective c++》/ 《more effective C++》</p>
+<p>可以让你知道怎么正确并且更好地使用C++技术。</p>
+</li>
+<li><p>《STL源码剖析》</p>
+<p>建议看看，能让你深入了解STL的实现原理，不仅仅是各个数据结构是怎么实现的，还涉及到一些设计模式、模板的知识。</p>
+</li>
+</ul>
+<p>上面有些知识过于硬核，也都是<strong>侯捷老师</strong>翻译的，如果觉得枯燥了点，可以搭配侯捷老师的视频一起学习：</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1o4411A7dg/?spm_id_from=333.788.recommend_more_video.2">C++标准 11-14</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1b4411977J/?spm_id_from=333.788.recommend_more_video.1">内存管理</a></li>
+<li><a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1yo4y1o7yA/?spm_id_from=333.788.recommend_more_video.0">C++标准库 体系结构与内核分析</a></li>
+</ul>
+<p>到此，C++知识基本已经完结，可能有人觉得还没涉及到C++模板的知识。但是在上面的推荐的知识中，已经包含了常用的模板使用技术，更加深入的<strong>元编程</strong>属于黑魔法级别，不会有公司使用的。</p>
+<p>当然，如果对模板、元编程非常有兴趣，可以看看：</p>
+<ul>
+<li>《C++模板 第二版》（目前还没有中文版）</li>
+</ul>
+<p>那么下面就要进入语言基础之外的体系了。</p>
+<h2 id="OS"><a href="#OS" class="headerlink" title="OS"></a>OS</h2><p>对于C/C++程序员，更加推荐 两本书：《深入理解计算机系统》 和 《程序员的自我修养-链接、装载》。这两本书能站在编译器的角度看待C/C++语言规则，校招问的也比较多，比如<code>new</code>是在底层是怎么一个过程？如果校招准备时间不够，可以不看 《程序员的自我修养-链接、装载》。</p>
+<ul>
+<li>《深入理解计算机系统》：重点章节：2，3，5，7，9</li>
+<li>《程序员的自我修养-链接、装载》</li>
+</ul>
+<p>如果时间有余，则可以进一步看《操作系统精髓与设计原理  第8版》，如果是非科班可以和<a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1YE411D7nH?from=search&seid=18413025192457118772">王道考研-操作系统</a>一起食用更佳。</p>
+<ul>
+<li>《操作系统精髓与设计原理  第8版》： 时间不足章节选看</li>
+</ul>
+<h2 id="Linux"><a href="#Linux" class="headerlink" title="Linux"></a>Linux</h2><p>好嘞，到这里真正开始进入到Linux后端开发了。需要先学习Linux的系统编程、网络编程知识，毫无疑问两本书：</p>
+<ul>
+<li><code>APUE</code>  – 《UNIX环境高级编程》 重点章节：3,4,5,7,8,10,11,12。</li>
+<li><code>UNP</code> –《UNIX网络编程》前面8章及11，14，16，26。整个书只看 <code>TCP/UDP</code> </li>
+</ul>
+<p>但有个难题，这两本书太厚了，对于初学者不友好，一开始看可能陷入无法理解的细节中。自己的方法是：</p>
+<ul>
+<li>先看上面列举出的重点章节，其余章节用到了再看；</li>
+<li>配合视频：我自己看的是<a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1dt411f7TZ?from=search&seid=7353292615540783179">黑马Linux全套视频</a> 及 <a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV1eb411F74G">Linux网络编程视频</a>，我也是跳着看的。后者音质可能不太好，看自己能不能接受。</li>
+</ul>
+<p>至于搭建linux环境，有两个方法：</p>
+<ul>
+<li>windows里下载wsl2，然后 vscode下载个<code>Remote-WSL</code>插件，vscode直接登录到wsl里，好用到爆炸！！！</li>
+<li>但是<code>wsl2</code>有几个缺陷，和调试网络有关的功能用不了，比如<code>tcpdump</code>等。那么此时可以开启一个虚拟机，vscode下载<code>Remote SSH</code>插件远程登录即可。</li>
+</ul>
+<p>如果只是日常开发，建议选择wsl，比较方便，调试网络之类的选择虚拟机。</p>
+<h2 id="后端"><a href="#后端" class="headerlink" title="后端"></a>后端</h2><p>如果上面都已经看完，则表示已经具备 C++ &amp; Linux 后端开发的基础了，那么下面可以开始学习服务器开发了：</p>
+<ul>
+<li>《Linux高性能服务器编程》</li>
+<li><a target="_blank" rel="noopener" href="https://github.com/chenshuo/muduo">开源项目-《Muduo》</a>及<a target="_blank" rel="noopener" href="https://www.bilibili.com/video/BV11b411q7zr">Muduo讲解视频</a></li>
+</ul>
+<p>游双老师的《Linux高性能服务器编程》，这本书剖析了设计一个服务器的各个要点，其中的点面试也经常考，比如<code>epoll</code>的ET模式能使用阻塞IO吗？这本书强势推荐。</p>
+<p>而陈硕老师的<code>muduo</code>项目，其设计上也符合《Linux高性能服务器编程》上的设计，b站有老师逐行代码讲解了<code>muduo</code>，不过这个视频噪音大了一点，我坚持看完了收获颇大。</p>
+<p>补充：有人可能觉得，muduo项目烂大街，但是你真的把里面的设计原理搞懂了吗？比如著名的<code>libuv</code>和<code>redis</code>的服务器相关的设计和<code>muduo</code>的设计完全一致，如果你搞懂了以后看redis源码也很轻松。其次有时间可以看看<code>libuv</code>，代码量不多，里面的多线程设计也具有参考价值。</p>
+<h2 id="后端进阶"><a href="#后端进阶" class="headerlink" title="后端进阶"></a>后端进阶</h2><h3 id="RPC"><a href="#RPC" class="headerlink" title="RPC"></a>RPC</h3><p>如果到此，你还使时间充足，想要冲刺核心部门，那么可以学习RPC的相关知识。你可以从<code>jsonrpc</code>开始学习json是怎么实现的，进阶一点你可以看看<code>brpc</code>的设计方式，比如它的协程是怎么设计的。</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="https://github.com/cinemast/libjson-rpc-cpp">libjson</a></li>
+<li><a target="_blank" rel="noopener" href="https://github.com/apache/incubator-brpc">brpc</a></li>
+</ul>
+<p>RPC就避免不了序列化协议部分，关于这个常用的有： <code>protobuff</code>, <code>json</code>，<code>xml</code> 。</p>
+<ul>
+<li><code>protobuf</code>：可以看看 <code>protobuff</code> 怎么使用。</li>
+<li><code>json</code>：可以自己写个解析器，<a target="_blank" rel="noopener" href="https://github.com/miloyip/json-tutorial">json-tutorials</a>详细分解了json的设计流程，看完基本就懂了。</li>
+</ul>
+<p>对于协议部分，要明白各个之间的区别、优劣势。</p>
+<h3 id="Redis"><a href="#Redis" class="headerlink" title="Redis"></a>Redis</h3><p>如果有时间，真的充足！！！可以看看redis的源码，Redis源码，个人觉得可以分为三个部分来看：</p>
+<ol>
+<li><p>服务器设计：这部分的主要内容就是：1）redis怎么接受客户端的输入、解析成指令；2）执行指令；3）怎么将指令结果返回给客户端。</p>
+<p><code>aeEventLoop</code>的设计和 《Linux高性能服务器编程》讲解的总体类似，输入输出缓冲区的设计和muduo讲解的基本一致，也有应用层的流量控制。</p>
+</li>
+<li><p>数据结构设计：各个数据结构的设计，怎么融合到<code>aeEventLoop</code>中，成为服务器的一部分，实现了各个指令功能。</p>
+</li>
+<li><p>分布式设计：1）主从同步replication；2）<code>sentinel</code>模式：用于解决主从同步中的主服务宕机怎么办，故障转移等；3）集群。</p>
+</li>
+</ol>
+<p>Redis整个设计大致如上，如果想在秋招之前学习下，建议看下第一部分。第二部分时间仍然有剩余可以看下。推荐的书籍：</p>
+<ul>
+<li>《Redis设计与实现》</li>
+<li>《Redis 5设计与源码分析》</li>
+</ul>
+<p>两本侧重点不同，前者侧重讲解原理，分析的比较清楚，只是代码是python的伪代码。后者结合redis的源码。结合看比较好。</p>
+<p>最后，学习redis不能光看书和代码，要先学会使用！！！再去看，有几个网址可以看看</p>
+<ul>
+<li><a target="_blank" rel="noopener" href="http://doc.redisfans.com/">Redis中文指令参考</a>：这是中文的，对于初学很友好</li>
+<li><a target="_blank" rel="noopener" href="https://redis.io/commands">Redis指令官网</a>：官网，实时更新，如果上面中文网页没有的知识，可以来这看。</li>
+</ul>
+<h2 id="数据结构与算法"><a href="#数据结构与算法" class="headerlink" title="数据结构与算法"></a>数据结构与算法</h2><h3 id="算法"><a href="#算法" class="headerlink" title="算法"></a>算法</h3><p>如果你的时间充足：</p>
+<ul>
+<li>《算法》</li>
+<li>清华大学邓俊辉老师的《数据结构与算法》。</li>
+</ul>
+<h3 id="leetcode-刷题"><a href="#leetcode-刷题" class="headerlink" title="leetcode 刷题"></a>leetcode 刷题</h3><ul>
+<li> Leetcode，时间充足刷前300道，至少200道，建议把《Leetcode精选TOP面试题》刷完</li>
+<li>剑指offer 至少2遍，要非常熟悉里面的题目，因为这真能让你获得offer</li>
+</ul>
+<p>是否要购买Leetcode会员，能把前面的300道题目写完足够。如果300道写完，可以到牛客网继续刷真题，因为面试时的面试题是要处理输<br>入输出的，秋招时很多人因为不能熟练处理输入输出导致无法ac。如果还想买，建议和同学一起买，更加便宜。</p>
+<h2 id="计算机网络"><a href="#计算机网络" class="headerlink" title="计算机网络"></a>计算机网络</h2><p>如果你时间充足，可以看看《TCP/IP 卷一》，时间不充足就不要看了。因为上面的书籍上、代码里都包含了常用的TCP/IP知识。</p>
+<p>建议掌握以下Linux 命令，帮助你分析网络通信：</p>
+<ul>
+<li><code>tcpdump</code></li>
+<li><code>lsof</code></li>
+<li><code>netstat</code></li>
+<li><code>netcat</code></li>
+</ul>
+<h2 id="工具"><a href="#工具" class="headerlink" title="工具"></a>工具</h2><p>学会使用，cmake、gdb。</p>
+<ul>
+<li>cmake：如果你看了muduo的讲解视频，里面在讲解muduo的同时了怎么使用cmake</li>
+<li><code>gdb</code>：建议学学，不仅有利于秋招，也能帮助自己学习源代码、调试</li>
+</ul>
+<h2 id="最后几点建议"><a href="#最后几点建议" class="headerlink" title="最后几点建议"></a>最后几点建议</h2><p>最后几点建议：</p>
+<ul>
+<li>要学会<code>markdown</code> 的使用，记录笔记</li>
+<li>创建github账号，更新你的项目</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/categories/">categories</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#C-%E5%9F%BA%E7%A1%80"><span class="toc-number">1.</span> <span class="toc-text">C++基础</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#C-11"><span class="toc-number">2.</span> <span class="toc-text">C++11</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#C-%E8%BF%9B%E9%98%B6"><span class="toc-number">3.</span> <span class="toc-text">C++进阶</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OS"><span class="toc-number">4.</span> <span class="toc-text">OS</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Linux"><span class="toc-number">5.</span> <span class="toc-text">Linux</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF"><span class="toc-number">6.</span> <span class="toc-text">后端</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%90%8E%E7%AB%AF%E8%BF%9B%E9%98%B6"><span class="toc-number">7.</span> <span class="toc-text">后端进阶</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RPC"><span class="toc-number">7.1.</span> <span class="toc-text">RPC</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Redis"><span class="toc-number">7.2.</span> <span class="toc-text">Redis</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E4%B8%8E%E7%AE%97%E6%B3%95"><span class="toc-number">8.</span> <span class="toc-text">数据结构与算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%97%E6%B3%95"><span class="toc-number">8.1.</span> <span class="toc-text">算法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#leetcode-%E5%88%B7%E9%A2%98"><span class="toc-number">8.2.</span> <span class="toc-text">leetcode 刷题</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%BD%91%E7%BB%9C"><span class="toc-number">9.</span> <span class="toc-text">计算机网络</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B7%A5%E5%85%B7"><span class="toc-number">10.</span> <span class="toc-text">工具</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E5%90%8E%E5%87%A0%E7%82%B9%E5%BB%BA%E8%AE%AE"><span class="toc-number">11.</span> <span class="toc-text">最后几点建议</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/Path/1/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/Path/1/&text=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/Path/1/&is_video=false&description=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=C++ &amp; Linux 后端：进BAT的学习路线&body=Check out this article: https://szza.github.io/2021/03/01/Path/1/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/Path/1/&title=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/Path/1/&name=C++ &amp; Linux 后端：进BAT的学习路线&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/Path/1/&t=C++ &amp; Linux 后端：进BAT的学习路线"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/about/">About</a></li>
+         
+          <li><a href="/categories/">categories</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>
