@@ -9,7 +9,7 @@
     <meta name="description" content="HashTable&lt;T, Hash, Equal&gt;RocksDb 为了优化多核下的HashTable性能，放弃了全局锁设计，取而代之是如下分段锁设计：在并发下，将全局锁上的竞争分散到各个bucket上。 对每个桶（bucket）分配一个锁（mutex），当获取某个bucket中的元素时，只使用对应bucket的mutex即可，这样对其他bucket的元素就没有额外的负担。 123456">
 <meta property="og:type" content="article">
 <meta property="og:title" content="多线程 HashTable 设计">
-<meta property="og:url" content="https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/index.html">
+<meta property="og:url" content="https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="HashTable&lt;T, Hash, Equal&gt;RocksDb 为了优化多核下的HashTable性能，放弃了全局锁设计，取而代之是如下分段锁设计：在并发下，将全局锁上的竞争分散到各个bucket上。 对每个桶（bucket）分配一个锁（mutex），当获取某个bucket中的元素时，只使用对应bucket的mutex即可，这样对其他bucket的元素就没有额外的负担。 123456">
 <meta property="og:locale" content="en_US">
@@ -76,10 +76,10 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2021/11/26/RocksDB/utility/persistent_cache/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2021/12/09/Redis/%E5%BC%82%E6%AD%A5%E9%80%9A%E4%BF%A1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
-        <li><a class="icon" href="/2021/11/26/RocksDB/Table/builder/2_IndexBlock/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        <li><a class="icon" href="/2021/11/26/rocksdb/utility/persistent_cache/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
         
         <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
         <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
@@ -92,17 +92,17 @@
     <br/>
     <div id="share" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&text=多线程 HashTable 设计"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&is_video=false&description=多线程 HashTable 设计"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=多线程 HashTable 设计&body=Check out this article: https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&name=多线程 HashTable 设计&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&t=多线程 HashTable 设计"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&text=多线程 HashTable 设计"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&is_video=false&description=多线程 HashTable 设计"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=多线程 HashTable 设计&body=Check out this article: https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&name=多线程 HashTable 设计&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&t=多线程 HashTable 设计"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -218,17 +218,17 @@
 
     <div id="share-footer" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&text=多线程 HashTable 设计"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&is_video=false&description=多线程 HashTable 设计"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=多线程 HashTable 设计&body=Check out this article: https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&name=多线程 HashTable 设计&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/&t=多线程 HashTable 设计"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&text=多线程 HashTable 设计"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&is_video=false&description=多线程 HashTable 设计"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=多线程 HashTable 设计&body=Check out this article: https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&title=多线程 HashTable 设计"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&name=多线程 HashTable 设计&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/&t=多线程 HashTable 设计"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>

@@ -29,7 +29,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/11/26/RocksDB/utility/persistent_cache/</loc>
+    <loc>https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -38,7 +38,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2022/01/06/RocksDB/MemoryAllocator/2_arena/</loc>
+    <loc>https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -47,7 +47,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/</loc>
+    <loc>https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -56,7 +56,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2022/01/07/RocksDB/MemoryAllocator/2_concurrent_arena/</loc>
+    <loc>https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -65,7 +65,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/11/25/RocksDB/Table/builder/5_Footer/</loc>
+    <loc>https://szza.github.io/2021/11/25/rocksdb/Table/builder/5_Footer/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -74,7 +74,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/11/26/RocksDB/Table/builder/4_BlockBaseTableBuilder/</loc>
+    <loc>https://szza.github.io/2021/11/26/rocksdb/Table/builder/4_BlockBaseTableBuilder/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -83,7 +83,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/11/26/RocksDB/Table/builder/3_FilterBlock/</loc>
+    <loc>https://szza.github.io/2021/11/26/rocksdb/Table/builder/3_FilterBlock/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -92,7 +92,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/11/26/RocksDB/Table/builder/2_IndexBlock/</loc>
+    <loc>https://szza.github.io/2021/11/26/rocksdb/Table/builder/2_IndexBlock/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -101,7 +101,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/01/26/RocksDB/Table/builder/1_BlockBuiler/</loc>
+    <loc>https://szza.github.io/2021/01/26/rocksdb/Table/builder/1_BlockBuiler/</loc>
     
     <lastmod>2023-07-31</lastmod>
     
@@ -227,15 +227,6 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/01/26/Redis/InputBuffer/</loc>
-    
-    <lastmod>2021-03-01</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>https://szza.github.io/2021/01/26/Redis/OutputBuffer/</loc>
     
     <lastmod>2021-03-01</lastmod>
@@ -254,16 +245,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/01/27/Redis/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/</loc>
-    
-    <lastmod>2021-03-01</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2021/01/29/Redis/%E5%88%86%E5%B8%83%E5%BC%8F/replication/</loc>
+    <loc>https://szza.github.io/2021/01/26/Redis/InputBuffer/</loc>
     
     <lastmod>2021-03-01</lastmod>
     
@@ -282,6 +264,24 @@
   
   <url>
     <loc>https://szza.github.io/2021/02/05/Redis/%E5%88%86%E5%B8%83%E5%BC%8F/sentinel/</loc>
+    
+    <lastmod>2021-03-01</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2021/01/27/Redis/%E6%8C%81%E4%B9%85%E5%8C%96/RIO/</loc>
+    
+    <lastmod>2021-03-01</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2021/01/29/Redis/%E5%88%86%E5%B8%83%E5%BC%8F/replication/</loc>
     
     <lastmod>2021-03-01</lastmod>
     
@@ -347,14 +347,14 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/tags/%E5%B7%A5%E5%85%B7/</loc>
+    <loc>https://szza.github.io/tags/nio/</loc>
     <lastmod>2023-07-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
-    <loc>https://szza.github.io/tags/nio/</loc>
+    <loc>https://szza.github.io/tags/%E5%B7%A5%E5%85%B7/</loc>
     <lastmod>2023-07-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -384,14 +384,14 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/categories/%E5%B7%A5%E5%85%B7/</loc>
+    <loc>https://szza.github.io/categories/nio/</loc>
     <lastmod>2023-07-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
-    <loc>https://szza.github.io/categories/nio/</loc>
+    <loc>https://szza.github.io/categories/%E5%B7%A5%E5%85%B7/</loc>
     <lastmod>2023-07-31</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>

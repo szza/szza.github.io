@@ -18,8 +18,8 @@
   
   <entry>
     <title>内存分配器之 concurrent_arena</title>
-    <link href="https://szza.github.io/2022/01/07/RocksDB/MemoryAllocator/2_concurrent_arena/"/>
-    <id>https://szza.github.io/2022/01/07/RocksDB/MemoryAllocator/2_concurrent_arena/</id>
+    <link href="https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/"/>
+    <id>https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/</id>
     <published>2022-01-07T06:15:35.000Z</published>
     <updated>2023-07-31T14:35:00.000Z</updated>
     
@@ -42,8 +42,8 @@
   
   <entry>
     <title>内存分配器之 arena</title>
-    <link href="https://szza.github.io/2022/01/06/RocksDB/MemoryAllocator/2_arena/"/>
-    <id>https://szza.github.io/2022/01/06/RocksDB/MemoryAllocator/2_arena/</id>
+    <link href="https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/"/>
+    <id>https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/</id>
     <published>2022-01-06T06:15:35.000Z</published>
     <updated>2023-07-31T14:54:32.000Z</updated>
     
@@ -142,33 +142,9 @@
   </entry>
   
   <entry>
-    <title>persistent cache 设计</title>
-    <link href="https://szza.github.io/2021/11/26/RocksDB/utility/persistent_cache/"/>
-    <id>https://szza.github.io/2021/11/26/RocksDB/utility/persistent_cache/</id>
-    <published>2021-11-26T06:15:35.000Z</published>
-    <updated>2023-07-31T15:01:40.000Z</updated>
-    
-    <content type="html"><![CDATA[<h2 id="persistent-cache"><a href="#persistent-cache" class="headerlink" title="persistent cache"></a>persistent cache</h2><p>RocksDb  利用分层概念，设计了persistent cache：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//</span><br><span class="line">// PersistentTieredCache architecture:</span><br><span class="line">// +--------------------------+ PersistentCacheTier that handles multiple tiers</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | RAM            | PersistentCacheTier that handles RAM (VolatileCacheImpl)</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   v                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | NVM            | PersistentCacheTier implementation that handles NVM</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   V                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | LE-SSD         | PersistentCacheTier implementation that handles LE-SSD</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   |                      |</span><br><span class="line">// |   V                      |</span><br><span class="line">// |  null                    |</span><br><span class="line">// +--------------------------+</span><br><span class="line">//               |</span><br><span class="line">//               V</span><br><span class="line">//              null</span><br></pre></td></tr></table></figure><ul><li>在最上层，数据全都是在内存中，这一部分属于易失性数据由 <code>VolatileCacheImpl</code> 实现</li><li>其他层，在内存和文件中的数据进行交互，由 <code>BlockCacheImpl</code> 实现。</li></ul>]]></content>
-    
-    
-      
-      
-    <summary type="html">&lt;h2 id=&quot;persistent-cache&quot;&gt;&lt;a href=&quot;#persistent-cache&quot; class=&quot;headerlink&quot; title=&quot;persistent cache&quot;&gt;&lt;/a&gt;persistent cache&lt;/h2&gt;&lt;p&gt;RocksDb  利用分层概</summary>
-      
-    
-    
-    
-    <category term="RocksDB 剖析" scheme="https://szza.github.io/categories/RocksDB-%E5%89%96%E6%9E%90/"/>
-    
-    
-    <category term="RocksDB" scheme="https://szza.github.io/tags/RocksDB/"/>
-    
-  </entry>
-  
-  <entry>
     <title>多线程 HashTable 设计</title>
-    <link href="https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/"/>
-    <id>https://szza.github.io/2021/11/26/RocksDB/utility/HashTablel/</id>
+    <link href="https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/"/>
+    <id>https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/</id>
     <published>2021-11-26T06:15:35.000Z</published>
     <updated>2023-07-31T14:48:16.000Z</updated>
     
@@ -190,9 +166,33 @@
   </entry>
   
   <entry>
+    <title>persistent cache 设计</title>
+    <link href="https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/"/>
+    <id>https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/</id>
+    <published>2021-11-26T06:15:35.000Z</published>
+    <updated>2023-07-31T15:01:40.000Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="persistent-cache"><a href="#persistent-cache" class="headerlink" title="persistent cache"></a>persistent cache</h2><p>RocksDb  利用分层概念，设计了persistent cache：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//</span><br><span class="line">// PersistentTieredCache architecture:</span><br><span class="line">// +--------------------------+ PersistentCacheTier that handles multiple tiers</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | RAM            | PersistentCacheTier that handles RAM (VolatileCacheImpl)</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   v                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | NVM            | PersistentCacheTier implementation that handles NVM</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   V                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | LE-SSD         | PersistentCacheTier implementation that handles LE-SSD</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   |                      |</span><br><span class="line">// |   V                      |</span><br><span class="line">// |  null                    |</span><br><span class="line">// +--------------------------+</span><br><span class="line">//               |</span><br><span class="line">//               V</span><br><span class="line">//              null</span><br></pre></td></tr></table></figure><ul><li>在最上层，数据全都是在内存中，这一部分属于易失性数据由 <code>VolatileCacheImpl</code> 实现</li><li>其他层，在内存和文件中的数据进行交互，由 <code>BlockCacheImpl</code> 实现。</li></ul>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h2 id=&quot;persistent-cache&quot;&gt;&lt;a href=&quot;#persistent-cache&quot; class=&quot;headerlink&quot; title=&quot;persistent cache&quot;&gt;&lt;/a&gt;persistent cache&lt;/h2&gt;&lt;p&gt;RocksDb  利用分层概</summary>
+      
+    
+    
+    
+    <category term="RocksDB 剖析" scheme="https://szza.github.io/categories/RocksDB-%E5%89%96%E6%9E%90/"/>
+    
+    
+    <category term="RocksDB" scheme="https://szza.github.io/tags/RocksDB/"/>
+    
+  </entry>
+  
+  <entry>
     <title>IndexBlock 源码分析</title>
-    <link href="https://szza.github.io/2021/11/26/RocksDB/Table/builder/2_IndexBlock/"/>
-    <id>https://szza.github.io/2021/11/26/RocksDB/Table/builder/2_IndexBlock/</id>
+    <link href="https://szza.github.io/2021/11/26/rocksdb/Table/builder/2_IndexBlock/"/>
+    <id>https://szza.github.io/2021/11/26/rocksdb/Table/builder/2_IndexBlock/</id>
     <published>2021-11-26T06:15:35.000Z</published>
     <updated>2023-07-31T14:33:52.000Z</updated>
     
@@ -215,8 +215,8 @@
   
   <entry>
     <title>FilterBlock 源码分析</title>
-    <link href="https://szza.github.io/2021/11/26/RocksDB/Table/builder/3_FilterBlock/"/>
-    <id>https://szza.github.io/2021/11/26/RocksDB/Table/builder/3_FilterBlock/</id>
+    <link href="https://szza.github.io/2021/11/26/rocksdb/Table/builder/3_FilterBlock/"/>
+    <id>https://szza.github.io/2021/11/26/rocksdb/Table/builder/3_FilterBlock/</id>
     <published>2021-11-26T06:15:35.000Z</published>
     <updated>2023-07-31T14:34:04.000Z</updated>
     
@@ -240,8 +240,8 @@
   
   <entry>
     <title>BlockBasedTableBuilder 源码分析</title>
-    <link href="https://szza.github.io/2021/11/26/RocksDB/Table/builder/4_BlockBaseTableBuilder/"/>
-    <id>https://szza.github.io/2021/11/26/RocksDB/Table/builder/4_BlockBaseTableBuilder/</id>
+    <link href="https://szza.github.io/2021/11/26/rocksdb/Table/builder/4_BlockBaseTableBuilder/"/>
+    <id>https://szza.github.io/2021/11/26/rocksdb/Table/builder/4_BlockBaseTableBuilder/</id>
     <published>2021-11-26T06:15:35.000Z</published>
     <updated>2023-07-31T14:34:18.000Z</updated>
     
@@ -264,8 +264,8 @@
   
   <entry>
     <title>Footer 格式</title>
-    <link href="https://szza.github.io/2021/11/25/RocksDB/Table/builder/5_Footer/"/>
-    <id>https://szza.github.io/2021/11/25/RocksDB/Table/builder/5_Footer/</id>
+    <link href="https://szza.github.io/2021/11/25/rocksdb/Table/builder/5_Footer/"/>
+    <id>https://szza.github.io/2021/11/25/rocksdb/Table/builder/5_Footer/</id>
     <published>2021-11-25T06:15:35.000Z</published>
     <updated>2023-07-31T14:34:32.000Z</updated>
     
