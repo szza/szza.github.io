@@ -142,28 +142,6 @@
   </entry>
   
   <entry>
-    <title>persistent cache 设计</title>
-    <link href="https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/"/>
-    <id>https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/</id>
-    <published>2021-11-26T06:15:35.000Z</published>
-    <updated>2023-07-31T16:46:34.312Z</updated>
-    
-    <content type="html"><![CDATA[<h2 id="persistent-cache"><a href="#persistent-cache" class="headerlink" title="persistent cache"></a>persistent cache</h2><p>RocksDB  利用分层概念，设计了persistent cache：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//</span><br><span class="line">// PersistentTieredCache architecture:</span><br><span class="line">// +--------------------------+ PersistentCacheTier that handles multiple tiers</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | RAM            | PersistentCacheTier that handles RAM (VolatileCacheImpl)</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   v                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | NVM            | PersistentCacheTier implementation that handles NVM</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   V                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | LE-SSD         | PersistentCacheTier implementation that handles LE-SSD</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   |                      |</span><br><span class="line">// |   V                      |</span><br><span class="line">// |  null                    |</span><br><span class="line">// +--------------------------+</span><br><span class="line">//               |</span><br><span class="line">//               V</span><br><span class="line">//              null</span><br></pre></td></tr></table></figure><ul><li>在最上层，数据全都是在内存中，这一部分属于易失性数据由 <code>VolatileCacheImpl</code> 实现</li><li>其他层，在内存和文件中的数据进行交互，由 <code>BlockCacheImpl</code> 实现。</li></ul>]]></content>
-    
-    
-      
-      
-    <summary type="html">&lt;h2 id=&quot;persistent-cache&quot;&gt;&lt;a href=&quot;#persistent-cache&quot; class=&quot;headerlink&quot; title=&quot;persistent cache&quot;&gt;&lt;/a&gt;persistent cache&lt;/h2&gt;&lt;p&gt;RocksDB  利用分层概</summary>
-      
-    
-    
-    
-    <category term="RocksDB 剖析" scheme="https://szza.github.io/categories/RocksDB-%E5%89%96%E6%9E%90/"/>
-    
-    
-  </entry>
-  
-  <entry>
     <title>多线程 HashTable 设计</title>
     <link href="https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/"/>
     <id>https://szza.github.io/2021/11/26/rocksdb/utility/HashTablel/</id>
@@ -176,6 +154,28 @@
       
       
     <summary type="html">&lt;h2 id=&quot;HashTable-lt-T-Hash-Equal-gt&quot;&gt;&lt;a href=&quot;#HashTable-lt-T-Hash-Equal-gt&quot; class=&quot;headerlink&quot; title=&quot;HashTable&amp;lt;T, Hash, Equal&amp;gt;&quot;&gt;&lt;/a</summary>
+      
+    
+    
+    
+    <category term="RocksDB 剖析" scheme="https://szza.github.io/categories/RocksDB-%E5%89%96%E6%9E%90/"/>
+    
+    
+  </entry>
+  
+  <entry>
+    <title>persistent cache 设计</title>
+    <link href="https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/"/>
+    <id>https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/</id>
+    <published>2021-11-26T06:15:35.000Z</published>
+    <updated>2023-07-31T16:46:34.312Z</updated>
+    
+    <content type="html"><![CDATA[<h2 id="persistent-cache"><a href="#persistent-cache" class="headerlink" title="persistent cache"></a>persistent cache</h2><p>RocksDB  利用分层概念，设计了persistent cache：</p><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">//</span><br><span class="line">// PersistentTieredCache architecture:</span><br><span class="line">// +--------------------------+ PersistentCacheTier that handles multiple tiers</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | RAM            | PersistentCacheTier that handles RAM (VolatileCacheImpl)</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   v                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | NVM            | PersistentCacheTier implementation that handles NVM</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   | next                 |</span><br><span class="line">// |   V                      |</span><br><span class="line">// | +----------------+       |</span><br><span class="line">// | | LE-SSD         | PersistentCacheTier implementation that handles LE-SSD</span><br><span class="line">// | +----------------+ (BlockCacheImpl)</span><br><span class="line">// |   |                      |</span><br><span class="line">// |   V                      |</span><br><span class="line">// |  null                    |</span><br><span class="line">// +--------------------------+</span><br><span class="line">//               |</span><br><span class="line">//               V</span><br><span class="line">//              null</span><br></pre></td></tr></table></figure><ul><li>在最上层，数据全都是在内存中，这一部分属于易失性数据由 <code>VolatileCacheImpl</code> 实现</li><li>其他层，在内存和文件中的数据进行交互，由 <code>BlockCacheImpl</code> 实现。</li></ul>]]></content>
+    
+    
+      
+      
+    <summary type="html">&lt;h2 id=&quot;persistent-cache&quot;&gt;&lt;a href=&quot;#persistent-cache&quot; class=&quot;headerlink&quot; title=&quot;persistent cache&quot;&gt;&lt;/a&gt;persistent cache&lt;/h2&gt;&lt;p&gt;RocksDB  利用分层概</summary>
       
     
     
