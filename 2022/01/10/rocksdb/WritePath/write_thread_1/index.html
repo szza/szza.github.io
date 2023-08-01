@@ -14,9 +14,9 @@
 <meta property="og:description" content="WriteBatch 无论 Put&#x2F;Delete&#x2F;DeleteRange 都是向 RocksDB 插入一对 {key, value}，在不至于引起误解的前提下，下面不加以区分地统一表述为 写入 操作  写入一条 &amp;#123;key, value&amp;#125; 数据需要先在 WriteBatch 内部序列化到 WriteBatch::rep_字段中。其整体格式如下： 1234# 实时上是一行连续存储，">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2022-01-10T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-08-01T02:09:20.774Z">
+<meta property="article:modified_time" content="2023-08-01T02:21:03.536Z">
 <meta property="article:author" content="fibonaccii">
-<meta property="article:tag" content="look code art">
+<meta property="article:tag" content="RocksDB">
 <meta name="twitter:card" content="summary">
     
     
@@ -76,7 +76,7 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2022/01/12/rocksdb/WritePath/write_thread_3/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2022/01/11/rocksdb/WritePath/write_thread_2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
         <li><a class="icon" href="/2022/01/08/rocksdb/WritePath/overview/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
@@ -145,6 +145,11 @@
 
 
       
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDB/" rel="tag">RocksDB</a>
+    </div>
+
 
     </div>
   </header>

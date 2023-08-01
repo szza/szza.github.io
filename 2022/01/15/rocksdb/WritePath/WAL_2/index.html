@@ -14,9 +14,9 @@
 <meta property="og:description" content="本文简要讲下在 Flush  MemTable 之前，WAL 需要进行 SYNC 的原因。更多设计思考可以阅读 Track-WAL-in-MANIFEST WHY NEED to SYNC WAL出于性能考虑，默认情况下 RocksDB 不会每写入一次数据就进行一次 SYNC WAL 操作。但没有 SYNC WAL 会带来两个影响：  在 recovery 时，就无法检查 WAL 是否存在磁盘上，">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2022-01-15T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-08-01T02:09:41.620Z">
+<meta property="article:modified_time" content="2023-08-01T02:20:56.518Z">
 <meta property="article:author" content="fibonaccii">
-<meta property="article:tag" content="look code art">
+<meta property="article:tag" content="RocksDB">
 <meta name="twitter:card" content="summary">
     
     
@@ -145,6 +145,11 @@
 
 
       
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDB/" rel="tag">RocksDB</a>
+    </div>
+
 
     </div>
   </header>

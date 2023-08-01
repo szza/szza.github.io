@@ -9,14 +9,14 @@
     <meta name="description" content="建议先阅读上一篇文章 WriteBatch 写入前的准备工作 了解一些基本概念  本篇博客讲解批量写流程的控制流程，了解这个流程之后再来讲解 PipelineWriteImpl 中优化。 整个写入流程大致如下： WriteThread::JoinBatchGroupJoinBatchGroup 函数充当着锁的作用：能成为 leader 的 writer 才能真正执行 WriteToWAL 和 M">
 <meta property="og:type" content="article">
 <meta property="og:title" content="WriteThread 如何自适应优化线程同步">
-<meta property="og:url" content="https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/index.html">
+<meta property="og:url" content="https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="建议先阅读上一篇文章 WriteBatch 写入前的准备工作 了解一些基本概念  本篇博客讲解批量写流程的控制流程，了解这个流程之后再来讲解 PipelineWriteImpl 中优化。 整个写入流程大致如下： WriteThread::JoinBatchGroupJoinBatchGroup 函数充当着锁的作用：能成为 leader 的 writer 才能真正执行 WriteToWAL 和 M">
 <meta property="og:locale" content="en_US">
-<meta property="article:published_time" content="2022-01-13T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-08-01T02:13:59.937Z">
+<meta property="article:published_time" content="2022-01-11T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-01T02:21:14.334Z">
 <meta property="article:author" content="fibonaccii">
-<meta property="article:tag" content="look code art">
+<meta property="article:tag" content="RocksDB">
 <meta name="twitter:card" content="summary">
     
     
@@ -76,10 +76,10 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2022/01/14/rocksdb/WritePath/WAL_1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2022/01/12/rocksdb/WritePath/write_thread_3/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
-        <li><a class="icon" href="/2022/01/13/rocksdb/WritePath/write_thread_4/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        <li><a class="icon" href="/2022/01/10/rocksdb/WritePath/write_thread_1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
         
         <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
         <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
@@ -92,17 +92,17 @@
     <br/>
     <div id="share" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&text=WriteThread 如何自适应优化线程同步"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&is_video=false&description=WriteThread 如何自适应优化线程同步"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=WriteThread 如何自适应优化线程同步&body=Check out this article: https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&name=WriteThread 如何自适应优化线程同步&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&t=WriteThread 如何自适应优化线程同步"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&text=WriteThread 如何自适应优化线程同步"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&is_video=false&description=WriteThread 如何自适应优化线程同步"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何自适应优化线程同步&body=Check out this article: https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&name=WriteThread 如何自适应优化线程同步&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&t=WriteThread 如何自适应优化线程同步"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -131,7 +131,7 @@
       
     <div class="postdate">
       
-        <time datetime="2022-01-13T06:15:35.000Z" itemprop="datePublished">2022-01-13</time>
+        <time datetime="2022-01-11T06:15:35.000Z" itemprop="datePublished">2022-01-11</time>
         
       
     </div>
@@ -145,6 +145,11 @@
 
 
       
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDB/" rel="tag">RocksDB</a>
+    </div>
+
 
     </div>
   </header>
@@ -231,7 +236,9 @@
 
 <h3 id="By-the-Way"><a href="#By-the-Way" class="headerlink" title="By the Way"></a>By the Way</h3><ul>
 <li>这篇文章里面用了许多原子操作以及一些内存序，诸如 <code>compare_exchange_strong/compare_exchange_weak</code> 区别，<code>acquire/release</code>语义，等后面有空再单独讲解下这个问题。</li>
+<li>欢迎点赞转发，有问题后台交流</li>
 </ul>
+<hr>
 
   </div>
 </article>
@@ -260,17 +267,17 @@
 
     <div id="share-footer" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&text=WriteThread 如何自适应优化线程同步"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&is_video=false&description=WriteThread 如何自适应优化线程同步"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=WriteThread 如何自适应优化线程同步&body=Check out this article: https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&name=WriteThread 如何自适应优化线程同步&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/&t=WriteThread 如何自适应优化线程同步"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&text=WriteThread 如何自适应优化线程同步"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&is_video=false&description=WriteThread 如何自适应优化线程同步"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何自适应优化线程同步&body=Check out this article: https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&name=WriteThread 如何自适应优化线程同步&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/11/rocksdb/WritePath/write_thread_2/&t=WriteThread 如何自适应优化线程同步"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
