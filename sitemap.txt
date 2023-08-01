@@ -1,3 +1,4 @@
+https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/
 https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/
 https://szza.github.io/2022/01/16/rocksdb/WritePath/WAL_3/
 https://szza.github.io/2022/01/15/rocksdb/WritePath/WAL_2/
@@ -5,7 +6,6 @@ https://szza.github.io/2022/01/14/rocksdb/WritePath/WAL_1/
 https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_4/
 https://szza.github.io/2022/01/12/rocksdb/WritePath/write_thread_3/
 https://szza.github.io/2022/01/10/rocksdb/WritePath/write_thread_1/
-https://szza.github.io/2022/01/13/rocksdb/WritePath/write_thread_2/
 https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/
 https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/
 https://szza.github.io/2021/11/26/rocksdb/utility/persistent_cache/
