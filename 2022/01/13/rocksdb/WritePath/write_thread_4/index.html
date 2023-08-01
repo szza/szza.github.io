@@ -14,9 +14,9 @@
 <meta property="og:description" content="在前面几篇讲解了从 WriteBatch 的内部序列化流程 和 WriteThread 如何控制并发写入的基本流程，本文进一步讲解 WriteThread 如何使用 PipelinedWrite 来提升写吞吐，其中和前文相似的逻辑不再细说。 通过设置选项 DBOptions::enable_pipelined_write &#x3D; true 来开启，开启后整个db的 WriteThread 都是通过 P">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2022-01-13T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-08-01T02:21:25.019Z">
+<meta property="article:modified_time" content="2023-08-01T02:28:51.351Z">
 <meta property="article:author" content="fibonaccii">
-<meta property="article:tag" content="RocksDB">
+<meta property="article:tag" content="RocksDb">
 <meta name="twitter:card" content="summary">
     
     
@@ -147,7 +147,7 @@
       
     <div class="article-tag">
         <i class="fas fa-tag"></i>
-        <a class="tag-link-link" href="/tags/RocksDB/" rel="tag">RocksDB</a>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
     </div>
 
 

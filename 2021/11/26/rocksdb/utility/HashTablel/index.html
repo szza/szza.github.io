@@ -14,9 +14,9 @@
 <meta property="og:description" content="HashTable&lt;T, Hash, Equal&gt;RocksDB 为了优化多核下的HashTable性能，放弃了全局锁设计，取而代之是如下分段锁设计：在并发下，将全局锁上的竞争分散到各个bucket上。 对每个桶（bucket）分配一个锁（mutex），当获取某个bucket中的元素时，只使用对应bucket的mutex即可，这样对其他bucket的元素就没有额外的负担。 123456">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-11-26T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-07-31T16:46:24.046Z">
+<meta property="article:modified_time" content="2023-08-01T02:29:08.149Z">
 <meta property="article:author" content="fibonaccii">
-<meta property="article:tag" content="look code art">
+<meta property="article:tag" content="RocksDb">
 <meta name="twitter:card" content="summary">
     
     
@@ -145,6 +145,11 @@
 
 
       
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
 
     </div>
   </header>
