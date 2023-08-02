@@ -8,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="ABSTRACT随着现代计算机架构的演进，出现了两个问题，与并行查询执行引擎中两个问题产生了矛盾：  为了充分利用多核，所有的查询工作必须很快均匀地分布在数百个线程中才能实现良好的性能加速； 然而，由于现代 CPU out-of-order 的复杂性，即使有准确的数据统计，也很难将工作均匀分配  因此，现有的针对 Volcano 的 &quot;Plan Driven&quot; 的并行方法遇到了">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age">
+<meta property="og:title" content="Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework">
 <meta property="og:url" content="https://szza.github.io/2023/08/02/Paper/morsel-driven-md/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="ABSTRACT随着现代计算机架构的演进，出现了两个问题，与并行查询执行引擎中两个问题产生了矛盾：  为了充分利用多核，所有的查询工作必须很快均匀地分布在数百个线程中才能实现良好的性能加速； 然而，由于现代 CPU out-of-order 的复杂性，即使有准确的数据统计，也很难将工作均匀分配  因此，现有的针对 Volcano 的 &quot;Plan Driven&quot; 的并行方法遇到了">
@@ -18,7 +18,7 @@
 <meta property="og:image" content="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-3.jpg">
 <meta property="og:image" content="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-4.jpg">
 <meta property="article:published_time" content="2023-08-02T13:58:02.000Z">
-<meta property="article:modified_time" content="2023-08-02T14:07:18.836Z">
+<meta property="article:modified_time" content="2023-08-02T14:09:11.153Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="PaperReading">
 <meta name="twitter:card" content="summary">
@@ -42,7 +42,7 @@
       
     
     <!-- title -->
-    <title>Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age</title>
+    <title>Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -96,16 +96,16 @@
     <div id="share" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&text=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&is_video=false&description=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age&body=Check out this article: https://szza.github.io/2023/08/02/Paper/morsel-driven-md/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&name=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&t=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&text=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&is_video=false&description=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework&body=Check out this article: https://szza.github.io/2023/08/02/Paper/morsel-driven-md/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&name=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&t=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -122,7 +122,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age
+        Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework
     </h1>
 
 
@@ -257,16 +257,16 @@
     <div id="share-footer" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&text=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&is_video=false&description=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age&body=Check out this article: https://szza.github.io/2023/08/02/Paper/morsel-driven-md/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&name=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&t=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework for the Many-Core Age"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&text=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&is_video=false&description=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework&body=Check out this article: https://szza.github.io/2023/08/02/Paper/morsel-driven-md/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&title=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&name=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/02/Paper/morsel-driven-md/&t=Morsel-Driven Parallelism: A NUMA-Aware Query Evaluation Framework"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
