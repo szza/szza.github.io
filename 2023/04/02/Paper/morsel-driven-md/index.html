@@ -13,16 +13,16 @@
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="ABSTRACT随着现代计算机架构的演进，出现了两个问题，与并行查询执行引擎中两个问题产生了矛盾：  为了充分利用多核，所有的查询工作必须很快均匀地分布在数百个线程中才能实现良好的性能加速； 然而，由于现代 CPU out-of-order 的复杂性，即使有准确的数据统计，也很难将工作均匀分配  因此，现有的针对 Volcano 的 &quot;Plan Driven&quot; 的并行方法遇到了">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://github.com/szza/szza.github.io/blob/master/2023/04/02/Paper/morsel-driven-md/morsel-driven-1.jpg">
+<meta property="og:image" content="https://szza.github.io/images/morsel-driven-1.jpg">
 <meta property="og:image" content="https://github.com/szza/szza.github.io/blob/master/2023/04/02/Paper/morsel-driven-md/morsel-driven-2.jpg">
 <meta property="og:image" content="https://github.com/szza/szza.github.io/blob/master/2023/04/02/Paper/morsel-driven-md/morsel-driven-3.jpg">
 <meta property="og:image" content="https://github.com/szza/szza.github.io/blob/master/2023/04/02/Paper/morsel-driven-md/morsel-driven-4.jpg">
 <meta property="article:published_time" content="2023-04-02T13:58:02.000Z">
-<meta property="article:modified_time" content="2023-08-02T14:30:55.125Z">
+<meta property="article:modified_time" content="2023-08-02T14:38:34.122Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="PaperReading">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://github.com/szza/szza.github.io/blob/master/2023/04/02/Paper/morsel-driven-md/morsel-driven-1.jpg">
+<meta name="twitter:image" content="https://szza.github.io/images/morsel-driven-1.jpg">
     
     
       
@@ -173,7 +173,7 @@
 <p>核心思想就是如何减少跨 core 通信：每个线程尽量访问自己核上的数据。RocksDB 中有个数据d结构 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/blob/9a2a6db2a9c5e628b38a5c8cceb90e1e5dbc39a4/util/core_local.h#L23">CoreLocalArray</a>，给每个 core 分配一个对象，让线程访问数据时直接访问线程所在core，减少与 remote core 之间的跨核通信</p>
 </blockquote>
 <p>在此之前的并发模型是 <strong>Volcano</strong> 模型，这种模型中 operators 是没有并行度可言的。因为并行的概念被封装成 Exchange Operator，这个算子在多线程间路由数据流，每个线程都执行着查询计划中完全相同的 pipelined 部分。这种设计就是 <em>plan driven</em>: 基于统计数据优化器在生成执行计划的编译期就确定需要启动多少线程，为每个线程实例化一个查询算子（query operator）并通过 exchange operators 实现这些 operators 间的通信。</p>
-<p>本文提出 <em>morsel driven</em> 查询执行框架，如 fig-1 是执行三表 join 查询 $R \Join_A S \Join_B T$ 的示意图，并行性是通过并行处理不同 cores 上的每个pipeline 实现的。如图所示，有红色和蓝色两个 pipelines。<br><img src="https://github.com/szza/szza.github.io/blob/master/2023/04/02/Paper/morsel-driven-md/morsel-driven-1.jpg" alt="morsel-driven-parallelism"></p>
+<p>本文提出 <em>morsel driven</em> 查询执行框架，如 fig-1 是执行三表 join 查询 $R \Join_A S \Join_B T$ 的示意图，并行性是通过并行处理不同 cores 上的每个pipeline 实现的。如图所示，有红色和蓝色两个 pipelines。<br><img src="/images/morsel-driven-1.jpg" alt="morsel-driven-parallelism"></p>
 <p>该框架的核心是调度机制（scheduling mechanism）即图中的 <em>dispatcher</em>，使得可以灵活地并行执行 operator pipleine，甚至可以在查询执行期间改变并行度。</p>
 <p>一个 query 会划分成多个 segments，每个可执行的 segments 都会接受输入的一小部分（即 morsel）作为数据源，然后执行，直到遇到下一个 pipeline 才会输出具体的结果。</p>
 <p>如 fig-1 中的红蓝所示，该 morsel 框架也支持 NUMA 局部处理：线程 T1 在一个 NUMA-Local 上输出输入，并且将其结果写入 NUMA-Local 存储区域，全程都没有跨 NUMA 结构。</p>
@@ -233,7 +233,9 @@
 <p>总得来说，morsel-driven 并行执行多个 pipelines 有点类似经典的 Volcano 模型实现，但是不同点在于 pipeline 是独立的，没有依赖的。也就是说，pipeline 共享数据结构并且 operators 能感知到并行执行的，因此最终必须执行线程同步（这一步需要通过有效的 lock-free 机制）。</p>
 <p>未来可能的不同点，是执行 pipelines 的线程数也是完全弹性。也就是说，不仅在不同的 pipelines 之间的线程数不同，如 fig-2 所示，而且在查询执行期间，同一个 pipelien 内部也可能不同。</p>
 <h2 id="DISPATCHER-SCHEDULING-PARALLEL-PIPELINE-TASKS"><a href="#DISPATCHER-SCHEDULING-PARALLEL-PIPELINE-TASKS" class="headerlink" title="DISPATCHER: SCHEDULING PARALLEL PIPELINE TASKS"></a>DISPATCHER: SCHEDULING PARALLEL PIPELINE TASKS</h2><p><em>dispatcher</em> 管控并将计算资源分配给并行的 pipelines。我们为每个机器提供的硬件线程（预）创建一个工作线程（work thread），并将每个工作线程永久地和他绑定在一起。</p>
-<p>一个赋给 work thread 的 <code>task</code> 由两部分组成：pipeline job 和 pipeline job 的操作对象 morsel。由于 Task 的抢占发生在碎片边界，从而消除了可能代价高昂的中断机制。通过实验确定，morsel 大约在 100,000 个元组时，可以在即时弹性调整、负载平衡和低维护开销之间产生良好的权衡</p>
+<p>一个赋给 work thread 的 <code>task</code> 由两部分组成：pipeline job 和 pipeline job 的操作对象 morsel。由于 Task 的抢占发生在碎片边界，从而消除了可能代价高昂的中断机制。通过实验确定，morsel 大约在 100,000 个元组时，可以在即时弹性调整、负载平衡和低维护开销之间产生良好的权衡。</p>
+<p>将 Task 分配给在特定 Core 上运行的线程，有三个主要目标:</p>
+<p>1. </p>
 
   </div>
 </article>
