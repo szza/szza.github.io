@@ -217,7 +217,7 @@
 <ol>
 <li><p>先判断此次分配内存，是否需要从arena直接分配即可</p>
 <ul>
-<li>超过一个shards内存大小的1/4</li>
+<li>超过一个shards内存大小的1&#x2F;4</li>
 <li>上层强制使用 arena</li>
 <li>该线程首次调用<code>AllocateImpl</code> 函数，此时<code>shards</code>中的各个<code>shard-&gt;free_begin</code>尚未指向有效内存地址；</li>
 </ul>

@@ -107,7 +107,7 @@
 
     </div>
     <div id="toc">
-      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.</span> <span class="toc-text">值传递</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">引用传递</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#const-T-amp"><span class="toc-number">2.1.</span> <span class="toc-text">const T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-amp"><span class="toc-number">2.2.</span> <span class="toc-text">T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-amp-amp"><span class="toc-number">2.3.</span> <span class="toc-text">T&amp;&amp;</span></a></li></ol></li></ol>
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.</span> <span class="toc-text">值传递</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">引用传递</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#const-T"><span class="toc-number">2.1.</span> <span class="toc-text">const T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T"><span class="toc-number">2.2.</span> <span class="toc-text">T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-1"><span class="toc-number">2.3.</span> <span class="toc-text">T&amp;&amp;</span></a></li></ol></li></ol>
     </div>
   </span>
 </div>
@@ -229,7 +229,7 @@
 <li>不会造成模板参数类型退化</li>
 </ul>
 <p>下面对三种引用类型进行说明。</p>
-<h3 id="const-T-amp"><a href="#const-T-amp" class="headerlink" title="const T&amp;"></a>const T&amp;</h3><p><code>const T&amp;</code> 引用类型：既可以接受左值，也可以接受右值。</p>
+<h3 id="const-T"><a href="#const-T" class="headerlink" title="const T&amp;"></a>const T&amp;</h3><p><code>const T&amp;</code> 引用类型：既可以接受左值，也可以接受右值。</p>
 <p>假定存在<code>pass_by_const_ref</code>函数，参数<code>arg</code>是<code>const T&amp;</code>引用类型，在函数内部打印传入的<code>arg</code>对象地址：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_const_ref</span><span class="params">(<span class="type">const</span> T&amp; arg)</span> </span>&#123; </span><br><span class="line">    std::cout&lt;&lt;&amp;arg&lt;&lt;std::endl;	</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    Foo foo&#123;<span class="number">10</span>&#125;;					<span class="comment">// 调用构造函数</span></span><br><span class="line">    <span class="built_in">pass_by_const_ref</span>(foo);</span><br><span class="line">    <span class="built_in">pass_by_const_ref</span>(std::<span class="built_in">move</span>(foo));</span><br><span class="line">    <span class="built_in">pass_by_const_ref</span>(Foo&#123;<span class="number">100</span>&#125;);	 <span class="comment">// 调用构造函数</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
@@ -253,7 +253,7 @@
 <p>或者，<code>arg</code>被用于其他函数<code>xxxx_func(arg)</code>的参数，也是触发<code>const Foo&amp;</code>版本，而不是<code>Foo&amp;&amp;</code>函数版本。</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_const_ref</span><span class="params">(<span class="type">const</span> T&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="function">Foo <span class="title">foo</span><span class="params">(arg)</span></span>;</span><br><span class="line">    <span class="comment">// xxx_func(arg);</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-<h3 id="T-amp"><a href="#T-amp" class="headerlink" title="T&amp;"></a>T&amp;</h3><p>假定有<code>pass_by_lv_ref</code>函数，以<code>T&amp;</code>为模板参数类型：</p>
+<h3 id="T"><a href="#T" class="headerlink" title="T&amp;"></a>T&amp;</h3><p>假定有<code>pass_by_lv_ref</code>函数，以<code>T&amp;</code>为模板参数类型：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_lv_ref</span><span class="params">(T&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="comment">//...   </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 <p><code>T&amp;</code> 与 <code>const T&amp;</code>区别有两点：</p>
 <ol>
@@ -269,11 +269,9 @@
 <p><font color="red">但是!!!</font> <code>pass_by_lv_ref</code>函数内部默认<code>arg</code>是可以修改的。当<code>pass_by_lv_ref</code>函数接受了const类型变量，<code>arg</code>被推导为<code>const T&amp;</code>，变成只能读，那么就会导致一个问题：如果在<code>pass_by_lv_ref</code>函数内部修改<code>str_const</code>、<code>ch</code>等const修饰的传入参数，将会编译报错。</p>
 <p>怎么办？</p>
 <p> 在C++20之前，使用<code>std::enable_if_t</code>，直接禁止给<code>pass_by_lv_ref</code>函数传入const类型变量。此时，给 <code>pass_by_lv_ref</code> 函数传递const类型变量，在IDE中这个函数下方出现红色波浪线，提示不存在这个函数，就不需要等到编译期才发现。</p>
-<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> = std::<span class="type">enable_if_t</span>&lt; !std::is_const&lt;T&gt;::value&gt;&gt;</span><br><span class="line"><span class="type">void</span> <span class="built_in">pass_by_lv_ref</span>(T&amp; arg) &#123; </span><br><span class="line"> <span class="comment">//...  </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-
-</li>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> = std::<span class="type">enable_if_t</span>&lt; !std::is_const&lt;T&gt;::value&gt;&gt;</span><br><span class="line"><span class="type">void</span> <span class="built_in">pass_by_lv_ref</span>(T&amp; arg) &#123; </span><br><span class="line"> <span class="comment">//...  </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
 </ol>
-<h3 id="T-amp-amp"><a href="#T-amp-amp" class="headerlink" title="T&amp;&amp;"></a>T&amp;&amp;</h3><p><code>T&amp;&amp;</code>，即右值引用模板化，此时的类型推导原则是：<strong>引用折叠</strong>。</p>
+<h3 id="T-1"><a href="#T-1" class="headerlink" title="T&amp;&amp;"></a>T&amp;&amp;</h3><p><code>T&amp;&amp;</code>，即右值引用模板化，此时的类型推导原则是：<strong>引用折叠</strong>。</p>
 <p>假定有<code>pass_by_perfect_ref</code>函数，如下：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_perfect_ref</span><span class="params">(T&amp;&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="comment">// ... std::forward&lt;T&amp;&amp;&gt;(arg)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
@@ -343,8 +341,8 @@
 
 <p>本文，主要讲解了值传递和引用传递的优缺点，但还有一个遗留问题：当模板函数的传入参数类型是<strong>字符串常量和裸数组</strong>时，该如何更好地处理？</p>
 <ul>
-<li>值传递：字符串常量/数组会退化成指针，那如果想判断数组是否相等怎么办？</li>
-<li>引用传递：字符串/数组会被推导出固定长度类型，比如上面的 <code>const int (&amp;rhs)[4]</code>，模板的灵活性不就丧失了？</li>
+<li>值传递：字符串常量&#x2F;数组会退化成指针，那如果想判断数组是否相等怎么办？</li>
+<li>引用传递：字符串&#x2F;数组会被推导出固定长度类型，比如上面的 <code>const int (&amp;rhs)[4]</code>，模板的灵活性不就丧失了？</li>
 </ul>
 <p>敬请期待下一次更新，奥里给！！！</p>
 
@@ -370,7 +368,7 @@
     </div>
 
     <div id="toc-footer" style="display: none">
-      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.</span> <span class="toc-text">值传递</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">引用传递</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#const-T-amp"><span class="toc-number">2.1.</span> <span class="toc-text">const T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-amp"><span class="toc-number">2.2.</span> <span class="toc-text">T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-amp-amp"><span class="toc-number">2.3.</span> <span class="toc-text">T&amp;&amp;</span></a></li></ol></li></ol>
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.</span> <span class="toc-text">值传递</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">引用传递</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#const-T"><span class="toc-number">2.1.</span> <span class="toc-text">const T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T"><span class="toc-number">2.2.</span> <span class="toc-text">T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-1"><span class="toc-number">2.3.</span> <span class="toc-text">T&amp;&amp;</span></a></li></ol></li></ol>
     </div>
 
     <div id="share-footer" style="display: none">

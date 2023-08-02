@@ -167,20 +167,16 @@
 <li>如果新插入一个 <code>Writer</code> 对象 w，则会尝试让 <code>newest_writer_</code> 指向该 w 。如果当前触发了 <em>WriteStall</em> 则会等待 <code>WriteStall</code> 被解除，才会再次尝试让 <code>newest_writer_</code> 指向该 w</li>
 <li>如果 w 插入时，<code>newest_writer_ == NULL</code> ，则 w 能顺利通过 <code>JoinBatchGroup</code> 函数，进入后续写入流程</li>
 <li>否则，说明当前已经存在 leader-writer，则只能阻塞等待 <code>w-&gt;state</code> 更改为下面其中一种才能解除阻塞:<ul>
-<li><p><code>STATE_GROUP_LEADER</code>: 变成下一个 write_group 的 leader，执行写入</p>
-</li>
-<li><p><code>STATE_COMPLETED</code>: 说明已经存在一个 leader-writer 替自己完成了写入，解除阻塞后就可以直接返回应用层</p>
-</li>
-<li><p><code>STATE_MEMTABLE_WRITER_LEADER</code>: …</p>
-</li>
-<li><p><code>STATE_PARALLEL_MEMTABLE_WRITER</code>: …</p>
-<p>代码如下：</p>
-<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::JoinBatchGroup</span><span class="params">(Writer* w)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(w-&gt;batch != <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="comment">// 1. 让 nnewest_writer_ 指向 w</span></span><br><span class="line">  <span class="type">bool</span> linked_as_leader = <span class="built_in">LinkOne</span>(w, &amp;newest_writer_);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (linked_as_leader) &#123;</span><br><span class="line">    <span class="built_in">SetState</span>(w, STATE_GROUP_LEADER);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (!linked_as_leader) &#123;</span><br><span class="line">     <span class="comment">// 2. 阻塞等待 w-&gt;state &amp; mask != 0</span></span><br><span class="line">    <span class="built_in">AwaitState</span>(w,</span><br><span class="line">               STATE_GROUP_LEADER | STATE_MEMTABLE_WRITER_LEADER |</span><br><span class="line">                   STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,</span><br><span class="line">               &amp;jbg_ctx);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h3 id="WriteThread-LinkOne"><a href="#WriteThread-LinkOne" class="headerlink" title="WriteThread::LinkOne"></a>WriteThread::LinkOne</h3><p><code>LinkOne</code>的功能其实就是在链表头发插入一个节点，不过需要先检查一个前提 <em>WriteStall</em>。</p>
-</li>
+<li><code>STATE_GROUP_LEADER</code>: 变成下一个 write_group 的 leader，执行写入</li>
+<li><code>STATE_COMPLETED</code>: 说明已经存在一个 leader-writer 替自己完成了写入，解除阻塞后就可以直接返回应用层</li>
+<li><code>STATE_MEMTABLE_WRITER_LEADER</code>: …</li>
+<li><code>STATE_PARALLEL_MEMTABLE_WRITER</code>: …</li>
 </ul>
 </li>
 </ol>
+<p>代码如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::JoinBatchGroup</span><span class="params">(Writer* w)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(w-&gt;batch != <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="comment">// 1. 让 nnewest_writer_ 指向 w</span></span><br><span class="line">  <span class="type">bool</span> linked_as_leader = <span class="built_in">LinkOne</span>(w, &amp;newest_writer_);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (linked_as_leader) &#123;</span><br><span class="line">    <span class="built_in">SetState</span>(w, STATE_GROUP_LEADER);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (!linked_as_leader) &#123;</span><br><span class="line">     <span class="comment">// 2. 阻塞等待 w-&gt;state &amp; mask != 0</span></span><br><span class="line">    <span class="built_in">AwaitState</span>(w,</span><br><span class="line">               STATE_GROUP_LEADER | STATE_MEMTABLE_WRITER_LEADER |</span><br><span class="line">                   STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,</span><br><span class="line">               &amp;jbg_ctx);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="WriteThread-LinkOne"><a href="#WriteThread-LinkOne" class="headerlink" title="WriteThread::LinkOne"></a>WriteThread::LinkOne</h3><p><code>LinkOne</code>的功能其实就是在链表头发插入一个节点，不过需要先检查一个前提 <em>WriteStall</em>。</p>
 <h4 id="WriteStall"><a href="#WriteStall" class="headerlink" title="WriteStall"></a>WriteStall</h4><p>如果写操作触发了 <em>WriteStall</em> ，会向 WriterThread 中写入一个 <code>write_stall_dummy_</code> 标志。因此在尝试将 <code>newest_writer_</code> 指向新加入的 <code>w</code> 时都需要先检查下 <code>newest_writer_</code> 是否等于 <code>write_stall_dummy_</code>。如果等于，有以下两种情况：</p>
 <ul>
 <li><p><code>Writer::no_slowdown == false</code>，这是默认情况，即基于条件变量 <code>stall_cv_</code> 阻塞等待 <em>WriteStall</em> 解除。解除后则需要重新读取 <code>newest_writer_</code></p>
@@ -190,7 +186,7 @@
 </li>
 </ul>
 <h4 id="compare-exchange-weak"><a href="#compare-exchange-weak" class="headerlink" title="compare_exchange_weak"></a>compare_exchange_weak</h4><p>当没有 <em>WriteStall</em> 或者有已经解除，则可以继续写入，将 <code>w-&gt;link_older = writers</code>。这里的 <code>link_older</code> 的语义其实就是 <code>next</code> 指针，效果即 <code>w-&gt;next = writers</code>。</p>
-<p>完成这一步后 <font color="red"> 却并没有执行 writers-&gt;prev = w 操作</font>，为什么呢？这是为了在 leader-writer 写流程结束时能通过 <code>link_newer/prev</code> 是否为 NULL 选出下一轮的 leader-writer，详见后文的 <code>ExitAsBatchGroupLeader</code> 函数。</p>
+<p>完成这一步后 <font color="red"> 却并没有执行 writers-&gt;prev &#x3D; w 操作</font>，为什么呢？这是为了在 leader-writer 写流程结束时能通过 <code>link_newer/prev</code> 是否为 NULL 选出下一轮的 leader-writer，详见后文的 <code>ExitAsBatchGroupLeader</code> 函数。</p>
 <p>再通过 <code>compare_exchange_weak</code> 操作将 <code>newest_writer_</code> 指向最新插入的 w，</p>
 <ul>
 <li><p>成功，则通过判断 <code>writers</code> 是否为 NULL，来判断 w 是不是下一轮 writer_group 的 leader-writer </p>

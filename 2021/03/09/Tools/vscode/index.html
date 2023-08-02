@@ -13,7 +13,7 @@
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="本期分享下自己的C++编码环境。自己目前C++编码环境是基于vscode打造的，再通过vscode远程登录到Linux（remote Linux）。对于Linux环境，可选方式有两种：  WSL（Windows Subsystem Linux） 虚拟机  WSL有诸多好处，它可以和WINDOWs-10更为紧密地联系在一起。比如，随处按下快捷键：shift + 右击，都可以开启 linux shel">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://szza.github.io/2021/03/09/Tools/vscode/images/1.jpg">
+<meta property="og:image" content="https://szza.github.io/images/1.jpg">
 <meta property="og:image" content="https://szza.github.io/images/2.jpg">
 <meta property="og:image" content="https://szza.github.io/images/4.jpg">
 <meta property="og:image" content="https://szza.github.io/images/3.jpg">
@@ -36,7 +36,7 @@
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="工具">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://szza.github.io/2021/03/09/Tools/vscode/images/1.jpg">
+<meta name="twitter:image" content="https://szza.github.io/images/1.jpg">
     
     
       
@@ -181,7 +181,7 @@
 <li>虚拟机</li>
 </ul>
 <p>WSL有诸多好处，它可以和WINDOWs-10更为紧密地联系在一起。比如，随处按下快捷键：<code>shift + 右击</code>，都可以开启 <code>linux shell</code>，然后使用linux的命令来操作WINDOWs。</p>
-<p><img src="./images/1.jpg"></p>
+<p><img src="/./images/1.jpg"></p>
 <p><img src="/images/2.jpg"></p>
 <p>但是WSL也有不足，其中关于调试网络的工具一般是用不了，比如有：<code>tcpdump</code>，这个bug自从WSL诞生至今尚未解决：</p>
 <figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta prompt_">$ </span><span class="language-bash">tcpdump</span></span><br><span class="line">tcpdump: socket: Socket type not supported  # 无法启动</span><br><span class="line"><span class="meta prompt_">$ </span><span class="language-bash"><span class="built_in">date</span></span></span><br><span class="line">Sun Mar  7 22:01:11 CST 2021</span><br></pre></td></tr></table></figure>
@@ -191,7 +191,7 @@
 <li>WSL能满足要求时，基本都用WSL</li>
 <li>当WSL无法满足时，就使用虚拟机</li>
 </ul>
-<p>当然，嫌麻烦完全可以仅使用虚拟机，除了无法在WINDOWs-10随处开启 <code>Linux shell</code>外，基本无差别。下面讲解下vscode怎么联合WSL / 虚拟机打造C++编码环境。</p>
+<p>当然，嫌麻烦完全可以仅使用虚拟机，除了无法在WINDOWs-10随处开启 <code>Linux shell</code>外，基本无差别。下面讲解下vscode怎么联合WSL &#x2F; 虚拟机打造C++编码环境。</p>
 <h3 id="vscode-WSL"><a href="#vscode-WSL" class="headerlink" title="vscode +  WSL"></a>vscode +  WSL</h3><ol>
 <li><p>安装WSL。在微软官方文档中有安装WSL的详细教程，照着步骤安装即可。地址：</p>
 <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://docs.microsoft.com/zh-cn/WINDOWs/wsl/install-win10</span><br></pre></td></tr></table></figure>
@@ -226,7 +226,7 @@
 </li>
 <li><p>安装C++相关插件。</p>
 <ul>
-<li>C/C++</li>
+<li>C&#x2F;C++</li>
 <li>C++ Intellisense</li>
 <li>Visual Studio Intellisense</li>
 <li>Visual Studio Intellisense Insider</li>

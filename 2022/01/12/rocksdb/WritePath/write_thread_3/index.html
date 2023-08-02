@@ -208,14 +208,14 @@
 <ul>
 <li><p><code>max_yield_usec_ &gt; 0</code>: 默认情况下总是开启</p>
 </li>
-<li><p><code>update_ctx</code>: 表示是否更新 <code>yield_credit</code> 的值。当且仅当基于均匀分布从 <em>[0, 255]</em> 区间获得 0 时值为 true，即 <code>Random::OneIn(sampling_base)</code> 返回 true 的概率为 <em>1/256</em></p>
+<li><p><code>update_ctx</code>: 表示是否更新 <code>yield_credit</code> 的值。当且仅当基于均匀分布从 <em>[0, 255]</em> 区间获得 0 时值为 true，即 <code>Random::OneIn(sampling_base)</code> 返回 true 的概率为 <em>1&#x2F;256</em></p>
 <p>  <em>would_spin_again</em> 表示 <code>w-&gt;state</code> 是否在第二阶段等到预期值，如果成功则 <code>yield_credit</code> 值增加，反之降低。<code>yield_credit</code> 的更新公式如下：</p>
   <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (update_ctx) &#123;</span><br><span class="line">   <span class="keyword">auto</span> v = yield_credit.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">   v = v - (v / <span class="number">1024</span>) + (would_spin_again ? <span class="number">1</span> : <span class="number">-1</span>) * <span class="number">131072</span>;</span><br><span class="line">   yield_credit.<span class="built_in">store</span>(v, std::memory_order_relaxed);</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure></li>
 <li><p><code>yield_credit</code>: 默认值为 0，在是否开启第二阶段中起着决定性作用。基本上需要满足 <code>yield_credit &gt;= 0</code> 才能进入第二阶段</p>
 <p>  <em>yield_credit</em> 值在两种情况下会更改，也是<strong>自适应</strong>原理：</p>
-<p>  1）进入了第二阶段，但是因为竞争太激烈，没有在第二阶段实现 <code>w-&gt;state &amp; goal_mask != 0</code>，此时会将 update_ctx = true，再由上述公式降低 <em>yield_credit</em> 的值，使其小于 0，这样 AwaitState 函数下次不会再进入第二阶段；</p>
+<p>  1）进入了第二阶段，但是因为竞争太激烈，没有在第二阶段实现 <code>w-&gt;state &amp; goal_mask != 0</code>，此时会将 update_ctx &#x3D; true，再由上述公式降低 <em>yield_credit</em> 的值，使其小于 0，这样 AwaitState 函数下次不会再进入第二阶段；</p>
 <ol start="2">
-<li>如果长时间 <code>yield_credit &lt; 0</code> 会一直无法进入第二阶段。但是由均匀分布可知，存在 1/256 的概率将 update_ctx = true，进入第二阶段，来<em>试探</em>现在竞争是否没那么激烈了。如果此时在第二阶段等到了 <code>w-&gt;state &amp; goal_mask != 0</code> ，那么就会再根据上述公式将 <code>yield_credit</code> 调节为非负数，使得下一次 AwaitState 函数仍能进入第二阶段。</li>
+<li>如果长时间 <code>yield_credit &lt; 0</code> 会一直无法进入第二阶段。但是由均匀分布可知，存在 1&#x2F;256 的概率将 update_ctx &#x3D; true，进入第二阶段，来<em>试探</em>现在竞争是否没那么激烈了。如果此时在第二阶段等到了 <code>w-&gt;state &amp; goal_mask != 0</code> ，那么就会再根据上述公式将 <code>yield_credit</code> 调节为非负数，使得下一次 AwaitState 函数仍能进入第二阶段。</li>
 </ol>
 </li>
 </ul>

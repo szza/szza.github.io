@@ -13,18 +13,18 @@
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="Overview尽管 rocksdb wiki 中 rocksdb-overview 已经描述了，本文以自己的理解作为一个补充。 如图 rocksdb 的总体架构图中主要由 MemTable, WAL 和 sstfile 三个基本组件组成，本文主要阐述下他们之间的协作关系。 MemTable写入的kv数据会先写入 WriteBatch， 在经过 WriteBatchInternal 封装后写入 M">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/images/rocksdb-overview.png">
-<meta property="og:image" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/images/rocksdb_pre_l0_compaction.png">
-<meta property="og:image" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/images/rocksdb_post_l0_compaction.png">
-<meta property="og:image" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/images/rocksdb_pre_l1_compaction.png">
-<meta property="og:image" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/images/rocksdb_post_l1_compaction.png">
-<meta property="og:image" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/images/rocksdb_cf.png">
+<meta property="og:image" content="https://szza.github.io/images/rocksdb-overview.png">
+<meta property="og:image" content="https://szza.github.io/images/rocksdb_pre_l0_compaction.png">
+<meta property="og:image" content="https://szza.github.io/images/rocksdb_post_l0_compaction.png">
+<meta property="og:image" content="https://szza.github.io/images/rocksdb_pre_l1_compaction.png">
+<meta property="og:image" content="https://szza.github.io/images/rocksdb_post_l1_compaction.png">
+<meta property="og:image" content="https://szza.github.io/images/rocksdb_cf.png">
 <meta property="article:published_time" content="2022-01-08T06:15:35.000Z">
 <meta property="article:modified_time" content="2023-08-01T02:28:58.126Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="RocksDb">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/images/rocksdb-overview.png">
+<meta name="twitter:image" content="https://szza.github.io/images/rocksdb-overview.png">
     
     
       
@@ -164,22 +164,18 @@
 
   <div class="content" itemprop="articleBody">
     <h1 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h1><p>尽管 rocksdb wiki 中 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/wiki">rocksdb-overview</a> 已经描述了，本文以自己的理解作为一个补充。</p>
-<p>如图 rocksdb 的总体架构图中主要由 <code>MemTable</code>, <code>WAL</code> 和 <code>sstfile</code> 三个基本组件组成，本文主要阐述下他们之间的协作关系。<br><img src="../images/rocksdb-overview.png" alt="rocksdb-overview"></p>
+<p>如图 rocksdb 的总体架构图中主要由 <code>MemTable</code>, <code>WAL</code> 和 <code>sstfile</code> 三个基本组件组成，本文主要阐述下他们之间的协作关系。<br><img src="/../images/rocksdb-overview.png" alt="rocksdb-overview"></p>
 <h3 id="MemTable"><a href="#MemTable" class="headerlink" title="MemTable"></a>MemTable</h3><p>写入的kv数据会先写入 <code>WriteBatch</code>， 在经过 <code>WriteBatchInternal</code> 封装后写入 MemTable。</p>
 <p>MemTable 是在读写路径中共享，这样可以减少读写路径中和磁盘交互的频次。但由于 MemTable 是个内存结构，为了防止各种故障导致 MemTable 中数据丢失，进而引入 WAL (<code>W</code>rite <code>A</code>head <code>L</code>og)，即每次写入的数据，会先写入 WAL，成功后再写入 MemTable，如果 MemTable 中的数据丢失则从 WAL 中恢复。</p>
 <p>正常情况下，写入的数据会持续写入 MemTable，直到 MemTable 的大小超过阈值，则会变成只具有只读属性的 ImutableMemTable, 同时创建新的 MemTable 接受后续的写入。等待后台线程 <em>Pickup</em> 合适的 ImmutableMemTables，将其 Flush 到 $Level_0$ 中，那么选中的 ImmutableMemTables 对应的 WALs 也可以删除了。</p>
 <p>这里为什么用了 <em>Pickup</em> 这个说法？在 RocksDB-3.0 引入 cf(<code>C</code>olumn<code>F</code>amily) 设计，每个 cf 都有一个自己的 MemTable，但是所有的 cfs 共享一个 WAL：当向其中一个 cf 写入大量数据会导致它的 MemTable full 并转为 ImmtableMemTable。此时能直接删除当前 WAL 吗，由于WAL 可能仍保存着其他 cfs 的 MemTable 数据，这就涉及到 WAL 生命周期的问题。因此在删除 WALs 时，需要挑选出 WALs 生命周期结束的才能删除。</p>
 <h4 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h4><p>TiKV 原本的架构是一个 TiKV-Server 上的所有 regions 共享两个 RocksDB 实例: <code>raft-rocksdb</code> 用于存放 raft log，<code>kv-rocksdb</code> 用于存放状态机数据，kv-rocksdb 实例有三个 column family，</p>
 <ol>
-<li><p>事务 T1 在 prewrite 阶段写入 MemTable 的 lock 信息，在事务 T1 commit 阶段之前可能有其他热点 regions 写入大量数据导致 Flush MemTable，进而导致事务 T1 commit 阶段原本可以在 MemTable 中就可以查询到 lock 信息，现在需要去 sst 文件中查询，无疑增加了成本。</p>
-</li>
-<li><p>那么我们是否可以通过每个 region 一个 cf 来实现 region 的隔离？</p>
-<p>显然也是不行，因为 cf 只是逻辑上的隔离，所有的 cf 仍共享一个 WAL：如果上万个 regions 对应上万个 cfs，如果会造成很多 WALs 生命周期无法结束、得不到释放，势必生成占用大量资源。</p>
-</li>
-<li><p>每个 region 一个 RocksDB 实例</p>
-<p>在 Release-6.6 提出 Partitioned-TiKV 架构，即每个 region 分配一个 rocksdb 实例，从物理层上实现 region 隔离，这样原本一个 region 只能存储 64M 的存储，现在可以存储10G+的数据，减少了写入过程 region-leader 分裂的频次。</p>
-</li>
+<li>事务 T1 在 prewrite 阶段写入 MemTable 的 lock 信息，在事务 T1 commit 阶段之前可能有其他热点 regions 写入大量数据导致 Flush MemTable，进而导致事务 T1 commit 阶段原本可以在 MemTable 中就可以查询到 lock 信息，现在需要去 sst 文件中查询，无疑增加了成本。</li>
+<li>那么我们是否可以通过每个 region 一个 cf 来实现 region 的隔离？</li>
 </ol>
+<p>  显然也是不行，因为 cf 只是逻辑上的隔离，所有的 cf 仍共享一个 WAL：如果上万个 regions 对应上万个 cfs，如果会造成很多 WALs 生命周期无法结束、得不到释放，势必生成占用大量资源。<br>3. 每个 region 一个 RocksDB 实例</p>
+<p>  在 Release-6.6 提出 Partitioned-TiKV 架构，即每个 region 分配一个 rocksdb 实例，从物理层上实现 region 隔离，这样原本一个 region 只能存储 64M 的存储，现在可以存储10G+的数据，减少了写入过程 region-leader 分裂的频次。</p>
 <p>  <em>Question</em>: 但是也有其他问题，比如 每个 region 一个 rocksdb，是否会因为 MemTable 导致占用的内存增加？尤其本来 TiKV 对硬件要求就很高，如此硬件成本是否会更高，以及内部 region 合并时 两个不同 RocksDB 实例的 regions 数据如何合并。不过由于 tikv region 本身就是按照 kv-range 划分的，不存在重复，合并可能主要需要修改元数据信息。</p>
 <p>  这个设计可以参考: <a target="_blank" rel="noopener" href="https://cn.pingcap.com/blog/principle-analysis-of-partitioned-raft-kv">partitioned-raft-kv</a></p>
 <h3 id="SST"><a href="#SST" class="headerlink" title="SST"></a>SST</h3><p>Rocksdb 引擎是个 LSM (<code>L</code>og <code>S</code>tructured <code>M</code>erge) Tree， 其中 $level_0$ ~ $level_N$ 都由 sst(<code>S</code>orted <code>S</code>tring <code>T</code>able) files 组成。</p>
@@ -192,20 +188,20 @@
 <ul>
 <li><p>$level_0$: 当 MemTable 中的数据 Flush 到 $Level_0$ 时，会导致 $Level_0$ 存在重复的 kv range。当 $Level_0$ 的文件数量达到阈值 <code>$Level_0$_file_num_compaction_trigger</code>，$Level_0$ 会被合并到会和 $Level_1$，并保持使得 $Level_1$ 层的 sstfiles 仍然有序且无重复。</p>
 <p>如图是 $level_0$ 的 compaction 前后过程：</p>
-<p><img src="../images/rocksdb_pre_l0_compaction.png" alt="pre_l0_compaction"></p>
-<p><img src="../images/rocksdb_post_l0_compaction.png" alt="post_l0_compaction"></p>
+<p><img src="/../images/rocksdb_pre_l0_compaction.png" alt="pre_l0_compaction"></p>
+<p><img src="/../images/rocksdb_post_l0_compaction.png" alt="post_l0_compaction"></p>
 </li>
 <li><p>当 $$Level_1$$ 的数据量越来越大，会触发 $Level_1$(inpit-level)层和 $level_2$ (output-level)层的 compaction。</p>
 <p>如图是 $level_1$ 的 compaction 前后过程：</p>
-<p><img src="../images/rocksdb_pre_l1_compaction.png" alt="rocksdb_pre_l1_compaction"></p>
-<p><img src="../images/rocksdb_post_l1_compaction.png" alt="rocksdb_post_l1_compaction"></p>
+<p><img src="/../images/rocksdb_pre_l1_compaction.png" alt="rocksdb_pre_l1_compaction"></p>
+<p><img src="/../images/rocksdb_post_l1_compaction.png" alt="rocksdb_post_l1_compaction"></p>
 </li>
 <li><p>以此类推到 LSM 最底层。</p>
 </li>
 </ul>
 <p>这里面需要研究的细节:</p>
 <ul>
-<li>input/output level 中的哪些 sstfiles 进行 compaction</li>
+<li>input&#x2F;output level 中的哪些 sstfiles 进行 compaction</li>
 <li>如何选择合适的 compaction 方式，平衡读写放大</li>
 <li>当 value 较大，进行 kv 分离来降低写方大问题</li>
 </ul>
@@ -217,14 +213,14 @@
 <li><code>imm</code>: 表征的是只读的 MemTable，不再接受写入的 MemTable；</li>
 <li><code>mm</code>: 当前最新的 MemTable，接受读写</li>
 </ul>
-<p>同样这里也存在<code>version</code>、<code>imm</code> 生命周期的问题，因为每次 flush/comapction，都会对 imm/version 产生影响，为了追踪生命周期，</p>
+<p>同样这里也存在<code>version</code>、<code>imm</code> 生命周期的问题，因为每次 flush&#x2F;comapction，都会对 imm&#x2F;version 产生影响，为了追踪生命周期，</p>
 <ul>
-<li><code>MemTableList</code> 对象 imm 中有个 <code>MemTableListVersion</code> 对象，并有 <em>Ref()</em>/<em>Unref()</em> 函数来追踪生命周期；</li>
-<li><code>Version</code> 对象 version 也有 <em>Ref()</em>/<em>Unref()</em> 函数来追踪生命周期；</li>
+<li><code>MemTableList</code> 对象 imm 中有个 <code>MemTableListVersion</code> 对象，并有 <em>Ref()</em>&#x2F;<em>Unref()</em> 函数来追踪生命周期；</li>
+<li><code>Version</code> 对象 version 也有 <em>Ref()</em>&#x2F;<em>Unref()</em> 函数来追踪生命周期；</li>
 </ul>
-<p><img src="../images/rocksdb_cf.png" alt="rocksdb-cf"></p>
+<p><img src="/../images/rocksdb_cf.png" alt="rocksdb-cf"></p>
 <p>因此，关于 cf 也好理解，在分析这块的时候可以多关注下 WALs、Version 等生命周期的起始。</p>
-<h2 id="Get-MultiGet"><a href="#Get-MultiGet" class="headerlink" title="Get/MultiGet"></a>Get/MultiGet</h2><p>读取路径会比较复杂，主要是将 mm/imm、sstfile 数据有序合并起来再取最新的数据输出，相关的三个迭代器 <code>MergingIterator</code>，<code>CompactionIterator</code>、<code>RangeTomeStoneIterator</code> 放在后续慢慢再讲解。这一部分还有一点就是利用 C++20 的协程实现异步IO来提取读取性能。</p>
+<h2 id="Get-MultiGet"><a href="#Get-MultiGet" class="headerlink" title="Get&#x2F;MultiGet"></a>Get&#x2F;MultiGet</h2><p>读取路径会比较复杂，主要是将 mm&#x2F;imm、sstfile 数据有序合并起来再取最新的数据输出，相关的三个迭代器 <code>MergingIterator</code>，<code>CompactionIterator</code>、<code>RangeTomeStoneIterator</code> 放在后续慢慢再讲解。这一部分还有一点就是利用 C++20 的协程实现异步IO来提取读取性能。</p>
 
   </div>
 </article>

@@ -209,7 +209,7 @@
 <h4 id="ReapBlock"><a href="#ReapBlock" class="headerlink" title="ReapBlock"></a>ReapBlock</h4><p><code>ReapBlock</code>，也是个回调函数 ，当一个block压缩完毕时调用，来更新当前压缩的状态：</p>
 <ul>
 <li><code>raw_bytes_compressed</code>：到目前为止，有多少字节的数据被压缩了；</li>
-<li><code>curr_compression_ratio</code>：已压缩的字节数 / 当前对应的原始字节数</li>
+<li><code>curr_compression_ratio</code>：已压缩的字节数 &#x2F; 当前对应的原始字节数</li>
 <li>重新估算最终写入sst文件的大小</li>
 </ul>
 <p>代码如下。</p>
@@ -268,7 +268,7 @@
 <h5 id="BGWorkCompression"><a href="#BGWorkCompression" class="headerlink" title="BGWorkCompression"></a>BGWorkCompression</h5><p>压缩线程的入口函数，<code>BGWorkCompression</code> ，仅用于压缩<code>data_block</code>，他一直在等待主线程发送待压缩的block，然后取出来，进行压缩。</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">BlockBasedTableBuilder::BGWorkCompression</span><span class="params">(<span class="type">const</span> CompressionContext&amp; compression_ctx,</span></span></span><br><span class="line"><span class="params"><span class="function">                                               UncompressionContext* verify_ctx)</span> </span>&#123;</span><br><span class="line">  ParallelCompressionRep::BlockRep* block_rep = <span class="literal">nullptr</span>;</span><br><span class="line">  <span class="keyword">while</span> (rep_-&gt;pc_rep-&gt;compress_queue.<span class="built_in">pop</span>(block_rep)) &#123;</span><br><span class="line">    <span class="built_in">assert</span>(block_rep != <span class="literal">nullptr</span>);</span><br><span class="line">    <span class="built_in">CompressAndVerifyBlock</span>(block_rep-&gt;contents, </span><br><span class="line">                           <span class="literal">true</span>, <span class="comment">/* is_data_block*/</span></span><br><span class="line">                           compression_ctx, </span><br><span class="line">                           verify_ctx,</span><br><span class="line">                           block_rep-&gt;compressed_data.<span class="built_in">get</span>(), <span class="comment">// 输出参数，unused ?</span></span><br><span class="line">                           &amp;block_rep-&gt;compressed_contents,  <span class="comment">// 保存压缩结果</span></span><br><span class="line">                           &amp;(block_rep-&gt;compression_type),   <span class="comment">// 压缩结果的字节数</span></span><br><span class="line">                           &amp;block_rep-&gt;status);              <span class="comment">// 压缩是否成功</span></span><br><span class="line">    <span class="comment">// 将压缩完毕的 block 加入到 block_rep-&gt;slot 中</span></span><br><span class="line">    <span class="comment">// 为后面写入sst准备</span></span><br><span class="line">    block_rep-&gt;slot-&gt;<span class="built_in">Fill</span>(block_rep);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-<h5 id="CompressAndVerifyBlock"><a href="#CompressAndVerifyBlock" class="headerlink" title="CompressAndVerifyBlock"></a>CompressAndVerifyBlock</h5><p>CompressAndVerifyBlock` 函数，不仅尝试去压缩，而且会统计压缩过程中的一些信息。为便于下面的代码简洁，易于理解，把这部分去掉了，专注于功能。</p>
+<h5 id="CompressAndVerifyBlock"><a href="#CompressAndVerifyBlock" class="headerlink" title="CompressAndVerifyBlock"></a>CompressAndVerifyBlock</h5><p>CompressAndVerifyBlock&#96; 函数，不仅尝试去压缩，而且会统计压缩过程中的一些信息。为便于下面的代码简洁，易于理解，把这部分去掉了，专注于功能。</p>
 <p>sst是由一系列的<code>block</code>组成，每个<code>block</code>的格式都是：</p>
 <figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">block_data: uint8[n] <span class="comment"># block 存储的数据</span></span><br><span class="line"><span class="built_in">type</span>: uint8          <span class="comment"># 压缩类型</span></span><br><span class="line">crc: uint32          <span class="comment"># 校验和</span></span><br></pre></td></tr></table></figure>
 
@@ -280,7 +280,7 @@
 </ol>
 <p>如果一切顺利，则：</p>
 <ul>
-<li> <code>block_contents</code> 中保存了<code>raw_block_contents</code>的压缩结果，</li>
+<li><code>block_contents</code> 中保存了<code>raw_block_contents</code>的压缩结果，</li>
 <li><code>type</code> 保存了压缩类型；</li>
 </ul>
 <p>代码简洁后如下。</p>
