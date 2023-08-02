@@ -6,7 +6,7 @@
   <link href="https://szza.github.io/atom.xml" rel="self"/>
   
   <link href="https://szza.github.io/"/>
-  <updated>2023-08-02T14:49:08.742Z</updated>
+  <updated>2023-08-02T15:04:29.912Z</updated>
   <id>https://szza.github.io/</id>
   
   <author>
@@ -21,14 +21,14 @@
     <link href="https://szza.github.io/2023/08/02/test-images/"/>
     <id>https://szza.github.io/2023/08/02/test-images/</id>
     <published>2023-08-02T14:42:01.000Z</published>
-    <updated>2023-08-02T14:49:08.742Z</updated>
+    <updated>2023-08-02T15:04:29.912Z</updated>
     
-    <content type="html"><![CDATA[<p><img src="test-images/morsel-driven-1.jpg" alt="testimages"></p>]]></content>
+    <content type="html"><![CDATA[<p><img src="https://github.com/szza/szza.github.io.images/tree/master/PaperReading/morsel-driven-1.jpg" alt="testimages"></p>]]></content>
     
     
       
       
-    <summary type="html">&lt;p&gt;&lt;img src=&quot;test-images/morsel-driven-1.jpg&quot; alt=&quot;testimages&quot;&gt;&lt;/p&gt;
+    <summary type="html">&lt;p&gt;&lt;img src=&quot;https://github.com/szza/szza.github.io.images/tree/master/PaperReading/morsel-driven-1.jpg&quot; alt=&quot;testimages&quot;&gt;&lt;/p&gt;
 </summary>
       
     
