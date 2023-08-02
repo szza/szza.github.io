@@ -13,16 +13,16 @@
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="ABSTRACT随着现代计算机架构的演进，出现了两个问题，与并行查询执行引擎中两个问题产生了矛盾：  为了充分利用多核，所有的查询工作必须很快均匀地分布在数百个线程中才能实现良好的性能加速； 然而，由于现代 CPU out-of-order 的复杂性，即使有准确的数据统计，也很难将工作均匀分配  因此，现有的针对 Volcano 的 &quot;Plan Driven&quot; 的并行方法遇到了">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://szza.github.io/.io//morsel-driven-1.jpg">
-<meta property="og:image" content="https://szza.github.io/.io//morsel-driven-2.jpg">
-<meta property="og:image" content="https://szza.github.io/.io//morsel-driven-3.jpg">
-<meta property="og:image" content="https://szza.github.io/.io//morsel-driven-4.jpg">
+<meta property="og:image" content="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-1.jpg">
+<meta property="og:image" content="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-2.jpg">
+<meta property="og:image" content="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-3.jpg">
+<meta property="og:image" content="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-4.jpg">
 <meta property="article:published_time" content="2023-08-02T13:58:02.000Z">
-<meta property="article:modified_time" content="2023-08-02T14:03:19.439Z">
+<meta property="article:modified_time" content="2023-08-02T14:07:18.836Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="PaperReading">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://szza.github.io/.io//morsel-driven-1.jpg">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-1.jpg">
     
     
       
@@ -169,7 +169,7 @@
 </blockquote>
 <p>在此之前的并发模型是 <strong>Volcano</strong> 模型，这种模型中 operators 是没有并行度可言的。因为并行的概念被封装成 Exchange Operator，这个算子在多线程间路由数据流，每个线程都执行着查询计划中完全相同的 pipelined 部分。这种设计就是 <em>plan driven</em>: 基于统计数据优化器在生成执行计划的编译期就确定需要启动多少线程，为每个线程实例化一个查询算子（query operator）并通过 exchange operators 实现这些 operators 间的通信。</p>
 <p>本文提出 <em>morsel driven</em> 查询执行框架，如 fig-1 是执行三表 join 查询 $R \Join_A S \Join_B T$ 的示意图，并行性是通过并行处理不同 cores 上的每个pipeline 实现的。如图所示，有红色和蓝色两个 pipelines。</p>
-<p><img src="/.io//morsel-driven-1.jpg" alt="morsel-driven-parallelism"></p>
+<p><img src="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-1.jpg" alt="morsel-driven-parallelism"></p>
 <p>该框架的核心是调度机制（scheduling mechanism）即图中的 <em>dispatcher</em>，使得可以灵活地并行执行 operator pipleine，甚至可以在查询执行期间改变并行度。</p>
 <p>一个 query 会划分成多个 segments，每个可执行的 segments 都会接受输入的一小部分（即 morsel）作为数据源，然后执行，直到遇到下一个 pipeline 才会输出具体的结果。</p>
 <p>如 fig-1 中的红蓝所示，该 morsel 框架也支持 NUMA 局部处理：线程 T1 在一个 NUMA-Local 上输出输入，并且将其结果写入 NUMA-Local 存储区域，全程都没有跨 NUMA 结构。</p>
@@ -199,14 +199,14 @@
 <li>扫描、过滤表 S 后，构建 S 的 HashTable $HT(S)$</li>
 <li>扫描、过滤表 R 后，再 probe $HT(S)$ 和 $HT(T)$，将结果存在输出区域</li>
 </ol>
-<p><img src="/.io//morsel-driven-2.jpg" alt="morsel-driven"></p>
+<p><img src="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-2.jpg" alt="morsel-driven"></p>
 <!-- HyPer 使用 JIT 技术生成高效的机器码（machine code）。每个 pipeline 都被编译到 code fragment，这实现了非常高的性能。此外，pipeline 中的 operators 也不会产生中间结果，这都已经由 VectorWise 实现了。 -->
 
 <p>morsel-driven 框架中，代数计划的执行是由 <em>QEPobject</em> 来控制的，它会将可执行的 pipelines 传递给 <em>dispatcher</em>。因此，<em>QEPobject</em> 需要爱去检测数据的的前置依赖， 比如fig-2的例子中，只有在前两个 pipelines 执行完，3-rd pipeline 才能执行。在具体的每个 pipeline 中，<em>QEPobject</em> 会分配临时存储区（temporary storage areas），执行 pipeline 的并行线程会将结果写入到这个临时存储区。</p>
 <p>在整个 pipeline 执行完后，临时存储区在逻辑上会被重新分割为同等大小的 morsels，这样后续的 pipeline 就可以从大小均等的新 morsels 上启动，而不是在 pipelines 之间保留 morsels 边界（容易导致数据倾斜）。任意时刻执行 pipelines 的线程数都受处理器硬件线程数量的限制，即上限是 <code>std::thread::hardware_concurrency()</code>。</p>
 <p>为了写入 NUMUA-Local 并避免在输出中间结果时线程同步，<em>QEPobject</em> 为每个执行 pipeline 的 thread/core 分配一个存储区域。</p>
 <p>$HT(T)$ pipeline 的并行处理如 fig-3 所示。</p>
-<p><img src="/.io//morsel-driven-3.jpg" alt="morsel-driven-3"></p>
+<p><img src="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-3.jpg" alt="morsel-driven-3"></p>
 <p>先重点关注第一阶段：每个线程先过滤输入 T，然后将过滤后得数据 tuples 存放在临时存储区。</p>
 <p>在图中，有三个并行线程，每个线程一次操作一个 morsel。由于表 T 是以 morsel 为单位存储在多个 NUMA Node 的内存中，那么只要有可能（比如内存足够）那么 scheduler 就会将线程 T 所属的 NUMA Node 上的 morsel 分配给线程T。</p>
 <p>比如在 fig-3 中颜色所表征的意思：在红色 Numa Node 上的 core 运行着红色线程，被赋予的任务就是处理红色 morsel。</p>
@@ -224,7 +224,7 @@
 </ol>
 <p>之所以将构建 HashTable 分成两个阶段，是因为第一阶段完成后，数据的准确数据是已知的，就可以完美地确定全局 hashtable 的大小。这个大小确定的 gloabl hashtable 将会被系统中不同 NUMA Node 上的线程探测（probe）。因此，为避免竞争，这个 gloabl hashtable 就不应该位于特定的 NUMA 区域，而是应该分散在所有的 NUMA node上。由于许多线程都竞争着将输入插入 gloabl hashtable，那么必不可少地要实现一个 lock-free hashtable。</p>
 <p>在 $HT(T)$ 和 $HT(S)$ 都构建完之后，probe pipeline 就可以被调度执行了。probe pipeline 的详细处理见 fig-4.</p>
-<p><img src="/.io//morsel-driven-4.jpg" alt="morsel-driven"></p>
+<p><img src="https://github.com/szza/szza.github.io/tree/master/2023/08/02/Paper/morsel-driven-md/morsel-driven-4.jpg" alt="morsel-driven"></p>
 <p>一个线程会向 dispatcher 请求任务，dispatcher 会在对应的 NUMA Node上 赋予该线程一个 morsel。也就是，如果线程位于红色 NUMA Node 上的 core，就会被分配表 R 在红色 NUMA Node 上的 morsel。Probe pipeline 的结果也会存储在 Numa 局部区域来保留后续处理阶段的局部性（这部分并没在图中画出）。</p>
 <p>总得来说，morsel-driven 并行执行多个 pipelines 有点类似经典的 Volcano 模型实现，但是不同点在于 pipeline 是独立的，没有依赖的。也就是说，pipeline 共享数据结构并且 operators 能感知到并行执行的，因此最终必须执行线程同步（这一步需要通过有效的 lock-free 机制）。</p>
 <p>未来可能的不同点，是执行 pipelines 的线程数也是完全弹性。也就是说，不仅在不同的 pipelines 之间的线程数不同，如 fig-2 所示，而且在查询执行期间，同一个 pipelien 内部也可能不同。</p>
