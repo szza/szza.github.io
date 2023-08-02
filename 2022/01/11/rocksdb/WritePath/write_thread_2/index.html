@@ -190,7 +190,7 @@
 </li>
 </ul>
 <h4 id="compare-exchange-weak"><a href="#compare-exchange-weak" class="headerlink" title="compare_exchange_weak"></a>compare_exchange_weak</h4><p>当没有 <em>WriteStall</em> 或者有已经解除，则可以继续写入，将 <code>w-&gt;link_older = writers</code>。这里的 <code>link_older</code> 的语义其实就是 <code>next</code> 指针，效果即 <code>w-&gt;next = writers</code>。</p>
-<p>完成这一步后 <font color=red> 却并没有执行 writers-&gt;prev = w 操作</font>，为什么呢？这是为了在 leader-writer 写流程结束时能通过 <code>link_newer/prev</code> 是否为 NULL 选出下一轮的 leader-writer，详见后文的 <code>ExitAsBatchGroupLeader</code> 函数。</p>
+<p>完成这一步后 <font color="red"> 却并没有执行 writers-&gt;prev = w 操作</font>，为什么呢？这是为了在 leader-writer 写流程结束时能通过 <code>link_newer/prev</code> 是否为 NULL 选出下一轮的 leader-writer，详见后文的 <code>ExitAsBatchGroupLeader</code> 函数。</p>
 <p>再通过 <code>compare_exchange_weak</code> 操作将 <code>newest_writer_</code> 指向最新插入的 w，</p>
 <ul>
 <li><p>成功，则通过判断 <code>writers</code> 是否为 NULL，来判断 w 是不是下一轮 writer_group 的 leader-writer </p>

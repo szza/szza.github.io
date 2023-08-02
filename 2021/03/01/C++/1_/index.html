@@ -175,7 +175,7 @@
 <p><code>bucket_index</code>函数时间复杂度是O(1)。在C++中，<code>std::unordered_map</code>提供的<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/container/unordered_map/bucket"><code>bucket(key)</code></a>方法实现了相同的功能，即计算键key在数组中位置，下面可以验证下<code>bucket_index(...)</code> 的正确性。</p>
 <figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> &#123;</span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">unordered_map</span>&lt;<span class="type">int</span>, <span class="type">int</span>&gt; <span class="title function_">map</span><span class="params">(<span class="number">5</span>)</span>; <span class="comment">// 桶的大小为5</span></span><br><span class="line">    <span class="type">int</span> key = <span class="number">8</span>;</span><br><span class="line">	<span class="comment">// 如果 bucket_index(map, key) != map.bucket(key)， </span></span><br><span class="line">    <span class="comment">// 会触发 abort 中断</span></span><br><span class="line">    assert( bucket_index(<span class="built_in">map</span>, key) == <span class="built_in">map</span>.bucket(key));</span><br><span class="line">    <span class="comment">// 计算结果</span></span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">cout</span>&lt;&lt;<span class="string">&quot;index: &quot;</span>&lt;&lt; bucket_index(<span class="built_in">map</span>, key) &lt;&lt; <span class="built_in">std</span>::<span class="built_in">endl</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 输出</span></span><br><span class="line">$ g++ main.cc  -o main &amp;&amp; ./main </span><br><span class="line">index: <span class="number">3</span></span><br></pre></td></tr></table></figure>
 
-<p>上面两个步骤，是插入、搜索一个节点的过程，能够以O(1)的时间复杂度。但若同时存在几个节点的hashcode值一样，那么后面插入的节点岂不是会覆盖前面的值?这个问题即 <font color=red> hash冲突</font>。</p>
+<p>上面两个步骤，是插入、搜索一个节点的过程，能够以O(1)的时间复杂度。但若同时存在几个节点的hashcode值一样，那么后面插入的节点岂不是会覆盖前面的值?这个问题即 <font color="red"> hash冲突</font>。</p>
 <h3 id="hash冲突"><a href="#hash冲突" class="headerlink" title="hash冲突"></a>hash冲突</h3><p>在正式讲解hash冲突之前，先介绍一个术语：在hashtable中，数组的每一个元素叫做桶（bucket）。</p>
 <p>为了解决hash冲突，hashtable在每个桶里<code>bucket[index]</code>不再直接存储待插入节点的值，而是存储一个哨兵节点，使其指向一个链表，由这个链表来存储每次插入节点的值：</p>
 <ul>
@@ -183,10 +183,10 @@
 <li>待插入节点的值在哨兵指向的链表头部插入，由于是头部插入整个插入过程还是O(1)时间复杂度。</li>
 </ul>
 <p>当发生hash冲突时，将所有hashcode相同的节点都插入到同一个链表中，如下图所示。由于采用的是头部插入法，那么即便是发生了hash冲突，此时插入时间复杂度也依然是O(1)。</p>
-<img src="./images/unordered_map_1.jpg" style="zoom:80%;" />
+<img src="./images/unordered_map_1.jpg" style="zoom:80%;">
 
 <p>上述解决hash冲突的方法，叫做<strong>开链法</strong>。此时，hash冲突的问题似乎解决了，能够插入多个hashcode一样的节点，并且插入操作的时间复杂度仍然是O(1)。</p>
-<p>但是!!!，当出现严重的hash冲突，会造成<code>bucket[idx]</code>指向的链表节点很长，此时搜索和删除一个节点的时间复杂度最坏却可能变成O(N)，即<font color=red>哈希表已经退化成链表</font>，那么就违背了一开始设计hashtable的初衷，即弥补数组O(N)的搜索、删除时间复杂度。</p>
+<p>但是!!!，当出现严重的hash冲突，会造成<code>bucket[idx]</code>指向的链表节点很长，此时搜索和删除一个节点的时间复杂度最坏却可能变成O(N)，即<font color="red">哈希表已经退化成链表</font>，那么就违背了一开始设计hashtable的初衷，即弥补数组O(N)的搜索、删除时间复杂度。</p>
 <h3 id="hash退化"><a href="#hash退化" class="headerlink" title="hash退化"></a>hash退化</h3><p>下面分为两个部分讲解hash退化的应对方法。</p>
 <h4 id="负载因子"><a href="#负载因子" class="headerlink" title="负载因子"></a>负载因子</h4><p>为了解决hash退化，引入了两个概念：</p>
 <ul>

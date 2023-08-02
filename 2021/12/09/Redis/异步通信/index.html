@@ -204,7 +204,7 @@
 <p>那么，可写事件呢？是服务端主动触发的。</p>
 <p>服务端与对端建立连接后，<code>connfd</code>的<code>send_buff</code>是空的，即处于高电平，是可以直接发送数据的。</p>
 <p>如果此时为<code>connfd</code>注册可写事件，这就会导致<code>epoll_wait</code>一直检测到<code>connfd</code>上的可写事件触发，但实际上服务端又没有数据可以发送给对端，造成服务端的CPU资源无端被消耗。</p>
-<p>因此，在<code>LT</code>模式下，当服务端要向对端发送数据时，不需要先通过<code>epoll_ctl</code>注册可写事件，然后阻塞在<code>epoll_wait</code>上等待可写事件的发生。<font color=red> 正确的做法如下</font>：</p>
+<p>因此，在<code>LT</code>模式下，当服务端要向对端发送数据时，不需要先通过<code>epoll_ctl</code>注册可写事件，然后阻塞在<code>epoll_wait</code>上等待可写事件的发生。<font color="red"> 正确的做法如下</font>：</p>
 <ul>
 <li>直接发送数据 <code>n = write(connfd, outbuffer, sizeof(outbuffer))</code>；</li>
 <li>如果此次数据没有发送完毕，即<code>n != sizeof(outbuffer)</code>，则为<code>connfd</code>注册可写事件；</li>

@@ -105,7 +105,7 @@
 &lt;ul&gt;
 &lt;li&gt;&lt;p&gt;单线程下，读取并解析客户端读&lt;/p&gt;
 &lt;/li&gt;
-&lt;li&gt;&lt;p&gt;多线程读  &lt;/p&gt;"><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+&lt;li&gt;&lt;p&gt;多线程读  &lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;"><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
   <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/01/26/Redis/InputBuffer/&t=剖析REDIS的输入缓冲区"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
@@ -185,7 +185,7 @@
 <li><p>调用 <code>connRead</code>函数读取数据</p>
 <ul>
 <li>根据返回值及<code>conn</code>状态，判断<code>connRead</code>结果</li>
-<li>如果读取成功，且 <code>c-&gt;querybuf</code> 中数据超过限制，也要关闭客户端（<font color=red> 应用层的流量控制</font>）</li>
+<li>如果读取成功，且 <code>c-&gt;querybuf</code> 中数据超过限制，也要关闭客户端（<font color="red"> 应用层的流量控制</font>）</li>
 </ul>
 </li>
 <li><p>调用<code> processInputBuffer</code>函数，解析并执行指令</p>
@@ -260,7 +260,7 @@
 </ul>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">processCommandAndResetClient</span><span class="params">(client *c)</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> deadclient = <span class="number">0</span>;</span><br><span class="line">    server.current_client = c;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// processCommand 中执行指令</span></span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">processCommand</span>(c) == C_OK) &#123;</span><br><span class="line">        <span class="built_in">commandProcessed</span>(c);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (server.current_client == <span class="literal">NULL</span>) deadclient = <span class="number">1</span>;</span><br><span class="line">    server.current_client = <span class="literal">NULL</span>;</span><br><span class="line">    <span class="comment">/* freeMemoryIfNeeded may flush slave output buffers. This may</span></span><br><span class="line"><span class="comment">     * result into a slave, that may be the active client, to be</span></span><br><span class="line"><span class="comment">     * freed. */</span></span><br><span class="line">    <span class="keyword">return</span> deadclient ? C_ERR : C_OK;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
-<h2 id="多线程-读"><a href="#多线程-读" class="headerlink" title="多线程-读"></a>多线程-读</h2><h3 id="handleClientsWithPendingReadsUsingThreads"><a href="#handleClientsWithPendingReadsUsingThreads" class="headerlink" title="handleClientsWithPendingReadsUsingThreads"></a>handleClientsWithPendingReadsUsingThreads</h3><p><code>handleClientsWithPendingReadsUsingThreads</code> 函数是在 <code>beforeSleep</code>中执行，用于将  <code>server.clients_pending_read</code> 中的读任务分到各个线程去执行，最后由主线程来执行之前加上标志位<font color=yellow> <code>CLIENT_PENDING_COMMAND</code></font>的读任务。5个基本步骤流程如下：</p>
+<h2 id="多线程-读"><a href="#多线程-读" class="headerlink" title="多线程-读"></a>多线程-读</h2><h3 id="handleClientsWithPendingReadsUsingThreads"><a href="#handleClientsWithPendingReadsUsingThreads" class="headerlink" title="handleClientsWithPendingReadsUsingThreads"></a>handleClientsWithPendingReadsUsingThreads</h3><p><code>handleClientsWithPendingReadsUsingThreads</code> 函数是在 <code>beforeSleep</code>中执行，用于将  <code>server.clients_pending_read</code> 中的读任务分到各个线程去执行，最后由主线程来执行之前加上标志位<font color="yellow"> <code>CLIENT_PENDING_COMMAND</code></font>的读任务。5个基本步骤流程如下：</p>
 <ol>
 <li><p>是否先启动读线程：第一个判断条件<code>server.io_threads_do_reads</code>是个<code>bool</code>变量，也是在<code>conf.c</code>中配置，默认是0，因此默认下，不使用多线程读取操作。</p>
  <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">createBoolConfig</span>(<span class="string">&quot;io-threads-do-reads&quot;</span>, </span><br><span class="line">                      <span class="literal">NULL</span>, </span><br><span class="line">                      IMMUTABLE_CONFIG, </span><br><span class="line">                      server.io_threads_do_reads, <span class="number">0</span>, </span><br><span class="line">                      <span class="literal">NULL</span>, <span class="literal">NULL</span>), <span class="comment">/* Read + parse from threads? */</span></span><br></pre></td></tr></table></figure>
@@ -271,7 +271,7 @@
 </li>
 <li><p>主线程去执行任务，并等待子线程完成任务</p>
 </li>
-<li><p>执行具有标志位<font color=yellow> <code>CLIENT_PENDING_COMMAND</code></font>的任务</p>
+<li><p>执行具有标志位<font color="yellow"> <code>CLIENT_PENDING_COMMAND</code></font>的任务</p>
 </li>
 </ol>
 <p>整个代码如下：</p>
@@ -318,7 +318,7 @@
 &lt;ul&gt;
 &lt;li&gt;&lt;p&gt;单线程下，读取并解析客户端读&lt;/p&gt;
 &lt;/li&gt;
-&lt;li&gt;&lt;p&gt;多线程读  &lt;/p&gt;"><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+&lt;li&gt;&lt;p&gt;多线程读  &lt;/p&gt;&lt;/li&gt;&lt;/ul&gt;"><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
   <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/01/26/Redis/InputBuffer/&t=剖析REDIS的输入缓冲区"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
