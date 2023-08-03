@@ -8,13 +8,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：  函数返回的是值语义时 函数参数是值语义时  返回值优化返回值优化RVO（Return Value Optimization，RVO），即避免返回过程触发复制 &#x2F; 移动构造函数。根据返回的值是否是匿名对象，可以">
 <meta property="og:type" content="article">
-<meta property="og:title" content="编译器优化之Copy elison、RVO">
+<meta property="og:title" content="编译器优化之 Copy Elison、RVO">
 <meta property="og:url" content="https://szza.github.io/2021/03/03/C++/RVO/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="C++11以后，g++ 编译器默认开启复制省略（copy elison ）选项，可以在以值语义传递对象时避免触发复制、移动构造函数。copy elision 主要发生在两个场景：  函数返回的是值语义时 函数参数是值语义时  返回值优化返回值优化RVO（Return Value Optimization，RVO），即避免返回过程触发复制 &#x2F; 移动构造函数。根据返回的值是否是匿名对象，可以">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-03-03T04:47:23.000Z">
-<meta property="article:modified_time" content="2022-02-14T14:17:38.000Z">
+<meta property="article:modified_time" content="2023-08-03T04:03:16.891Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Modern C++">
 <meta name="twitter:card" content="summary">
@@ -37,7 +37,7 @@
       
     
     <!-- title -->
-    <title>编译器优化之Copy elison、RVO</title>
+    <title>编译器优化之 Copy Elison、RVO</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -76,7 +76,7 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2021/03/04/C++/reference/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2021/03/04/C++/reference_1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
         <li><a class="icon" href="/2021/03/03/C++/allocator/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
@@ -93,16 +93,16 @@
     <div id="share" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/03/C++/RVO/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/03/C++/RVO/&text=编译器优化之Copy elison、RVO"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/03/C++/RVO/&is_video=false&description=编译器优化之Copy elison、RVO"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=编译器优化之Copy elison、RVO&body=Check out this article: https://szza.github.io/2021/03/03/C++/RVO/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/03/C++/RVO/&name=编译器优化之Copy elison、RVO&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/03/C++/RVO/&t=编译器优化之Copy elison、RVO"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/03/C++/RVO/&text=编译器优化之 Copy Elison、RVO"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/03/C++/RVO/&is_video=false&description=编译器优化之 Copy Elison、RVO"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=编译器优化之 Copy Elison、RVO&body=Check out this article: https://szza.github.io/2021/03/03/C++/RVO/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/03/C++/RVO/&name=编译器优化之 Copy Elison、RVO&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/03/C++/RVO/&t=编译器优化之 Copy Elison、RVO"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -119,7 +119,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        编译器优化之Copy elison、RVO
+        编译器优化之 Copy Elison、RVO
     </h1>
 
 
@@ -140,7 +140,7 @@
       
     <div class="article-category">
         <i class="fas fa-archive"></i>
-        <a class="category-link" href="/categories/%E6%B7%B1%E5%85%A5%E4%BA%86%E8%A7%A3-Modern-C/">深入了解 Modern C++</a>
+        <a class="category-link" href="/categories/Modern-C/">Modern C++</a>
     </div>
 
 
@@ -282,16 +282,16 @@
     <div id="share-footer" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/03/C++/RVO/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/03/C++/RVO/&text=编译器优化之Copy elison、RVO"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/03/C++/RVO/&is_video=false&description=编译器优化之Copy elison、RVO"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=编译器优化之Copy elison、RVO&body=Check out this article: https://szza.github.io/2021/03/03/C++/RVO/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之Copy elison、RVO"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/03/C++/RVO/&name=编译器优化之Copy elison、RVO&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/03/C++/RVO/&t=编译器优化之Copy elison、RVO"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/03/C++/RVO/&text=编译器优化之 Copy Elison、RVO"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/03/C++/RVO/&is_video=false&description=编译器优化之 Copy Elison、RVO"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=编译器优化之 Copy Elison、RVO&body=Check out this article: https://szza.github.io/2021/03/03/C++/RVO/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/03/C++/RVO/&title=编译器优化之 Copy Elison、RVO"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/03/C++/RVO/&name=编译器优化之 Copy Elison、RVO&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/03/C++/RVO/&t=编译器优化之 Copy Elison、RVO"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>

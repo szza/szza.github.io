@@ -8,13 +8,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="从本期，就开始智能指针源码分析之路，从源码中了解他们的设计。 智能指针，可以分为两类：  独占型：如std::unique_ptr，一份资源，仅能由一个std::unique_ptr对象管理； 共享型：如std::shared_ptr，一份资源，可以由多个std::shared_ptr对象共同管理，当没有std::shared_ptr对象指向这份的资源，资源才会被释放，即基于引用技术原理。  本期">
 <meta property="og:type" content="article">
-<meta property="og:title" content="从 std::auto_ptr 到 std::unique_ptr 到进化之路">
+<meta property="og:title" content="从 std::auto_ptr 到 std::unique_ptr">
 <meta property="og:url" content="https://szza.github.io/2021/12/21/C++/unique_ptr/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="从本期，就开始智能指针源码分析之路，从源码中了解他们的设计。 智能指针，可以分为两类：  独占型：如std::unique_ptr，一份资源，仅能由一个std::unique_ptr对象管理； 共享型：如std::shared_ptr，一份资源，可以由多个std::shared_ptr对象共同管理，当没有std::shared_ptr对象指向这份的资源，资源才会被释放，即基于引用技术原理。  本期">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-12-21T04:47:23.000Z">
-<meta property="article:modified_time" content="2022-02-14T14:15:06.000Z">
+<meta property="article:modified_time" content="2023-08-03T04:10:02.758Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Modern C++">
 <meta name="twitter:card" content="summary">
@@ -37,7 +37,7 @@
       
     
     <!-- title -->
-    <title>从 std::auto_ptr 到 std::unique_ptr 到进化之路</title>
+    <title>从 std::auto_ptr 到 std::unique_ptr</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -76,7 +76,7 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2022/01/01/C++/0_align/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2022/01/01/C++/align/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
         <li><a class="icon" href="/2021/12/09/Redis/%E5%BC%82%E6%AD%A5%E9%80%9A%E4%BF%A1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
@@ -93,16 +93,16 @@
     <div id="share" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&text=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&is_video=false&description=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=从 std::auto_ptr 到 std::unique_ptr 到进化之路&body=Check out this article: https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&name=从 std::auto_ptr 到 std::unique_ptr 到进化之路&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/12/21/C++/unique_ptr/&t=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&text=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&is_video=false&description=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=从 std::auto_ptr 到 std::unique_ptr&body=Check out this article: https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&name=从 std::auto_ptr 到 std::unique_ptr&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/12/21/C++/unique_ptr/&t=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -119,7 +119,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        从 std::auto_ptr 到 std::unique_ptr 到进化之路
+        从 std::auto_ptr 到 std::unique_ptr
     </h1>
 
 
@@ -140,7 +140,7 @@
       
     <div class="article-category">
         <i class="fas fa-archive"></i>
-        <a class="category-link" href="/categories/%E6%B7%B1%E5%85%A5%E4%BA%86%E8%A7%A3-Modern-C/">深入了解 Modern C++</a>
+        <a class="category-link" href="/categories/Modern-C/">Modern C++</a>
     </div>
 
 
@@ -179,7 +179,7 @@
 
 <p>先给出导致错误的结论：是由于类<code>std::auto_ptr</code> 没有提供<code>const std::auto_ptr&lt;T&gt;&amp;</code>类型的复制构造函数。</p>
 <p>那为啥会没有呢？</p>
-<p>因为<code>std::auto_ptr</code>的设计者，想使<code>std::auto_ptr</code>的复制构造函数具备移动构造函数的属性（如果不懂右值、移动等内容，可以看看 <a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s?__biz=MzkyMjIxMzIxNA==&mid=2247483868&idx=1&sn=3271bc5f1694818a493fd54185b341dd&chksm=c1f68fedf68106fb21fedd83136aa39a1ed01761ad68018d9bedd1591d9241cb8838432d634b&token=1599630750&lang=zh_CN#rd">右值引用的正确用法</a>），这就使得<code>std::auto_ptr</code>复制构造函数的输入参数<code>__a</code>不能由 const 修饰，否则<code>__a</code>指向的资源就无法移动到新创建的对象中了。</p>
+<p>因为<code>std::auto_ptr</code>的设计者，想使<code>std::auto_ptr</code>的复制构造函数具备移动构造函数的属性（如果不懂右值、移动等内容，可以看看 <a href="https://szza.github.io/2021/03/04/C++/reference_1">右值引用的正确用法</a>），这就使得<code>std::auto_ptr</code>复制构造函数的输入参数<code>__a</code>不能由 const 修饰，否则<code>__a</code>指向的资源就无法移动到新创建的对象中了。</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">auto_ptr</span>(auto_ptr&amp; __a) <span class="keyword">throw</span>() : _M_ptr(__a.<span class="built_in">release</span>()) &#123;&#125; </span><br></pre></td></tr></table></figure>
 
 <p>这就导致<code>std::auto_ptr</code>中，所有和赋值有关的操作，都不能有<code>const</code>修饰。</p>
@@ -336,16 +336,16 @@
     <div id="share-footer" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&text=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&is_video=false&description=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=从 std::auto_ptr 到 std::unique_ptr 到进化之路&body=Check out this article: https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&name=从 std::auto_ptr 到 std::unique_ptr 到进化之路&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/12/21/C++/unique_ptr/&t=从 std::auto_ptr 到 std::unique_ptr 到进化之路"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&text=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&is_video=false&description=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=从 std::auto_ptr 到 std::unique_ptr&body=Check out this article: https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&name=从 std::auto_ptr 到 std::unique_ptr&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/12/21/C++/unique_ptr/&t=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
