@@ -14,7 +14,7 @@
 <meta property="og:description" content="本文是 WAL&#x2F;MemTable 生命周期的完结篇，主要关注 FlushJob 执行流程以及如何确定哪些 WAL&#x2F;MmmTable 可以安全地删除。 PickMemTableFlushJob 首先需要从 ColumnFamilyData::imm_ 中挑选出本次所需的 FlushJob::mems_ ，这部分功能由 PickMemTable 函数实现。最大可以选择的 MemTa">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2022-04-16T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-08-03T04:44:58.097Z">
+<meta property="article:modified_time" content="2023-08-03T04:46:36.289Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="RocksDb">
 <meta name="twitter:card" content="summary">
@@ -157,7 +157,7 @@
 
   <div class="content" itemprop="articleBody">
     <p>本文是 WAL&#x2F;MemTable 生命周期的完结篇，主要关注 FlushJob 执行流程以及如何确定哪些 WAL&#x2F;MmmTable 可以安全地删除。</p>
-<h2 id="PickMemTable"><a href="#PickMemTable" class="headerlink" title="PickMemTable"></a>PickMemTable</h2><p>FlushJob 首先需要从 <em>ColumnFamilyData::imm_</em> 中挑选出本次所需的 <em>FlushJob::mems_</em> ，这部分功能由 <code>PickMemTable</code> 函数实现。最大可以选择的 MemTable::id_ 是 <em>max_memtable_id_</em> ，该参数值的设置见由上一节 <a href="https://szza.github.io/2022-04-05/rocksdb/WritePath/WAL_2">WAL、MemTable 的生命周期管理(2)</a>。</p>
+<h2 id="PickMemTable"><a href="#PickMemTable" class="headerlink" title="PickMemTable"></a>PickMemTable</h2><p>FlushJob 首先需要从 <em>ColumnFamilyData::imm_</em> 中挑选出本次所需的 <em>FlushJob::mems_</em> ，这部分功能由 <code>PickMemTable</code> 函数实现。最大可以选择的 MemTable::id_ 是 <em>max_memtable_id_</em> ，该参数值的设置见由上一节 <a href="https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2">WAL、MemTable 的生命周期管理(2)</a>。</p>
 <p>每个 FlushJob 选中的 <em>mems_</em> 是基于 MemTable 的创建时间排序，即 <code>mems_[0]</code> 是最早创建的，<code>mems.back()</code> 是最晚创建的。具体从 imm_ 获取 <em>mems_</em> 的逻辑由 <code>PickMemtablesToFlush</code> 函数实现。</p>
 <p>每次 Flush 操作都产生一个 VersionEdit。FlushJob 将 VersionEdit 信息记录在 <code>mems_[0]-&gt;edit_</code> 中，edit_ 中 <code>log_number_</code> 主要是用于追踪 WAL 的生命周期，其值是<code>max_next_log_number</code>，如何与WAL生命周期产生联系可见后文分析。</p>
 <p>此外，<code>FlushJob::meta_</code> 中记录着成功 Flush 后生成的 level0 SST 文件的元信息数据。</p>
