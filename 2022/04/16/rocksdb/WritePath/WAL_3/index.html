@@ -14,7 +14,7 @@
 <meta property="og:description" content="本文是 WAL&#x2F;MemTable 生命周期的完结篇，主要关注 FlushJob 执行流程以及如何确定哪些 WAL&#x2F;MmmTable 可以安全地删除。 PickMemTableFlushJob 首先需要从 ColumnFamilyData::imm_ 中挑选出本次所需的 FlushJob::mems_ ，这部分功能由 PickMemTable 函数实现。最大可以选择的 MemTa">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2022-04-16T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-08-03T04:46:36.289Z">
+<meta property="article:modified_time" content="2023-08-07T09:26:04.729Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="RocksDb">
 <meta name="twitter:card" content="summary">
@@ -140,7 +140,7 @@
       
     <div class="article-category">
         <i class="fas fa-archive"></i>
-        <a class="category-link" href="/categories/RocksDB-%E5%89%96%E6%9E%90/">RocksDB 剖析</a>
+        <a class="category-link" href="/categories/Timeline/">Timeline</a>
     </div>
 
 
