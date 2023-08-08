@@ -6,16 +6,20 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="HandheldFriendly" content="True">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-    <meta property="og:type" content="article">
+    <meta name="description" content="Abstract在计算密集型（compute-intensive）的应用领域中，数据库系统在现代 CPU 上往往只能实现较低的 IPC（Instructions-Per-Cycle）效率。基于这一问题，本文的主要工作分为如下两个方面：  通过 TPCH benchmark，深入分析 IPC 效率不高的原因，即为什么每个周期（Cycle）执行的指令（Instructions）非常少。通过对不同的关系">
+<meta property="og:type" content="article">
 <meta property="og:title" content="Hyper-Pipelining Query Execution">
 <meta property="og:url" content="https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/index.html">
 <meta property="og:site_name" content="szza">
+<meta property="og:description" content="Abstract在计算密集型（compute-intensive）的应用领域中，数据库系统在现代 CPU 上往往只能实现较低的 IPC（Instructions-Per-Cycle）效率。基于这一问题，本文的主要工作分为如下两个方面：  通过 TPCH benchmark，深入分析 IPC 效率不高的原因，即为什么每个周期（Cycle）执行的指令（Instructions）非常少。通过对不同的关系">
 <meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-1.jpg?raw=true">
 <meta property="article:published_time" content="2023-05-01T13:58:02.000Z">
-<meta property="article:modified_time" content="2023-08-08T03:09:15.274Z">
+<meta property="article:modified_time" content="2023-08-08T13:51:24.910Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Papers">
 <meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-1.jpg?raw=true">
     
     
       
@@ -105,7 +109,7 @@
 
     </div>
     <div id="toc">
-      
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract"><span class="toc-number">1.</span> <span class="toc-text">Abstract</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-How-CPUs-Work"><span class="toc-number">3.</span> <span class="toc-text">2. How CPUs Work</span></a></li></ol>
     </div>
   </span>
 </div>
@@ -154,7 +158,26 @@
   
 
   <div class="content" itemprop="articleBody">
-    
+    <h2 id="Abstract"><a href="#Abstract" class="headerlink" title="Abstract"></a>Abstract</h2><p>在计算密集型（compute-intensive）的应用领域中，数据库系统在现代 CPU 上往往只能实现较低的 IPC（Instructions-Per-Cycle）效率。基于这一问题，本文的主要工作分为如下两个方面：</p>
+<ol>
+<li><p>通过 TPCH benchmark，深入分析 IPC 效率不高的原因，即为什么每个周期（Cycle）执行的指令（Instructions）非常少。通过对不同的关系型数据库和 MonetDB[1] 进行分析，得到了一个设计查询处理器（Query Processor）的新指南。</p>
+</li>
+<li><p>本文的第二部分， 基于上述分析得到的查询处理器设计指南，如何为我们的 MonetDB 设计新的查询引擎 X100。</p>
+<p> 表面上， X100 类似于基于 Volcano 模型设计的引擎，关键区别在于 X100 所有的执行都是基于矢量处理 （vector processing）的概念，使得 X100 引擎的 CPU 效率非常高。</p>
+</li>
+</ol>
+<p>我们在 TPCH benchmark 输入数据为 100GB 的版本上评估了 MonetDB&#x2F;X100 的性能，结果显示其原始执行能力（即未经过调优）比以前的技术实现高出一到两个数量级。</p>
+<h2 id="1-Introduction"><a href="#1-Introduction" class="headerlink" title="1. Introduction"></a>1. Introduction</h2><p>现代 CPU 每秒可以执行大量计算，但前提是能够找到大量不存在依赖关系的任务，才利用其并行执行能力。在过去的十年里硬件飞速发展，这使得 CPU 以最大吞吐量运行（full throughput）和最小吞吐量（minimal throughput）运行时之间的速度差异可能存在着一个数量级。</p>
+<p>那么大家就期望查询密集型工作负载（workload），比如 decision support, OLAP, data-mining 等，这些应用场景中都存在着大量不相关的计算，那么此时就应该让 Modern-CPUs 有机会发挥出接近最优的 IPC 效率。</p>
+<p>然而研究却表名当前数据库在这些应用场景中，在 Modern-Cpus 上实现的 IPC 效率非常低。这就让人感到困惑。因此本文详细研究了在查询密集型应用场景中，关系数据库是如何与 Modern super-scalar（Hyper-Pipelined） CPUs 交互的，尤其是在 TPCH benchmark 场景中。</p>
+<p>从该调查研究中我们得到的主要结论是：<strong>绝大多数 DBMSs 采用的架构阻碍了编译器使用最关键的性能优化技术（即 Pipeline），从而导致 CPU 效率低下</strong>。比如，在 Modern-CPUs 的流水线技术(Pipelined Prcoessing)架构下，非常火的 Volcano 模型的最通用实现，执行过程中数据传递方式是 <code>tuple-at-a-time</code>（即一次传输一个tuple），1）不仅会产生高额的解释开销（interpretation overhead），还会阻止编译器让 CPU 并行的机会。</p>
+<p>除此之外，我们也分析了内存数据库 MonetDB 的性能，这是由本文作者团队使用 MIL 语言开发的数据库。MonetDB&#x2F;MIL 的执行模型是 <code>Column-at-a-time</code>，因此不会有 <code>tuple-at-a-time</code> 执行模型中的解释开销问题（即被分摊了）。然而，它使用全列具体化（Full Column Materialization）的策略会导致在查询执行过程中产生大量数据。比如，我们就发现在 Decision Support 应用场景中，MonetDB&#x2F;MIL 就被内存带宽严重限制，导致 CPU 效率急剧下降。</p>
+<blockquote>
+<p>Materialization: 在这表达的语义是 “具体化”</p>
+</blockquote>
+<p>因此，我们任务应该将 MonetDB 的 <code>Coumn-at-a-time</code> 执行流程和 Volcano 模型 Pipeline 实现中的增量具体化（Incremental Materialization）技术结合起来。我们从零为 MonetDB 设计并实现了一个新的查询处理引擎，即 X100，它使用的是向量化查询处理模型（<strong>vectorized</strong> query processing model）。</p>
+<h2 id="2-How-CPUs-Work"><a href="#2-How-CPUs-Work" class="headerlink" title="2. How CPUs Work"></a>2. How CPUs Work</h2><p>如图-1 显示了过去十年中每年最快的 CPU（按照 MHz 衡量 ）、最高性能，以及当年最先进的芯片制造技术。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-1.jpg?raw=true" alt="Hyper-Pipelining-1"></p>
+
   </div>
 </article>
 
@@ -177,7 +200,7 @@
     </div>
 
     <div id="toc-footer" style="display: none">
-      
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract"><span class="toc-number">1.</span> <span class="toc-text">Abstract</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-How-CPUs-Work"><span class="toc-number">3.</span> <span class="toc-text">2. How CPUs Work</span></a></li></ol>
     </div>
 
     <div id="share-footer" style="display: none">
