@@ -18,9 +18,10 @@
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-3.jpg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-table-2.jpg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-table-1.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-table-3.jpg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-4.jpg?raw=true">
 <meta property="article:published_time" content="2023-05-01T13:58:02.000Z">
-<meta property="article:modified_time" content="2023-08-09T09:22:51.081Z">
+<meta property="article:modified_time" content="2023-08-09T13:49:52.037Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Papers">
 <meta name="twitter:card" content="summary">
@@ -264,8 +265,29 @@
 <p>此外，我们也在知名的商业数据库上测试了相同的查询 Q1，如表-1 第一行所示。虽然我们没有该产品的源码，无法获得 gprof 性能记录，但是该 RDBMS 的查询评估成本和 MYSQL 是极其相似的。表-1的下半部分是从 TPC 网站获取的一些官方 TPCH Q1 结果。</p>
 <p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-table-1.jpg?raw=true" alt="Hyper-Pipelining-table-1"></p>
 <h3 id="3-2-Q1-on-MonetDB-MIL"><a href="#3-2-Q1-on-MonetDB-MIL" class="headerlink" title="3.2 Q1 on MonetDB&#x2F;MIL"></a>3.2 Q1 on MonetDB&#x2F;MIL</h3><p>MonetDB&#x2F;MIL 是由本论文作者团队开发的，因使用垂直分片（vertical fragmentation），按列存储表（storing tables column-wise）而知名。</p>
-<h3 id="3-3-Q1-Baseline-Performance"><a href="#3-3-Q1-Baseline-Performance" class="headerlink" title="3.3 Q1 Baseline Performance"></a>3.3 Q1 Baseline Performance</h3><p>为了获得现代硬件对 Q1 等问题的处理能力的 baseline，我们将其实现为 MonetDB 中的一个 UDF，如图 4 所示，该 UDF 仅在查询涉及的那些列中传递，</p>
+<p>我们使用 MonetDB&#x2F;MIL SQL frontend 将 TPCH Q1 转化为 MIL 语言后再执行。表-3显示了 20个 MIL 调用情况，它们总共占用了 99% 以上的查询运行时间。基于 TPCH Q1，MonetDB&#x2F;MIL 是明显快于 MYSQL 和同一机器上的商业 DBMS，并且和表-1中已公布的 TPCH 结果也具有竞争力。然而，仔细观察表-3会发现，几乎所有 MIL 操作都是内存密集型（Memory-bound）而不是CPU密集型操作（CPU-bound），即受限于内存而无法充分利用 CPU 资源。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-table-3.jpg?raw=true" alt="Hyper-Pipelining-table-3"></p>
+<p>在将 TPCH 数据集的规模系数 $SF &#x3D; 0.001$ 时，再运行相同的查询计划，表 <strong>lineitem</strong> 所有使用到的列和产生的中间结果（intermediate results）此时都都能填充到 CPU Cache 中，这就消除了CPU和内存之间的流量，然后，MonetDB&#x2F;MIL 的速度几乎是原来的两倍。</p>
+<p>表-3的第 2 列和第 4 列显示的是各个 MIL 操作实现的 bandwidth（BW，以 MB&#x2F;s 为单位），同时计算了输入 BAT（Binary Association Table） 的大小和生成的输出 BAT。</p>
+<ul>
+<li>在 SF&#x3D;1 时，MonetDB 带宽上限卡在 500MB&#x2F;s，这是在该硬件上可持续的最大带宽</li>
+<li>在 SF&#x3D;0.001 时，能够完全在 CPU 缓存中运行，此时带宽上限可以达到 1.5GB&#x2F;s。</li>
+</ul>
+<p>对于乘法 <code>[*]()</code>，bandwidth 只有 500 MB&#x2F;s 意味着 tuples 速度是 20M&#x2F;s （16 个字节输入，8 个字节输出），因此在我们的 1533 MHz CPU 上每个乘法需要 75 cycles，这比 MySQL 还要拉胯。</p>
+<p>因此，MonetDB&#x2F;MIL 的 <strong>column-at-a-time</strong> 策略表现出两面性：</p>
+<ul>
+<li><p>优点： MonetDB 不容易遇到 MySQL 的问题，即 90% 的查询执行时间都消耗在 “tuple-at-a-time” 模型的解释开销上。</p>
+<p> 这是因为乘法是操作整个 BATs (这是个数组，其 layout 在编译时就已知)，那么编译器能够使用 loop-pipelining 技术，使得这些运算具有很高的 CPU 效率，具体体现在表-3 SF&#x3D;0.001 的结果中。</p>
+</li>
+<li><p>缺点：Full Materialization</p>
+<p> 当基于大量 tuples 进行复杂逻辑表达式计算时，查询将为表达式中的每个函数 materialize 整个结果列。然而，这样的中间结果对于整个查询而言并不是必要的，它只是作为表达式中其他函数的输入。比如。在一个查询计划中，聚合操作是最顶层的算子（即执行计划的根节点），那么最终输出的结果大小甚至可以忽略不计（比如TPCH Q1）。在这种情况下，MIL 产生的中间数据远多于实际所需的，导致非常高的带宽消耗（即所需的带宽也远多于实际所需的）。</p>
+<p> 而这个问题在 Volcano-like 查询执行引擎中并不存在，它可以一次性完成选择、计算和聚合，而不具体化任何数据（即不会产生无用的中间数据）。</p>
+</li>
+</ul>
+<p><strong>所以就是要结合 Volcano-like 和 MonetDB 各自的优点重新设计新的 X100。</strong></p>
+<h3 id="3-3-Q1-Baseline-Performance"><a href="#3-3-Q1-Baseline-Performance" class="headerlink" title="3.3 Q1 Baseline Performance"></a>3.3 Q1 Baseline Performance</h3><p>为了获得现代硬件对 Q1 等问题的处理能力的 baseline，我们将其实现为 MonetDB 中的一个 UDF，如图 4 所示，该 UDF 仅在查询涉及的那些列中传递。</p>
 <p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-4.jpg?raw=true" alt="Hyper-Pipelining-4"></p>
+<p>从 表-1 可以看出这个 UDF 实现（标记为“hand-code”）居然将查询成本降低到了 0.22s。 然而，表-1也可以看出，新的 X100 查询处理器（见下一篇博客）能够达到此 UDF 版本的 2 倍以内（也就是虽然慢了一倍，但还是算很快，毕竟编译器自动生成的肯定比不上大佬手写的）。</p>
 
   </div>
 </article>
