@@ -8,8 +8,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="Abstract在计算密集型（compute-intensive）的应用领域中，数据库系统在现代 CPU 上往往只能实现较低的 IPC（Instructions-Per-Cycle）效率。基于这一问题，本文的主要工作分为如下两个方面：  通过 TPCH benchmark，深入分析 IPC 效率不高的原因，即为什么每个周期（Cycle）执行的指令（Instructions）非常少。通过对不同的关系">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Hyper-Pipelining Query Execution">
-<meta property="og:url" content="https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/index.html">
+<meta property="og:title" content="Hyper-Pipelining Query Execution(上)">
+<meta property="og:url" content="https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="Abstract在计算密集型（compute-intensive）的应用领域中，数据库系统在现代 CPU 上往往只能实现较低的 IPC（Instructions-Per-Cycle）效率。基于这一问题，本文的主要工作分为如下两个方面：  通过 TPCH benchmark，深入分析 IPC 效率不高的原因，即为什么每个周期（Cycle）执行的指令（Instructions）非常少。通过对不同的关系">
 <meta property="og:locale" content="en_US">
@@ -20,7 +20,7 @@
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-table-1.jpg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-4.jpg?raw=true">
 <meta property="article:published_time" content="2023-05-01T13:58:02.000Z">
-<meta property="article:modified_time" content="2023-08-09T09:10:19.438Z">
+<meta property="article:modified_time" content="2023-08-09T09:22:51.081Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Papers">
 <meta name="twitter:card" content="summary">
@@ -44,7 +44,7 @@
       
     
     <!-- title -->
-    <title>Hyper-Pipelining Query Execution</title>
+    <title>Hyper-Pipelining Query Execution(上)</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -83,7 +83,7 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2023/05/07/Pipeline/Overview/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
         <li><a class="icon" href="/2023/04/22/Paper/Radix-Join/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
@@ -99,22 +99,22 @@
     <br/>
     <div id="share" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&text=Hyper-Pipelining Query Execution"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&is_video=false&description=Hyper-Pipelining Query Execution"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=Hyper-Pipelining Query Execution&body=Check out this article: https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&name=Hyper-Pipelining Query Execution&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&t=Hyper-Pipelining Query Execution"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&text=Hyper-Pipelining Query Execution(上)"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&is_video=false&description=Hyper-Pipelining Query Execution(上)"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Hyper-Pipelining Query Execution(上)&body=Check out this article: https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&name=Hyper-Pipelining Query Execution(上)&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&t=Hyper-Pipelining Query Execution(上)"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
     <div id="toc">
-      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract"><span class="toc-number">1.</span> <span class="toc-text">Abstract</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-How-CPUs-Work"><span class="toc-number">3.</span> <span class="toc-text">2. How CPUs Work</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-Microbenchmark-TPCH-Query-1"><span class="toc-number">4.</span> <span class="toc-text">3. Microbenchmark: TPCH Query 1</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Query-1-on-Relational-Database-Systems"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 Query 1 on Relational Database Systems</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-Query-1-on-MonetDB-MIL"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 Query 1 on MonetDB&#x2F;MIL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Query-1-Baseline-Performance"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 Query 1: Baseline Performance</span></a></li></ol></li></ol>
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract"><span class="toc-number">1.</span> <span class="toc-text">Abstract</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-How-CPUs-Work"><span class="toc-number">3.</span> <span class="toc-text">2. How CPUs Work</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-Micro-benchmark-TPCH-Q1"><span class="toc-number">4.</span> <span class="toc-text">3. Micro-benchmark: TPCH Q1</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Q1-on-Relational-Database-Systems"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 Q1 on Relational Database Systems</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-Q1-on-MonetDB-MIL"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 Q1 on MonetDB&#x2F;MIL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Q1-Baseline-Performance"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 Q1 Baseline Performance</span></a></li></ol></li></ol>
     </div>
   </span>
 </div>
@@ -126,7 +126,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        Hyper-Pipelining Query Execution
+        Hyper-Pipelining Query Execution(上)
     </h1>
 
 
@@ -222,11 +222,11 @@
 <li>编译器和 CPU 平均能检测到的不相关指令数量</li>
 </ol>
 <p>研究表名，即便是在商业数据库中，查询执行引擎的 IPC 也才 0.7，也就是说每个指令周期执行的指令少于1个。相比之下，科学计算（例如矩阵乘法）或多媒体处理却可以从 Modern-CPUs 中获得的平均 IPC 高达 2。因此我们认为数据库不应该表现得这么糟糕，特别是在需要检查数百万 tuples 并计算表达式的大规模分析任务中。这些任务具有大量的独立性，应该能够完全填满 CPUs 所能提供的所有 Pipelines。因此，本文目标是调整数据库架构，尽可能将其暴露给编译器和 CPU，从而显着提高查询处理吞吐量。</p>
-<h2 id="3-Microbenchmark-TPCH-Query-1"><a href="#3-Microbenchmark-TPCH-Query-1" class="headerlink" title="3. Microbenchmark: TPCH Query 1"></a>3. Microbenchmark: TPCH Query 1</h2><p>虽然我们总体上以查询处理的 CPU 效率为目标，但我们首先关注表达式计算（expression calculation），放弃更复杂的关系操作（比如 JOIN）以简化我们的分析。我们选择 TPCH benchmark Q1（如图-3所示）来进行分析，因为在我们测试的所有 RDBMSs 上，该 Query 都是CPU 密集型的（CPU-bound）。此外，这个Q1的执行计划非常简单，以至于几乎不需要优化和花哨的 JOIN 实现。因此，所有数据库都在一个公平的竞争环境中运行，并主要突出它们计算表达式的效率。</p>
+<h2 id="3-Micro-benchmark-TPCH-Q1"><a href="#3-Micro-benchmark-TPCH-Q1" class="headerlink" title="3. Micro-benchmark: TPCH Q1"></a>3. Micro-benchmark: TPCH Q1</h2><p>虽然我们总体上以查询处理的 CPU 效率为目标，但我们首先关注表达式计算（expression calculation），放弃更复杂的关系操作（比如 JOIN）以简化我们的分析。我们选择 TPCH benchmark Q1（如图-3所示）来进行分析，因为在我们测试的所有 RDBMSs 上，该 Query 都是CPU 密集型的（CPU-bound）。此外，这个Q1的执行计划非常简单，以至于几乎不需要优化和花哨的 JOIN 实现。因此，所有数据库都在一个公平的竞争环境中运行，并主要突出它们计算表达式的效率。</p>
 <p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-3.jpg?raw=true" alt="Hyper-Pipelining-3"></p>
 <p>TPCH benchmark 运行在 1G 大小的数据仓库上，这个大小可以通过 <code>Scaling Factor</code> (SF) 来调节。Q1 是对大小为 SF * 6M tuples 的表 <em>lineitem</em> 进行 scan，几乎选择了该表的所有的数据（SF * 5.9M tuples），并计算了多个 fixed-point 十进制表达式：两个 column-to-const 减法，一个 column-to-const 加法，三个 column-to-column 乘法以及8个聚合计算（四个 SUM，三个 AVG和一个 COUNT）。聚合分组是针对两个单字符列（two single-character column），并仅产生四个唯一的组合，因此通过小的 hashtable 就能高效完成，不需要额外的 IO，甚至不需要 CPU 缓存命中。</p>
 <p>下面，我们先分析Q1在关系型数据库上的性能，然后分析在 MonetDB&#x2F;MIL 上的性能，最后是通过 hand-coded 实现的性能。</p>
-<h3 id="3-1-Query-1-on-Relational-Database-Systems"><a href="#3-1-Query-1-on-Relational-Database-Systems" class="headerlink" title="3.1 Query 1 on Relational Database Systems"></a>3.1 Query 1 on Relational Database Systems</h3><p>从 RDBMSs 早期开始，他们的查询执行功能就是通过实现物理关系代数（Physical Relational Algebra）来提供的，这通常遵循 Volcano 流水线处理模型。然而，关系代数的参数有很高的自由度。比如，即使是一个简单的 ScanSelect(R, b, P) 也只能在查询时（query-time）才能完全了解:</p>
+<h3 id="3-1-Q1-on-Relational-Database-Systems"><a href="#3-1-Q1-on-Relational-Database-Systems" class="headerlink" title="3.1 Q1 on Relational Database Systems"></a>3.1 Q1 on Relational Database Systems</h3><p>从 RDBMSs 早期开始，他们的查询执行功能就是通过实现物理关系代数（Physical Relational Algebra）来提供的，这通常遵循 Volcano 流水线处理模型。然而，关系代数的参数有很高的自由度。比如，即使是一个简单的 ScanSelect(R, b, P) 也只能在查询时（query-time）才能完全了解:</p>
 <ul>
 <li>输入关系 R 的格式（列数、列类型和记录偏移量，</li>
 <li>布尔选择表达式 b (可以是任何形式），以及</li>
@@ -263,7 +263,8 @@
 <p>总而言之，<strong>tuple-at-a-time</strong> 即一次只针对一个数据进行操作，导致无法 pipelined loop + 无法分摊成本。</p>
 <p>此外，我们也在知名的商业数据库上测试了相同的查询 Q1，如表-1 第一行所示。虽然我们没有该产品的源码，无法获得 gprof 性能记录，但是该 RDBMS 的查询评估成本和 MYSQL 是极其相似的。表-1的下半部分是从 TPC 网站获取的一些官方 TPCH Q1 结果。</p>
 <p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-table-1.jpg?raw=true" alt="Hyper-Pipelining-table-1"></p>
-<h3 id="3-2-Query-1-on-MonetDB-MIL"><a href="#3-2-Query-1-on-MonetDB-MIL" class="headerlink" title="3.2 Query 1 on MonetDB&#x2F;MIL"></a>3.2 Query 1 on MonetDB&#x2F;MIL</h3><h3 id="3-3-Query-1-Baseline-Performance"><a href="#3-3-Query-1-Baseline-Performance" class="headerlink" title="3.3 Query 1: Baseline Performance"></a>3.3 Query 1: Baseline Performance</h3><p>为了获得现代硬件对 Q1 等问题的处理能力的 baseline，我们将其实现为 MonetDB 中的一个 UDF，如图 4 所示。该 UDF 仅在查询涉及的那些列中传递，</p>
+<h3 id="3-2-Q1-on-MonetDB-MIL"><a href="#3-2-Q1-on-MonetDB-MIL" class="headerlink" title="3.2 Q1 on MonetDB&#x2F;MIL"></a>3.2 Q1 on MonetDB&#x2F;MIL</h3><p>MonetDB&#x2F;MIL 是由本论文作者团队开发的，因使用垂直分片（vertical fragmentation），按列存储表（storing tables column-wise）而知名。</p>
+<h3 id="3-3-Q1-Baseline-Performance"><a href="#3-3-Q1-Baseline-Performance" class="headerlink" title="3.3 Q1 Baseline Performance"></a>3.3 Q1 Baseline Performance</h3><p>为了获得现代硬件对 Q1 等问题的处理能力的 baseline，我们将其实现为 MonetDB 中的一个 UDF，如图 4 所示，该 UDF 仅在查询涉及的那些列中传递，</p>
 <p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-4.jpg?raw=true" alt="Hyper-Pipelining-4"></p>
 
   </div>
@@ -288,22 +289,22 @@
     </div>
 
     <div id="toc-footer" style="display: none">
-      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract"><span class="toc-number">1.</span> <span class="toc-text">Abstract</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-How-CPUs-Work"><span class="toc-number">3.</span> <span class="toc-text">2. How CPUs Work</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-Microbenchmark-TPCH-Query-1"><span class="toc-number">4.</span> <span class="toc-text">3. Microbenchmark: TPCH Query 1</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Query-1-on-Relational-Database-Systems"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 Query 1 on Relational Database Systems</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-Query-1-on-MonetDB-MIL"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 Query 1 on MonetDB&#x2F;MIL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Query-1-Baseline-Performance"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 Query 1: Baseline Performance</span></a></li></ol></li></ol>
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstract"><span class="toc-number">1.</span> <span class="toc-text">Abstract</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-How-CPUs-Work"><span class="toc-number">3.</span> <span class="toc-text">2. How CPUs Work</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-Micro-benchmark-TPCH-Q1"><span class="toc-number">4.</span> <span class="toc-text">3. Micro-benchmark: TPCH Q1</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Q1-on-Relational-Database-Systems"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 Q1 on Relational Database Systems</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-Q1-on-MonetDB-MIL"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 Q1 on MonetDB&#x2F;MIL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Q1-Baseline-Performance"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 Q1 Baseline Performance</span></a></li></ol></li></ol>
     </div>
 
     <div id="share-footer" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&text=Hyper-Pipelining Query Execution"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&is_video=false&description=Hyper-Pipelining Query Execution"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=Hyper-Pipelining Query Execution&body=Check out this article: https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&title=Hyper-Pipelining Query Execution"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&name=Hyper-Pipelining Query Execution&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining%20Query%20Execution/&t=Hyper-Pipelining Query Execution"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&text=Hyper-Pipelining Query Execution(上)"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&is_video=false&description=Hyper-Pipelining Query Execution(上)"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Hyper-Pipelining Query Execution(上)&body=Check out this article: https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&title=Hyper-Pipelining Query Execution(上)"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&name=Hyper-Pipelining Query Execution(上)&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/&t=Hyper-Pipelining Query Execution(上)"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
