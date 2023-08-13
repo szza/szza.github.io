@@ -13,18 +13,18 @@
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="Overview尽管 rocksdb wiki 中 rocksdb-overview 已经描述了，本文以自己的理解作为一个补充。 如图 rocksdb 的总体架构图中主要由 MemTable, WAL 和 sstfile 三个基本组件组成，本文主要阐述下他们之间的协作关系。 MemTable写入的kv数据会先写入 WriteBatch， 在经过 WriteBatchInternal 封装后写入 M">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l0_compaction.png">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l0_compaction.png">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l1_compaction.png">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l1_compaction.png">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_cf.png">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l0_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l0_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l1_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l1_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_cf.png?raw=true">
 <meta property="article:published_time" content="2022-01-08T06:15:35.000Z">
-<meta property="article:modified_time" content="2023-08-07T09:26:04.729Z">
+<meta property="article:modified_time" content="2023-08-12T12:54:33.277Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="RocksDb">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png?raw=true">
     
     
       
@@ -164,7 +164,7 @@
 
   <div class="content" itemprop="articleBody">
     <h1 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h1><p>尽管 rocksdb wiki 中 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/wiki">rocksdb-overview</a> 已经描述了，本文以自己的理解作为一个补充。</p>
-<p>如图 rocksdb 的总体架构图中主要由 <code>MemTable</code>, <code>WAL</code> 和 <code>sstfile</code> 三个基本组件组成，本文主要阐述下他们之间的协作关系。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png" alt="rocksdb-overview"></p>
+<p>如图 rocksdb 的总体架构图中主要由 <code>MemTable</code>, <code>WAL</code> 和 <code>sstfile</code> 三个基本组件组成，本文主要阐述下他们之间的协作关系。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png?raw=true" alt="rocksdb-overview"></p>
 <h3 id="MemTable"><a href="#MemTable" class="headerlink" title="MemTable"></a>MemTable</h3><p>写入的kv数据会先写入 <code>WriteBatch</code>， 在经过 <code>WriteBatchInternal</code> 封装后写入 MemTable。</p>
 <p>MemTable 是在读写路径中共享，这样可以减少读写路径中和磁盘交互的频次。但由于 MemTable 是个内存结构，为了防止各种故障导致 MemTable 中数据丢失，进而引入 WAL (<code>W</code>rite <code>A</code>head <code>L</code>og)，即每次写入的数据，会先写入 WAL，成功后再写入 MemTable，如果 MemTable 中的数据丢失则从 WAL 中恢复。</p>
 <p>正常情况下，写入的数据会持续写入 MemTable，直到 MemTable 的大小超过阈值，则会变成只具有只读属性的 ImutableMemTable, 同时创建新的 MemTable 接受后续的写入。等待后台线程 <em>Pickup</em> 合适的 ImmutableMemTables，将其 Flush 到 $Level_0$ 中，那么选中的 ImmutableMemTables 对应的 WALs 也可以删除了。</p>
@@ -188,13 +188,13 @@
 <ul>
 <li><p>$level_0$: 当 MemTable 中的数据 Flush 到 $Level_0$ 时，会导致 $Level_0$ 存在重复的 kv range。当 $Level_0$ 的文件数量达到阈值 <code>$Level_0$_file_num_compaction_trigger</code>，$Level_0$ 会被合并到会和 $Level_1$，并保持使得 $Level_1$ 层的 sstfiles 仍然有序且无重复。</p>
 <p>如图是 $level_0$ 的 compaction 前后过程：</p>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l0_compaction.png" alt="pre_l0_compaction"></p>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l0_compaction.png" alt="post_l0_compaction"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l0_compaction.png?raw=true" alt="pre_l0_compaction"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l0_compaction.png?raw=true" alt="post_l0_compaction"></p>
 </li>
 <li><p>当 $$Level_1$$ 的数据量越来越大，会触发 $Level_1$(inpit-level)层和 $level_2$ (output-level)层的 compaction。</p>
 <p>如图是 $level_1$ 的 compaction 前后过程：</p>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l1_compaction.png" alt="rocksdb_pre_l1_compaction"></p>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l1_compaction.png" alt="rocksdb_post_l1_compaction"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l1_compaction.png?raw=true" alt="rocksdb_pre_l1_compaction"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l1_compaction.png?raw=true" alt="rocksdb_post_l1_compaction"></p>
 </li>
 <li><p>以此类推到 LSM 最底层。</p>
 </li>
@@ -218,7 +218,7 @@
 <li><code>MemTableList</code> 对象 imm 中有个 <code>MemTableListVersion</code> 对象，并有 <em>Ref()</em>&#x2F;<em>Unref()</em> 函数来追踪生命周期；</li>
 <li><code>Version</code> 对象 version 也有 <em>Ref()</em>&#x2F;<em>Unref()</em> 函数来追踪生命周期；</li>
 </ul>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_cf.png" alt="rocksdb-cf"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_cf.png?raw=true" alt="rocksdb-cf"></p>
 <p>因此，关于 cf 也好理解，在分析这块的时候可以多关注下 WALs、Version 等生命周期的起始。</p>
 <h2 id="Get-MultiGet"><a href="#Get-MultiGet" class="headerlink" title="Get&#x2F;MultiGet"></a>Get&#x2F;MultiGet</h2><p>读取路径会比较复杂，主要是将 mm&#x2F;imm、sstfile 数据有序合并起来再取最新的数据输出，相关的三个迭代器 <code>MergingIterator</code>，<code>CompactionIterator</code>、<code>RangeTomeStoneIterator</code> 放在后续慢慢再讲解。这一部分还有一点就是利用 C++20 的协程实现异步IO来提取读取性能。</p>
 
