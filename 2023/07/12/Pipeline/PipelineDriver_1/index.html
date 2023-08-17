@@ -6,18 +6,18 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="HandheldFriendly" content="True">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-    <meta name="description" content="本篇来看看 PipelineDriver 的执行流程，以及如何与 PipelineDriverPoller 交互。 Pipeline DriverState一个 PipelineDriver 的状态有如下 9 种： 123456789101112enum DriverState : uint32_t &amp;#123;    NOT_READY &#x3D; 0,    READY &#x3D; 1,    RUNNING">
+    <meta name="description" content="本篇来看看 PipelineDriver 的执行流程，以及如何与 PipelineDriverPoller 交互。 Pipeline DriverState一个 PipelineDriver 的状态有如下 10 种： 123456789101112enum DriverState : uint32_t &amp;#123;    NOT_READY &#x3D; 0,    READY &#x3D; 1,    RUNNIN">
 <meta property="og:type" content="article">
 <meta property="og:title" content="PipelineDriver 状态机(1)">
 <meta property="og:url" content="https://szza.github.io/2023/07/12/Pipeline/PipelineDriver_1/index.html">
 <meta property="og:site_name" content="szza">
-<meta property="og:description" content="本篇来看看 PipelineDriver 的执行流程，以及如何与 PipelineDriverPoller 交互。 Pipeline DriverState一个 PipelineDriver 的状态有如下 9 种： 123456789101112enum DriverState : uint32_t &amp;#123;    NOT_READY &#x3D; 0,    READY &#x3D; 1,    RUNNING">
+<meta property="og:description" content="本篇来看看 PipelineDriver 的执行流程，以及如何与 PipelineDriverPoller 交互。 Pipeline DriverState一个 PipelineDriver 的状态有如下 10 种： 123456789101112enum DriverState : uint32_t &amp;#123;    NOT_READY &#x3D; 0,    READY &#x3D; 1,    RUNNIN">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/PipelineDriver-1.svg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-1.svg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/Pipeline-OlapScanOperator-1.svg?raw=true">
 <meta property="article:published_time" content="2023-07-12T02:00:01.000Z">
-<meta property="article:modified_time" content="2023-08-17T11:41:47.004Z">
+<meta property="article:modified_time" content="2023-08-17T13:54:02.425Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Pipeline">
 <meta name="twitter:card" content="summary">
@@ -161,7 +161,7 @@
 
   <div class="content" itemprop="articleBody">
     <p>本篇来看看 PipelineDriver 的执行流程，以及如何与 PipelineDriverPoller 交互。</p>
-<h2 id="Pipeline-DriverState"><a href="#Pipeline-DriverState" class="headerlink" title="Pipeline DriverState"></a>Pipeline DriverState</h2><p>一个 PipelineDriver 的状态有如下 9 种：</p>
+<h2 id="Pipeline-DriverState"><a href="#Pipeline-DriverState" class="headerlink" title="Pipeline DriverState"></a>Pipeline DriverState</h2><p>一个 PipelineDriver 的状态有如下 10 种：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">enum</span> <span class="title class_">DriverState</span> : <span class="type">uint32_t</span> &#123;</span><br><span class="line">    NOT_READY = <span class="number">0</span>,</span><br><span class="line">    READY = <span class="number">1</span>,</span><br><span class="line">    RUNNING = <span class="number">2</span>,</span><br><span class="line">    INPUT_EMPTY = <span class="number">3</span>,</span><br><span class="line">    OUTPUT_FULL = <span class="number">4</span>,</span><br><span class="line">    PRECONDITION_BLOCK = <span class="number">5</span>,</span><br><span class="line">    FINISH = <span class="number">6</span>,</span><br><span class="line">    CANCELED = <span class="number">7</span>,</span><br><span class="line">    INTERNAL_ERROR = <span class="number">8</span>,</span><br><span class="line">    PENDING_FINISH = <span class="number">9</span>,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
 <p>他们之间的状态变化如下:<br><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/PipelineDriver-1.svg?raw=true" alt="PipelineaDriver-1"></p>
 <p>在此处不单独讲解每个状态，后面融到代码流程一起讲解。</p>
