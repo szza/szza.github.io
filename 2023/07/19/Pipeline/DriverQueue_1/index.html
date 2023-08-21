@@ -6,16 +6,16 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="HandheldFriendly" content="True">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
-    <meta name="description" content="DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。 DriverQueue 本质上是个调度 PipelineDrivers 的数据结构，这样">
+    <meta name="description" content="DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。 本文专注于 QuerySharedDriverQueue 的实现，ResuorceGrou">
 <meta property="og:type" content="article">
 <meta property="og:title" content="QuerySharedDriverQueue: 多级反馈队列">
 <meta property="og:url" content="https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/index.html">
 <meta property="og:site_name" content="szza">
-<meta property="og:description" content="DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。 DriverQueue 本质上是个调度 PipelineDrivers 的数据结构，这样">
+<meta property="og:description" content="DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。 本文专注于 QuerySharedDriverQueue 的实现，ResuorceGrou">
 <meta property="og:locale" content="en_US">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-driver-queue-1.svg?raw=true">
 <meta property="article:published_time" content="2023-07-19T02:00:01.000Z">
-<meta property="article:modified_time" content="2023-08-21T03:06:01.416Z">
+<meta property="article:modified_time" content="2023-08-21T03:14:25.973Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Pipeline">
 <meta name="twitter:card" content="summary">
@@ -77,6 +77,8 @@
     <br/>
     <span id="actions">
       <ul>
+        
+        <li><a class="icon" href="/2023/07/25/Pipeline/PipelineExecutor/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
         <li><a class="icon" href="/2023/07/15/Pipeline/PipelineDriver_2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
@@ -157,6 +159,7 @@
 
   <div class="content" itemprop="articleBody">
     <p>DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。</p>
+<p>本文专注于 QuerySharedDriverQueue 的实现，ResuorceGroup 后文单独讲解。下文 DriverQueue 一般指 QuerySharedDriverQueue。 </p>
 <p>DriverQueue 本质上是个调度 PipelineDrivers 的数据结构，这样 DrvierQueue 本身就不需要占据一个线程，它可以在 GloablEexecuotr::work_thread 所在的核上运行。</p>
 <p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-driver-queue-1.svg?raw=true" alt="pipeline-driver-queue-1"></p>
 <h2 id="DriverAcct"><a href="#DriverAcct" class="headerlink" title="DriverAcct"></a>DriverAcct</h2><p>DriverQueue 实现调度，需要依赖 PipelineDriver 运行时的统计信息。比如，在前文我们说过了 <a href="https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2">PipelineDriver</a> 每执行一次 PipelineDriver:process 函数都会更新统计信息。</p>
