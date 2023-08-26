@@ -14,7 +14,7 @@
 <meta property="og:description" content="观前提醒，横屏有助于提升阅读体验。 上一节剖析 std::unordered_map 具有O(1)时间复杂度的原理中讲解了std::unordered_map应对hash冲突、退化，实现O(1)时间复杂度的原理。这一节从源码角度看看它底层实现细节。 在本节，由于C++的STL中模板参数较多，为便于描述：  将模板参数较多的返回类型使用auto替代 将类的成员函数实现中的类模板参数以...替代  i">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2021-03-01T07:15:07.000Z">
-<meta property="article:modified_time" content="2023-08-07T09:25:11.463Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.793Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Modern C++">
 <meta name="twitter:card" content="summary">
@@ -138,11 +138,6 @@
 
 
       
-    <div class="article-category">
-        <i class="fas fa-archive"></i>
-        <a class="category-link" href="/categories/Timeline/">Timeline</a>
-    </div>
-
 
       
     <div class="article-tag">
