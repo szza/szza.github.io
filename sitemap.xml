@@ -101,7 +101,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2022/10/02/TiFlash/DeltaTreeIndex-2/</loc>
+    <loc>https://szza.github.io/2022/10/01/TiFlash/DeltaTreeIndex-1/</loc>
     
     <lastmod>2023-08-28</lastmod>
     
@@ -110,7 +110,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2022/10/01/TiFlash/DeltaTreeIndex-1/</loc>
+    <loc>https://szza.github.io/2022/10/02/TiFlash/DeltaTreeIndex-2/</loc>
     
     <lastmod>2023-08-28</lastmod>
     
@@ -191,33 +191,6 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2023/05/07/Pipeline/Overview/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/</loc>
     
     <lastmod>2023-08-26</lastmod>
@@ -236,6 +209,60 @@
   </url>
   
   <url>
+    <loc>https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2023/05/07/Pipeline/Overview/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2022/03/01/rocksdb/WritePath/WAL_1/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://szza.github.io/2022/04/16/rocksdb/WritePath/WAL_3/</loc>
     
     <lastmod>2023-08-26</lastmod>
@@ -246,15 +273,6 @@
   
   <url>
     <loc>https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -299,15 +317,6 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2022/03/01/rocksdb/WritePath/WAL_1/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>https://szza.github.io/2021/12/01/rocksdb/utility/HashTablel/</loc>
     
     <lastmod>2023-08-26</lastmod>
@@ -318,24 +327,6 @@
   
   <url>
     <loc>https://szza.github.io/2021/12/02/rocksdb/utility/persistent_cache/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -362,6 +353,24 @@
   </url>
   
   <url>
+    <loc>https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2021/11/27/rocksdb/Table/builder/3_FilterBlock/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://szza.github.io/2021/11/24/rocksdb/Table/builder/5_Footer/</loc>
     
     <lastmod>2023-08-26</lastmod>
@@ -372,15 +381,6 @@
   
   <url>
     <loc>https://szza.github.io/2021/11/28/rocksdb/Table/builder/4_BlockBaseTableBuilder/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2021/11/27/rocksdb/Table/builder/3_FilterBlock/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -407,7 +407,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2023/07/07/Pipeline/MorselQueue_3/</loc>
+    <loc>https://szza.github.io/2023/07/31/Pipeline/FragmentInstance/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -425,16 +425,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2023/07/31/Pipeline/FragmentInstance/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/</loc>
+    <loc>https://szza.github.io/2023/07/07/Pipeline/MorselQueue_3/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -444,6 +435,15 @@
   
   <url>
     <loc>https://szza.github.io/2023/07/12/Pipeline/PipelineDriver_1/</loc>
+    
+    <lastmod>2023-08-26</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -479,15 +479,6 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/03/01/Path/1/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>https://szza.github.io/2021/01/26/Redis/Threads/</loc>
     
     <lastmod>2023-08-26</lastmod>
@@ -506,7 +497,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/03/01/Path/2/</loc>
+    <loc>https://szza.github.io/2021/01/26/Redis/EventLoop/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -515,7 +506,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/01/26/Redis/EventLoop/</loc>
+    <loc>https://szza.github.io/2021/01/26/Redis/InputBuffer/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -542,25 +533,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/01/26/Redis/InputBuffer/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>https://szza.github.io/2021/03/03/C++/RVO/</loc>
-    
-    <lastmod>2023-08-26</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2021/03/09/Tools/vscode/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -587,7 +560,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/12/21/C++/unique_ptr/</loc>
+    <loc>https://szza.github.io/2021/03/03/C++/allocator/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -605,7 +578,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2021/03/03/C++/allocator/</loc>
+    <loc>https://szza.github.io/2021/12/21/C++/unique_ptr/</loc>
     
     <lastmod>2023-08-26</lastmod>
     
@@ -693,7 +666,7 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/tags/%E5%90%8E%E7%AB%AF%E8%B7%AF%E7%BA%BF/</loc>
+    <loc>https://szza.github.io/tags/Papers/</loc>
     <lastmod>2023-08-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -701,13 +674,6 @@
   
   <url>
     <loc>https://szza.github.io/tags/Pipeline/</loc>
-    <lastmod>2023-08-29</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/tags/Papers/</loc>
     <lastmod>2023-08-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
@@ -736,13 +702,6 @@
   
   <url>
     <loc>https://szza.github.io/tags/TiKV6-1/</loc>
-    <lastmod>2023-08-29</lastmod>
-    <changefreq>weekly</changefreq>
-    <priority>0.2</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/tags/%E5%B7%A5%E5%85%B7/</loc>
     <lastmod>2023-08-29</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
