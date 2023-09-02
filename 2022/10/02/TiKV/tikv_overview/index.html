@@ -8,24 +8,25 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="KvService当用户从 mysql 客户端 insert 数据时，在 TiDB 通过 pd 定位到具体的每条数据对应的 region，然后将这个数据插入到对应的 region leader 中。TiKV 在接受到写指令后，再进行处理。本节专注于写流程本身，忽略 Tansactions 和 MVCC。TiKV 写指令的逻辑大致如下：   RaftStoreRouter： KvService 封装">
 <meta property="og:type" content="article">
-<meta property="og:title" content="TiKV &amp;&amp; TiFlash RAFT 同步流程">
-<meta property="og:url" content="https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/index.html">
+<meta property="og:title" content="HTAP Overview: TiKV、TiFlash RAFT 同步流程">
+<meta property="og:url" content="https://szza.github.io/2022/10/02/TiKV/tikv_overview/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="KvService当用户从 mysql 客户端 insert 数据时，在 TiDB 通过 pd 定位到具体的每条数据对应的 region，然后将这个数据插入到对应的 region leader 中。TiKV 在接受到写指令后，再进行处理。本节专注于写流程本身，忽略 Tansactions 和 MVCC。TiKV 写指令的逻辑大致如下：   RaftStoreRouter： KvService 封装">
 <meta property="og:locale" content="en_US">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-1.svg?raw=true">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-2.svg?raw=true">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-3.svg?raw=true">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-4.svg?raw=true">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-5.svg?raw=true">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-5.svg?raw=true">
-<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-5.svg?raw=true">
-<meta property="article:published_time" content="2022-10-05T02:00:01.000Z">
-<meta property="article:modified_time" content="2023-09-02T03:55:20.261Z">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-1.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-2.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-3.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-4.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-5.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-6.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-7.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-8.svg?raw=true">
+<meta property="article:published_time" content="2022-10-02T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-02T07:40:38.914Z">
 <meta property="article:author" content="fibonaccii">
-<meta property="article:tag" content="TiKV6.1">
+<meta property="article:tag" content="tidb-v6.1">
 <meta name="twitter:card" content="summary">
-<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-1.svg?raw=true">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-1.svg?raw=true">
     
     
       
@@ -45,7 +46,7 @@
       
     
     <!-- title -->
-    <title>TiKV &amp;&amp; TiFlash RAFT 同步流程</title>
+    <title>HTAP Overview: TiKV、TiFlash RAFT 同步流程</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -82,10 +83,10 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2022/10/05/TiFlash/SegmentReadThread/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2022/10/03/TiKV/raft_1_append/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
-        <li><a class="icon" href="/2022/10/04/TiFlash/DelteMerge/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        <li><a class="icon" href="/2022/10/01/TiDB/tranasaction/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
         
         <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
         <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
@@ -98,17 +99,17 @@
     <br/>
     <div id="share" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&text=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&is_video=false&description=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=TiKV &amp;&amp; TiFlash RAFT 同步流程&body=Check out this article: https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&name=TiKV &amp;&amp; TiFlash RAFT 同步流程&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&t=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/02/TiKV/tikv_overview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&text=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&is_video=false&description=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=HTAP Overview: TiKV、TiFlash RAFT 同步流程&body=Check out this article: https://szza.github.io/2022/10/02/TiKV/tikv_overview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&name=HTAP Overview: TiKV、TiFlash RAFT 同步流程&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&t=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -125,7 +126,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        TiKV &amp;&amp; TiFlash RAFT 同步流程
+        HTAP Overview: TiKV、TiFlash RAFT 同步流程
     </h1>
 
 
@@ -137,7 +138,7 @@
       
     <div class="postdate">
       
-        <time datetime="2022-10-05T02:00:01.000Z" itemprop="datePublished">2022-10-05</time>
+        <time datetime="2022-10-02T02:00:01.000Z" itemprop="datePublished">2022-10-02</time>
         
       
     </div>
@@ -148,7 +149,7 @@
       
     <div class="article-tag">
         <i class="fas fa-tag"></i>
-        <a class="tag-link-link" href="/tags/TiKV6-1/" rel="tag">TiKV6.1</a>
+        <a class="tag-link-link" href="/tags/tidb-v6-1/" rel="tag">tidb-v6.1</a>
     </div>
 
 
@@ -158,7 +159,7 @@
 
   <div class="content" itemprop="articleBody">
     <h2 id="KvService"><a href="#KvService" class="headerlink" title="KvService"></a>KvService</h2><p>当用户从 mysql 客户端 insert 数据时，在 TiDB 通过 pd 定位到具体的每条数据对应的 region，然后将这个数据插入到对应的 region leader 中。TiKV 在接受到写指令后，再进行处理。本节专注于写流程本身，忽略 Tansactions 和 MVCC。TiKV 写指令的逻辑大致如下：</p>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-1.svg?raw=true" alt="tikv-raft-1"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-1.svg?raw=true" alt="tikv-raft-1"></p>
 <ul>
 <li>RaftStoreRouter： KvService 封装了所有 TiKV 相关的 RPC 接口，在接受到写指令后，通过 RaftStoreRouter 将接收到的消息传递给后台线程池 <strong>BatchSystem</strong> 处理，在 RaftStore 内部再基于 Raft Log 的共识算法复制到其他 TiKV Followers。</li>
 <li>Transport：内部封装了 Raft Client，用于将 TiKV 的消息发送出去，比如 leader 和 follower之间的信息交互即基于 Transport 完成的。</li>
@@ -191,7 +192,7 @@
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line">  <span class="keyword">fn</span> <span class="title function_">TiKVServer</span>::init_servers&lt;F: KvFormat&gt;(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) <span class="punctuation">-&gt;</span> Arc&lt;VersionTrack&lt;ServerConfig&gt;&gt; &#123;</span><br><span class="line">      <span class="comment">//...</span></span><br><span class="line">     <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">node</span> = Node::<span class="title function_ invoke__">new</span>(</span><br><span class="line">          <span class="keyword">self</span>.system.<span class="title function_ invoke__">take</span>().<span class="title function_ invoke__">unwrap</span>(),</span><br><span class="line">          &amp;server_config.<span class="title function_ invoke__">value</span>().<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          raft_store.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.config.storage.<span class="title function_ invoke__">api_version</span>(),</span><br><span class="line">          <span class="keyword">self</span>.pd_client.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.state.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.background_worker.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="title function_ invoke__">Some</span>(health_service.<span class="title function_ invoke__">clone</span>()),</span><br><span class="line">      );</span><br><span class="line">      node.<span class="title function_ invoke__">try_bootstrap_store</span>(engines.engines.<span class="title function_ invoke__">clone</span>())</span><br><span class="line">          .<span class="title function_ invoke__">unwrap_or_else</span>(|e| fatal!(<span class="string">&quot;failed to bootstrap node id: &#123;&#125;&quot;</span>, e));</span><br><span class="line"></span><br><span class="line">     <span class="keyword">let</span> <span class="variable">server</span> = Server::<span class="title function_ invoke__">new</span>(</span><br><span class="line">          node.<span class="title function_ invoke__">id</span>(),</span><br><span class="line">          &amp;server_config,</span><br><span class="line">          &amp;<span class="keyword">self</span>.security_mgr,</span><br><span class="line">          storage,</span><br><span class="line">          coprocessor::Endpoint::<span class="title function_ invoke__">new</span>(</span><br><span class="line">              &amp;server_config.<span class="title function_ invoke__">value</span>(),</span><br><span class="line">              cop_read_pool_handle,</span><br><span class="line">              <span class="keyword">self</span>.concurrency_manager.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">              resource_tag_factory,</span><br><span class="line">              Arc::<span class="title function_ invoke__">clone</span>(&amp;<span class="keyword">self</span>.quota_limiter),</span><br><span class="line">          ),</span><br><span class="line">          coprocessor_v2::Endpoint::<span class="title function_ invoke__">new</span>(&amp;<span class="keyword">self</span>.config.coprocessor_v2),</span><br><span class="line">          <span class="keyword">self</span>.router.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.resolver.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          snap_mgr.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          gc_worker.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          check_leader_scheduler,</span><br><span class="line">          <span class="keyword">self</span>.env.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          unified_read_pool,</span><br><span class="line">          debug_thread_pool,</span><br><span class="line">          health_service,</span><br><span class="line">      )</span><br><span class="line">      .<span class="title function_ invoke__">unwrap_or_else</span>(|e| fatal!(<span class="string">&quot;failed to create server: &#123;&#125;&quot;</span>, e));</span><br><span class="line">      <span class="comment">//...</span></span><br><span class="line">      <span class="comment">// node start</span></span><br><span class="line">      node.<span class="title function_ invoke__">start</span>(</span><br><span class="line">          engines.engines.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          server.<span class="title function_ invoke__">transport</span>(),</span><br><span class="line">          snap_mgr,</span><br><span class="line">          pd_worker,</span><br><span class="line">          engines.store_meta.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.coprocessor_host.<span class="title function_ invoke__">clone</span>().<span class="title function_ invoke__">unwrap</span>(),</span><br><span class="line">          importer.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          split_check_scheduler,</span><br><span class="line">          auto_split_controller,</span><br><span class="line">          <span class="keyword">self</span>.concurrency_manager.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          collector_reg_handle,</span><br><span class="line">      )</span><br><span class="line">      .<span class="title function_ invoke__">unwrap_or_else</span>(|e| fatal!(<span class="string">&quot;failed to start node: &#123;&#125;&quot;</span>, e));</span><br><span class="line">      <span class="comment">//..</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
 
 <p>TiKV 包含多个服务，其中比较重要的是 TiKVService.</p>
-<h2 id="Raft-log-replication"><a href="#Raft-log-replication" class="headerlink" title="Raft log replication"></a>Raft log replication</h2><p>Raft  log replication<br>在 TiKV 内部有两个 rocksdb 实例：</p>
+<h2 id="Raft-log-replication"><a href="#Raft-log-replication" class="headerlink" title="Raft log replication"></a>Raft log replication</h2><p>在 TiKV 内部有两个 rocksdb 实例：</p>
 <ul>
 <li>raft-rocksdb：用于保存新增的 Raft Log 及最新的 Raft state；</li>
 <li>kv-rocksdb：用于保存TiKV 执行 command 之后产生的  kv 数据<br>kv-rocksdb 中有四个 Column Family：<ul>
@@ -202,31 +203,32 @@
 </ul>
 </li>
 </ul>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-2.svg?raw=true" alt="tikv-raft-2"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-2.svg?raw=true" alt="tikv-raft-2"></p>
 <p>在 Raft  Repplication 过程中，snapshot 是由 Raft 状态机自动产生的，比如当 follower &#x2F; learner 出现宕机或者网络分区、新加入 follower &#x2F; learner 节点或者处于 backup 需求，leader 就需要生成 snapshot。<br>follower、learner 接收到 snapshot 时，处理的优先级最高，因为这个 snapshot 是 follower 处理后续的 proposals 的基准数据。</p>
 <h2 id="BatchSystem"><a href="#BatchSystem" class="headerlink" title="BatchSystem"></a>BatchSystem</h2><p>Batch System 类似线程池，是 RaftStore 的核心执行组件， 其职责就是检测哪些状态机需要驱动，然后调用 PollHandler 去消费消息。消费消息会产生副作用，而这些副作用或要落盘，或要网络交互。PollHandler 在一个批次中可以处理多个 normal 状态机。</p>
 <h2 id="PollHandler"><a href="#PollHandler" class="headerlink" title="PollHandler"></a>PollHandler</h2><p>PollHandler 负责处理处理接收到的消息，消息的处理流程按照如下trait。</p>
 <figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">trait</span> <span class="title class_">PollHandler</span>&lt;N, C&gt;: <span class="built_in">Send</span> + <span class="symbol">&#x27;static</span> &#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">begin</span>&lt;F&gt;(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, _batch_size: <span class="type">usize</span>, update_cfg: F);</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">handle_control</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, control: &amp;<span class="keyword">mut</span> C) <span class="punctuation">-&gt;</span> <span class="type">Option</span>&lt;<span class="type">usize</span>&gt;;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">handle_normal</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, normal: &amp;<span class="keyword">mut</span> <span class="keyword">impl</span> <span class="title class_">DerefMut</span>&lt;Target = N&gt;) <span class="punctuation">-&gt;</span> HandleResult;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">light_end</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, _batch: &amp;<span class="keyword">mut</span> [<span class="type">Option</span>&lt;<span class="keyword">impl</span> <span class="title class_">DerefMut</span>&lt;Target = N&gt;&gt;]) &#123;&#125;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">end</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, batch: &amp;<span class="keyword">mut</span> [<span class="type">Option</span>&lt;<span class="keyword">impl</span> <span class="title class_">DerefMut</span>&lt;Target = N&gt;&gt;]);</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">pause</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) &#123;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-3.svg?raw=true" alt="tikv-raft-3"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-3.svg?raw=true" alt="tikv-raft-3"></p>
 <p>在 raftstore 里，一共有两个 Batch System。分别是 RaftBatchSystem 和 ApplyBatchSystem，对应的 PollHandler也分为 RaftPoller、ApplyPoller。</p>
 <ul>
 <li>RaftBatchSystem 用于驱动 Raft 状态机，包括日志的分发、落盘、状态跃迁等，当日志 committed 并持久化到 raft-rocksdb 后，会发往 ApplyBatchSystem 进行处理；</li>
 <li>ApplyBatchSystem 将日志解析并应用到状态机，数据持久化到 kv-rocksdb，执行回调函数回复客户端。<br>所有的写操作都遵循着这个流程，简要流程如下：</li>
 </ul>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-4.svg?raw=true" alt="tikv-raft-4"></p>
-<h2 id="TiFlash"><a href="#TiFlash" class="headerlink" title="TiFlash"></a>TiFlash</h2><h3 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h3><p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-5.svg?raw=true" alt="tikv-raft-5"></p>
-<h3 id="Arch"><a href="#Arch" class="headerlink" title="Arch"></a>Arch</h3><p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-5.svg?raw=true" alt="tikv-raft-5"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-4.svg?raw=true" alt="tikv-raft-4"></p>
+<h2 id="TiFlash"><a href="#TiFlash" class="headerlink" title="TiFlash"></a>TiFlash</h2><h3 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h3><p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-5.png?raw=true" alt="tikv-raft-5"></p>
+<h3 id="Arch"><a href="#Arch" class="headerlink" title="Arch"></a>Arch</h3><p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-6.jpg?raw=true" alt="tikv-raft-5"></p>
 <p>TiKV 是用 Rust 实现的，而 TiFlash 是用 C++ 实现的，TiFlash 和 TiFlash-Proxy（简称 Proxy）经常需要相互调用，这一机制基于 FFI （Foreign Function Interface）实现。<br>C++ 端和 Rust 端共享一个 ProxyFFI.h，任何新增的 FFI 调用只需要在该接口中定义一遍，调用 gen-proxy-ffi 模块即可生成 Rust 端的接口代码<br>TiFlash 和 TiFlash-Proxy 会各自将 FFI 函数封装入 Helper 对象中，然后再互相持有对方的 Helper 指针。</p>
 <ul>
 <li>RaftStoreProxyFFIHelper：是 Proxy 给 TiFlash 调用的句柄，它封装了 RaftStoreProxy 对象。TiFlash 通过该句柄可以进行 ReadIndex、解析 SST、获取 Region 相关信息以及 Encryption 等相关工作；</li>
 <li>EngineStoreServerHelper 是 TiFlash 给 Proxy 调用的句柄，Proxy 通过该句柄可以向 TiFlash 写入数据和 Snapshot、获取 TiFlash 的各种状态等</li>
 </ul>
-<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/tikv-raft-5.svg?raw=true" alt="tikv-raft-7"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-7.svg?raw=true" alt="tikv-raft-7"></p>
 <h3 id="write-path"><a href="#write-path" class="headerlink" title="write path"></a>write path</h3><p>TiFlash-Proxy 处理的是写流程，将TiFlash包装成TiKV，是将 TiKV 的 apply 流程中的 kv-rocksdb 替换为 TiFlash，由 TiFlash 来持久化保存kv数据。<br>TiFlash-Proxy 处理的写入主要分为普通的 KV write、Admin Command 以及 IngestSST。这些写入会被存放在内存中。<br>一个 region 的数据分为两个部分：</p>
 <ul>
 <li>committed：已写入列式引擎 storage，通过 tryFlushRegionCacheInStorage 函数来刷盘；</li>
 <li>uncommitted：尚未写入 storage 中的，由 RegionPersister 调用 persistRegion 函数持久化到  PageStorage中<br>所以一般 flush 的整体流程：</li>
 </ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-raft-8.svg?raw=true" alt="tikv-raft-8"></p>
 <ol>
 <li>tryFlushRegion 将 committed 的数据写入 storage 的 cache</li>
 <li>tryFlushRegionCacheInStorage 将 storage 的 cache 数据刷盘</li>
@@ -272,17 +274,17 @@
 
     <div id="share-footer" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&text=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&is_video=false&description=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=TiKV &amp;&amp; TiFlash RAFT 同步流程&body=Check out this article: https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&title=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&name=TiKV &amp;&amp; TiFlash RAFT 同步流程&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/05/TiKV/RaftStoreRouter/&t=TiKV &amp;&amp; TiFlash RAFT 同步流程"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/02/TiKV/tikv_overview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&text=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&is_video=false&description=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=HTAP Overview: TiKV、TiFlash RAFT 同步流程&body=Check out this article: https://szza.github.io/2022/10/02/TiKV/tikv_overview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&title=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&name=HTAP Overview: TiKV、TiFlash RAFT 同步流程&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/02/TiKV/tikv_overview/&t=HTAP Overview: TiKV、TiFlash RAFT 同步流程"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
