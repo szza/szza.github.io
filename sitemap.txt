@@ -1,6 +1,7 @@
+https://szza.github.io/2023/10/04/Pipeline/coordinator/
+https://szza.github.io/2023/10/03/Pipeline/PlanFragment/
 https://szza.github.io/2023/10/07/Pipeline/EnforceAndCostTask/
 https://szza.github.io/2023/10/12/Pipeline/OptimizerTask/
-https://szza.github.io/2023/10/03/Pipeline/PlanFragment/
 https://szza.github.io/2023/08/20/Pipeline/Aggregator-1/
 https://szza.github.io/2023/08/16/Pipeline/HashJoin/
 https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/

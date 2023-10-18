@@ -2,6 +2,24 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://szza.github.io/2023/10/04/Pipeline/coordinator/</loc>
+    
+    <lastmod>2023-10-18</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2023/10/03/Pipeline/PlanFragment/</loc>
+    
+    <lastmod>2023-10-18</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://szza.github.io/2023/10/07/Pipeline/EnforceAndCostTask/</loc>
     
     <lastmod>2023-10-18</lastmod>
@@ -12,15 +30,6 @@
   
   <url>
     <loc>https://szza.github.io/2023/10/12/Pipeline/OptimizerTask/</loc>
-    
-    <lastmod>2023-10-18</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2023/10/03/Pipeline/PlanFragment/</loc>
     
     <lastmod>2023-10-18</lastmod>
     
