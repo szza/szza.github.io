@@ -8,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="输入数据源会被划分多个 Morsels，每个 morsel 都表征着一个要读取的数据源及其范围 {tablet_id, version}，这两个信息也包含在 scan_range 中。  enable_query_cache在 query_cache 没有失效的情况下，N 个 MultiLaneOperator 之间的 lane 是一一对应的，数据流如下。  一个 MultiLaneOperato">
 <meta property="og:type" content="article">
-<meta property="og:title" content="查询加速: QueryCache">
+<meta property="og:title" content="Pipeline: 查询加速: QueryCache">
 <meta property="og:url" content="https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="输入数据源会被划分多个 Morsels，每个 morsel 都表征着一个要读取的数据源及其范围 {tablet_id, version}，这两个信息也包含在 scan_range 中。  enable_query_cache在 query_cache 没有失效的情况下，N 个 MultiLaneOperator 之间的 lane 是一一对应的，数据流如下。  一个 MultiLaneOperato">
@@ -18,7 +18,7 @@
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/QueryCache-3.svg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/QueryCache-4.svg?raw=true">
 <meta property="article:published_time" content="2023-08-05T02:00:01.000Z">
-<meta property="article:modified_time" content="2023-09-26T02:32:44.377Z">
+<meta property="article:modified_time" content="2023-10-19T03:14:49.223Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="StarRocks">
 <meta name="twitter:card" content="summary">
@@ -42,7 +42,7 @@
       
     
     <!-- title -->
-    <title>查询加速: QueryCache</title>
+    <title>Pipeline: 查询加速: QueryCache</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -96,16 +96,16 @@
     <div id="share" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&text=查询加速: QueryCache"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&is_video=false&description=查询加速: QueryCache"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=查询加速: QueryCache&body=Check out this article: https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&name=查询加速: QueryCache&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&t=查询加速: QueryCache"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&text=Pipeline: 查询加速: QueryCache"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&is_video=false&description=Pipeline: 查询加速: QueryCache"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Pipeline: 查询加速: QueryCache&body=Check out this article: https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&name=Pipeline: 查询加速: QueryCache&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&t=Pipeline: 查询加速: QueryCache"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -122,7 +122,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        查询加速: QueryCache
+        Pipeline: 查询加速: QueryCache
     </h1>
 
 
@@ -276,16 +276,16 @@
     <div id="share-footer" style="display: none">
       <ul>
   <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&text=查询加速: QueryCache"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&is_video=false&description=查询加速: QueryCache"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=查询加速: QueryCache&body=Check out this article: https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=查询加速: QueryCache"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&name=查询加速: QueryCache&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&t=查询加速: QueryCache"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&text=Pipeline: 查询加速: QueryCache"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&is_video=false&description=Pipeline: 查询加速: QueryCache"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Pipeline: 查询加速: QueryCache&body=Check out this article: https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&title=Pipeline: 查询加速: QueryCache"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&name=Pipeline: 查询加速: QueryCache&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/05/Pipeline/StarRocks-QueryCache/&t=Pipeline: 查询加速: QueryCache"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
