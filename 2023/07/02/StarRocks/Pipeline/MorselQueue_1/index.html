@@ -16,7 +16,7 @@
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-3.svg?raw=true">
 <meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-2.svg?raw=true">
 <meta property="article:published_time" content="2023-07-02T08:00:02.000Z">
-<meta property="article:modified_time" content="2023-10-19T03:14:35.006Z">
+<meta property="article:modified_time" content="2023-10-31T03:23:59.889Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="StarRocks">
 <meta name="twitter:card" content="summary">
@@ -233,15 +233,17 @@
 <p>顾名思义，<strong>SharedMorselQueueFactory</strong> 即所有的 PipelineDrivers 共享一个 MorselQueue，此时就要求该 MorselQueue 具有较好的并发性能，比如FixedMorselQueue，而 IndividualMorselQueueFactory 则为每个 PipelineDriver 都分配一个 MorselQueue。</p>
 <p>通过 Factory 创建 MorselQueue 的函数如下：</p>
 <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">MorselQueue* <span class="title">SharedMorselQueueFactory::create</span><span class="params">(<span class="type">int</span> driver_sequence)</span> <span class="keyword">override</span> </span>&#123; </span><br><span class="line">    <span class="keyword">return</span> _queue.<span class="built_in">get</span>(); </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 每个 PipelineDrvier 都有一个 driver_sequence</span></span><br><span class="line"><span class="function">MorselQueue* <span class="title">IndividualMorselQueueFactory::create</span><span class="params">(<span class="type">int</span> driver_sequence)</span> <span class="keyword">override</span> </span>&#123;</span><br><span class="line">    <span class="built_in">DCHECK_LT</span>(driver_sequence, _queue_per_driver_seq.<span class="built_in">size</span>());</span><br><span class="line">    <span class="keyword">return</span> _queue_per_driver_seq[driver_sequence].<span class="built_in">get</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
-<h3 id="convert-scan-range-to-morsel-queue-factory"><a href="#convert-scan-range-to-morsel-queue-factory" class="headerlink" title="convert_scan_range_to_morsel_queue_factory"></a>convert_scan_range_to_morsel_queue_factory</h3><p>在创建 Factory 前，需要先由 <em>convert_scan_range_to_morsel_queue</em> 函数获得 MorselQueue，再根据 frontend 优化器是否设置了 <code>scan_ranges_per_driver_seq</code> 来做一些决策。</p>
+<h3 id="convert-scan-range-to-morsel-queue-factory"><a href="#convert-scan-range-to-morsel-queue-factory" class="headerlink" title="convert_scan_range_to_morsel_queue_factory"></a>convert_scan_range_to_morsel_queue_factory</h3><p>在创建 Factory 前，需要先由 <em>convert_scan_range_to_morsel_queue</em> 函数获得 MorselQueue，再根据 frontend 优化器是否设置了 scan_ranges_per_driver_seq 来做一些决策。</p>
 <ul>
-<li><p>大多数情况下，<code>scan_ranges_per_driver_seq</code> 都不为空，即每个 PipelineDriver 已经分配好了自己要读取的 scan_range，则直接使用 convert_scan_range_to_morsel_queue 函数每个 PipelineDriver 生成 MorselQueue，并添加到 pipeline::IndividualMorselQueueFactory 对象中暂存。</p>
-</li>
-<li><p>如果 <code>scan_ranges_per_driver_seq</code> 为空，则为全局要读取的数据范围 global_scan_ranges 创建对应的 MorselQueue。</p>
-<p>MorselQueue::max_degree_of_parallelism() 表征同时支持的读取并行度，比如 FixedMorseQueue 的 max_degree_of_parallelism 即 _morsel_size，最多只允许 _morsel_size 一起读取。而 SplitMorselQueue 的 max_degree_of_parallelism 则是在 _could_tablet_internal_parallel 函数中计算出来的 scan_dop。</p>
+<li><p>如果 scan_ranges_per_driver_seq 为空，则为全局要读取的数据范围 global_scan_ranges 创建对应的 MorselQueue。</p>
+<p>  这种情况是会发生 LocalShuffle。 </p>
+<p>  MorselQueue::max_degree_of_parallelism() 表征同时支持的读取并行度，比如 FixedMorseQueue 的 max_degree_of_parallelism 即 _morsel_size，最多只允许 _morsel_size 一起读取。而 SplitMorselQueue 的 max_degree_of_parallelism 则是在 _could_tablet_internal_parallel 函数中计算出来的 scan_dop。</p>
 <blockquote>
 <p>到底是什么规模想要用 FixedMorselQueue</p>
 </blockquote>
+</li>
+<li><p>scan_ranges_per_driver_seq 不为空，是因为 BE 不需要再次进行 LocalShuffle，即每个 PipelineDriver 在 FE 的 Coordinator 中已经分配好了自己要读取的 scan_range（对应某个 tablet），则直接使用 convert_scan_range_to_morsel_queue 函数每个 PipelineDriver 生成 MorselQueue，并添加到 pipeline::IndividualMorselQueueFactory 对象中暂存。</p>
+<p>  这种情况，一般是 HashAggreagte、ColocationJOIN、BucketShuffleJOIN 时才有可能发生。</p>
 </li>
 </ul>
 <p>这部分代码如下。</p>
