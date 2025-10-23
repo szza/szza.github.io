@@ -14,9 +14,9 @@
 <meta property="og:description" content="Abstarct强一致性需要的延迟高，无法应当网络分区（network partition）故障，很有可能导致无法执行操作，那么可选的方案就是弱一致性模型，比如最终一致性（eventual consistency），因果一致性（causal consistency），此时任何一个副本都能接受更新，并异步复制到其他副本。 采用弱一致性模型的系统，就允许副本短暂的和集群分离(比如因为网络问题等），并且">
 <meta property="og:locale" content="en_US">
 <meta property="article:published_time" content="2023-12-31T02:20:00.000Z">
-<meta property="article:modified_time" content="2024-01-01T06:10:59.077Z">
+<meta property="article:modified_time" content="2025-10-23T13:06:42.724Z">
 <meta property="article:author" content="fibonaccii">
-<meta property="article:tag" content="Papers">
+<meta property="article:tag" content="CRDT">
 <meta name="twitter:card" content="summary">
     
     
@@ -145,7 +145,7 @@
       
     <div class="article-tag">
         <i class="fas fa-tag"></i>
-        <a class="tag-link-link" href="/tags/Papers/" rel="tag">Papers</a>
+        <a class="tag-link-link" href="/tags/CRDT/" rel="tag">CRDT</a>
     </div>
 
 
@@ -178,6 +178,7 @@
 <p>这里的”同步图”代表分布式系统中不同数据副本间的通信路径。如果图是连通的，那就意味着图中任意两个节点（副本）之间都存在路径。 这是保证所有更新最终到达所有副本的必要条件。如果图不连通，那么可能存在一些副本与其他副本隔离，无法接收到所有的更新。然而，需要注意的是，虽然连通的同步图是必要的，但在所有情况下，它可能并不足以确保最终的一致性。其他因素，如操作的顺序和网络延迟，也可能影响所有副本是否最终达到一致。例如，在一些分布式系统中，可能需要使用额外的机制，如向量时钟，来跟踪操作的因果顺序，或使用确保按照某种顺序将更新传播到所有副本的协议。</p>
 </blockquote>
 <h4 id="3-1-2-Operation-based-synchronization"><a href="#3-1-2-Operation-based-synchronization" class="headerlink" title="3.1.2 Operation-based synchronization"></a>3.1.2 Operation-based synchronization</h4><p>传递的是更新。除了要可靠地传递给 operations，一些 crdt 设计还需要按照某些顺序来传递 operation。</p>
+<p>TODO….</p>
 
   </div>
 </article>

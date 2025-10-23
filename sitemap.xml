@@ -2,7 +2,7 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://szza.github.io/2024/09/29/ETCD/4_lessor/</loc>
+    <loc>https://szza.github.io/2023/12/31/Paper/CRDT/</loc>
     
     <lastmod>2025-10-23</lastmod>
     
@@ -20,15 +20,6 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2024/09/03/ETCD/3_mvcc/</loc>
-    
-    <lastmod>2025-10-23</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
     <loc>https://szza.github.io/2024/08/01/ETCD/1_backend/</loc>
     
     <lastmod>2025-10-23</lastmod>
@@ -38,9 +29,18 @@
   </url>
   
   <url>
-    <loc>https://szza.github.io/2023/12/31/Paper/CRDT/</loc>
+    <loc>https://szza.github.io/2024/09/29/ETCD/4_lessor/</loc>
     
-    <lastmod>2024-01-01</lastmod>
+    <lastmod>2025-10-23</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2024/09/03/ETCD/3_mvcc/</loc>
+    
+    <lastmod>2025-10-23</lastmod>
     
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -828,6 +828,13 @@
   
   <url>
     <loc>https://szza.github.io/tags/ETCD/</loc>
+    <lastmod>2025-10-23</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/tags/CRDT/</loc>
     <lastmod>2025-10-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>

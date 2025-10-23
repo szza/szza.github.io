@@ -1,8 +1,8 @@
-https://szza.github.io/2024/09/29/ETCD/4_lessor/
-https://szza.github.io/2024/08/19/ETCD/2_kv/
-https://szza.github.io/2024/09/03/ETCD/3_mvcc/
-https://szza.github.io/2024/08/01/ETCD/1_backend/
 https://szza.github.io/2023/12/31/Paper/CRDT/
+https://szza.github.io/2024/08/19/ETCD/2_kv/
+https://szza.github.io/2024/08/01/ETCD/1_backend/
+https://szza.github.io/2024/09/29/ETCD/4_lessor/
+https://szza.github.io/2024/09/03/ETCD/3_mvcc/
 https://szza.github.io/2022/03/01/rocksdb/WritePath/WAL_1/
 https://szza.github.io/2023/11/05/Paper/HashTable-Desigin/
 https://szza.github.io/2023/10/29/SIMD/selector/
@@ -92,6 +92,7 @@ https://szza.github.io/tags/StarRocks/
 https://szza.github.io/tags/tidb-v6-1/
 https://szza.github.io/tags/RocksDb/
 https://szza.github.io/tags/ETCD/
+https://szza.github.io/tags/CRDT/
 https://szza.github.io/categories/SIMD/
 https://szza.github.io/categories/CBO/
 https://szza.github.io/categories/Pipeline/
