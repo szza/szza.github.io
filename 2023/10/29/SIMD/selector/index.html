@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本文主要是讲述下 StarRocks 中如何利用 SIMD 指令来实现 select_if 的，其中关于 SIMD 的相关 API 含义直接参考 intel-intrinsics-guide 文档 avx2_select_if_common_impl调用 avx2_select_if_common_impl 函数的前提是 sizeof(T) 是 {2,4,8} 中的一个。 1234template">
+<meta property="og:type" content="article">
+<meta property="og:title" content="SIMD: avx2_select_if 函数实现">
+<meta property="og:url" content="https://szza.github.io/2023/10/29/SIMD/selector/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本文主要是讲述下 StarRocks 中如何利用 SIMD 指令来实现 select_if 的，其中关于 SIMD 的相关 API 含义直接参考 intel-intrinsics-guide 文档 avx2_select_if_common_impl调用 avx2_select_if_common_impl 函数的前提是 sizeof(T) 是 {2,4,8} 中的一个。 1234template">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/SIMD/avx2_select_if.drawio.svg?raw=true">
+<meta property="article:published_time" content="2023-10-29T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-11-04T02:31:10.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/SIMD/avx2_select_if.drawio.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>SIMD: avx2_select_if 函数实现</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/11/05/Paper/HashTable-Desigin/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/10/07/StarRocks/CBO/Optimizer/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/10/29/SIMD/selector/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/10/29/SIMD/selector/&text=SIMD: avx2_select_if 函数实现"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/10/29/SIMD/selector/&is_video=false&description=SIMD: avx2_select_if 函数实现"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SIMD: avx2_select_if 函数实现&body=Check out this article: https://szza.github.io/2023/10/29/SIMD/selector/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/10/29/SIMD/selector/&name=SIMD: avx2_select_if 函数实现&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/10/29/SIMD/selector/&t=SIMD: avx2_select_if 函数实现"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#avx2-select-if-common-impl"><span class="toc-number">1.</span> <span class="toc-text">avx2_select_if_common_impl</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#T1-load"><span class="toc-number">1.1.</span> <span class="toc-text">T1-load</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T2-Blendv"><span class="toc-number">1.2.</span> <span class="toc-text">T2-Blendv</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T3-store"><span class="toc-number">1.3.</span> <span class="toc-text">T3-store</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#avx2-select-if"><span class="toc-number">2.</span> <span class="toc-text">avx2_select_if</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#avx2-select-if-1"><span class="toc-number">3.</span> <span class="toc-text">avx2_select_if</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SIMD-selector"><span class="toc-number">4.</span> <span class="toc-text">SIMD_selector</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        SIMD: avx2_select_if 函数实现
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-10-29T02:00:01.000Z" itemprop="datePublished">2023-10-29</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/SIMD/">SIMD</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文主要是讲述下 StarRocks 中如何利用 SIMD 指令来实现 select_if 的，其中关于 SIMD 的相关 API 含义直接参考 <a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html"><strong>intel-intrinsics-guide</strong></a> 文档</p>
+<h2 id="avx2-select-if-common-impl"><a href="#avx2-select-if-common-impl" class="headerlink" title="avx2_select_if_common_impl"></a>avx2_select_if_common_impl</h2><p>调用 avx2_select_if_common_impl 函数的前提是 sizeof(T) 是 {2,4,8} 中的一个。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="keyword">constexpr</span> <span class="type">bool</span> <span class="title">could_use_common_select_if</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">sizeof</span>(T) == <span class="number">2</span> || <span class="built_in">sizeof</span>(T) == <span class="number">4</span> || <span class="built_in">sizeof</span>(T) == <span class="number">8</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>select_if 的简单实现就是使用一个 for-loop 对 conditions 中每个条件进行判断：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> cond, a, <span class="function">b in <span class="title">zip</span><span class="params">(conditions, vector_a, vector_b)</span>:</span></span><br><span class="line"><span class="function">    dst.append(a if cond =</span>= True <span class="keyword">else</span> b)</span><br></pre></td></tr></table></figure>
+<p>要用 SIMD 指令来实现 avx2_select_if, 思路就是将原本一次处理 8bit 转变为现在一次性处理 256 bit（假设支持 avx2 指令集）：<br><img src="https://github.com/szza/szza.github.io.images/blob/master/SIMD/avx2_select_if.drawio.svg?raw=true" alt="avx2_select_if-1"></p>
+<h3 id="T1-load"><a href="#T1-load" class="headerlink" title="T1-load"></a>T1-load</h3><p>首先需要读取 selector、a、b 中的值，每次读取 256 bit，保存为 __m256i 类型。__m256i 实际上就是存储类型为 integer、大小为 256 bit 的数组。</p>
+<ol>
+<li><p>使用 <a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_loadu_si256&techs=AVX_ALL">_mm256_loadu_si256</a> 函数将数据从内存读取到寄存器中，需要保证读取的内存确实有 256 bit 的连续内存，否则会触发 segment fault。</p>
+</li>
+<li><p>selector 转化为 __m256i 对象 loaded_mask 后，需要逐字节（bytewise）和 0x00 进行比较</p>
+<p> 这里使用 <a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_cmpeq_epi8&techs=AVX_ALL&ig_expand=895">_mm256_cmpeq_epi8</a> 函数逐字节将 loaded_mask 和 0x00 进行比较：相等的为 0x00 ，不等为 0xff。再对比较结果进行取反，相等的为 0xff，不等为 0x00。</p>
+<p> 这一步作用：由于 selector 是 uint8_t[] 类型，每个元素的值要么是 0x00 要么是 0x01，通过 comp 和取反操作后，0x00 仍然是 0x00，而 0x01 变成 0xff，可以看做是『适配』SIMD API 的行为，因为很多 SIMD API 操作依赖 MEM[i*8+7] 的值来进行判断，后续比较方便。</p>
+</li>
+<li><p>使用 <a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_movemask_epi8&techs=AVX_ALL&ig_expand=895,4635">_mm256_movemask_epi8</a> 函数将 loaded_mask 中每个字节的最高位组合起来，生成 32 bit &#x3D; 256 bit &#x2F; 8 整数 mask。</p>
+<p>  至于这一步为啥怎么做，还不太清楚？后面还有个 data_mask 用来将 mask 扩充</p>
+</li>
+</ol>
+<p>模板参数中的 left_const 和 right_const 表示比较的左侧和右侧是否是个常数：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">select</span> .. <span class="keyword">where</span> a <span class="operator">&gt;</span> <span class="number">10</span>; <span class="comment">-- left_const = true, right_const = false</span></span><br><span class="line"><span class="keyword">select</span> .. <span class="keyword">where</span> a <span class="operator">&gt;</span> b;  <span class="comment">-- left_const = false, right_const = false</span></span><br></pre></td></tr></table></figure>
+<p>读取 a、b 的数据至 vec_a、vec_b 的过程比较简单，这部分代码及注释如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="type">bool</span> left_const = <span class="literal">false</span>, <span class="type">bool</span> right_const = <span class="literal">false</span>&gt;</span><br><span class="line"><span class="keyword">inline</span> <span class="type">void</span> <span class="built_in">avx2_select_if_common_impl</span>(<span class="type">uint8_t</span>*&amp; selector, T*&amp; dst,</span><br><span class="line">                                            <span class="type">const</span> T*&amp; a, <span class="type">const</span> T*&amp; b, <span class="type">int</span> size) &#123;</span><br><span class="line">  <span class="type">const</span> T* dst_end = dst + size;</span><br><span class="line">  <span class="keyword">constexpr</span> <span class="type">int</span> data_size = <span class="built_in">sizeof</span>(T);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 需要确保还剩余足够的内存</span></span><br><span class="line">  <span class="keyword">while</span> (dst + <span class="number">32</span> &lt; dst_end) &#123;</span><br><span class="line">    __m256i loaded_mask = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;__m256i*&gt;(selector));</span><br><span class="line">    loaded_mask = _mm256_cmpeq_epi8(loaded_mask, _mm256_setzero_si256());</span><br><span class="line">    loaded_mask = ~loaded_mask;</span><br><span class="line">    <span class="type">uint32_t</span> mask = _mm256_movemask_epi8(loaded_mask);</span><br><span class="line"></span><br><span class="line">    __m256i vec_a[data_size];</span><br><span class="line">    __m256i vec_b[data_size];</span><br><span class="line">    __m256i vec_dst[data_size];</span><br><span class="line"></span><br><span class="line">    <span class="comment">// load data from data vector</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; data_size; ++i) &#123;</span><br><span class="line">      <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(!left_const)</span> </span>&#123;</span><br><span class="line">        vec_a[i] = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> __m256i*&gt;(a) + i);</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        vec_a[i] = SIMDUtils::<span class="built_in">set_data</span>(*a);</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(!right_const)</span> </span>&#123;</span><br><span class="line">        vec_b[i] = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> __m256i*&gt;(b) + i);</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        vec_b[i] = SIMDUtils::<span class="built_in">set_data</span>(*b);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="T2-Blendv"><a href="#T2-Blendv" class="headerlink" title="T2-Blendv"></a>T2-Blendv</h3><p>由于已经基于 a, b 生成 __m256i 对象 vec_a, vec_b，向量化实现 avx2_select_if 的关键在于生成 __m256i 的 condition，最终调用 <a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_blendv_epi8&techs=AVX_ALL&ig_expand=895,4635,506">_mm256_blendv_epi8</a> 函数来实现向量化三元表达式。</p>
+<p>由于在 T1-load 中已经将 selector 转化为 uint32_t 类型的 mask，下面需要将 mask 恢复成 __m256i。</p>
+<p>data_size 的值是 sizeof(T)（比如 uint16_t 的 data_size 是 2），for-loop 迭代 data_size 次，因此每次迭代处理 each_loop_handle_sz bit &#x3D; <strong>32</strong> &#x2F; data_size bit（其中 <strong>32</strong> 表征 mask 是 uint32_t 类型），即每次处理向量中的元素 vec_a[i]，vec_b[i] 的位数。</p>
+<p>因此, uint16_t 就是每次迭代处理 16bit, uint32_t 每次处理 8 bit, 而 uint64_t 每次处理 4 bit，对应到 mask_table 中就是 0xFFFF、0xFF、0X0F，即通过 <code>select_mask = mask &amp; mask_table[data_size]</code> 来取出每次迭代操作的位。 </p>
+<p>下面以 uint16 为例。</p>
+<ol>
+<li><p>在第一轮迭代中 select_mask 取的是 mask 的低 16 位，高 16 位为 0，即</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">select_mask[<span class="number">15</span>:<span class="number">0</span>] = mask[<span class="number">15</span>:<span class="number">0</span>]</span><br><span class="line">select_mask[<span class="number">31</span>:<span class="number">16</span>] = <span class="number">0</span></span><br></pre></td></tr></table></figure>
+<p>_mm256_set1_epi16(select_mask) 函数用 select_mask[15:0] 填充满 256 bit，即 select_vector 中连续存储了 16 个 select_mask[15:0]，效果就类似于 memset。</p>
+<p>由于 select_mask[15:0] 中的每一个bit，对应着 loaded_mask 中 1 个字节最高位，因此这里为了取出该字节，使用 data_mask 恢复。比如 data_mask 前五个数据是：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="number">0x0001</span> <span class="comment">// 取的是第一个字节</span></span><br><span class="line"><span class="number">0x0002</span> <span class="comment">// 取的是第二个字节</span></span><br><span class="line"><span class="number">0x0004</span> <span class="comment">// 取的是第三个字节</span></span><br><span class="line"><span class="number">0x0008</span> <span class="comment">// 取的是第四个字节</span></span><br><span class="line"><span class="number">0x0010</span> <span class="comment">// 取的是第五个字节</span></span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+<p>再将 select_vector &#x3D; select_vector &amp; data_mask，得到就是每个字节的 mask。</p>
+<p>由于 <a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_blendv_epi8&techs=AVX_ALL&ig_expand=895,4635,506">_mm256_blendv_epi8</a> 函数是按照 mask[i*8+7] 位置进行判断的，因此，需要将 select_vector 中 0x01 扩充成为 0xff，这就是 _mm256_cmpeq_epi16 函数和取反操作的目的。</p>
+<p>到此，第一轮结束，<a target="_blank" rel="noopener" href="https://www.intel.com/content/www/us/en/docs/intrinsics-guide/index.html#text=_mm256_blendv_epi8&techs=AVX_ALL&ig_expand=895,4635,506">_mm256_blendv_epi8</a> 函数所需的 vec_a, vec_b, select_vector 都具备了，则可以一次性处理 256 bit，结构存于 vec_dst。</p>
+</li>
+<li><p>下一轮迭代即处理 mask 的高 16 位</p>
+<p>此时只需要将 mask &gt;&gt; each_loop_handle_sz，即高 16 位变成低 16 位，重复上述逻辑。</p>
+</li>
+</ol>
+<p>data_size 为 4、8的逻辑类似，代码如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">//...</span></span><br><span class="line"><span class="comment">// 2.</span></span><br><span class="line"><span class="keyword">constexpr</span> <span class="type">uint32_t</span> mask_table[] = &#123;<span class="number">0</span>, <span class="number">0xFFFFFFFF</span>, <span class="number">0xFFFF</span>,</span><br><span class="line">                                   <span class="number">0</span>, <span class="number">0xFF</span>, </span><br><span class="line">                                   <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0x0F</span>,</span><br><span class="line">                                   <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>, <span class="number">0x03</span>&#125;;</span><br><span class="line"><span class="keyword">constexpr</span> <span class="type">uint8_t</span> each_loop_handle_sz = <span class="number">32</span> / data_size;</span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; data_size; ++i) &#123;</span><br><span class="line">   <span class="type">uint32_t</span> select_mask = mask &amp; mask_table[data_size];</span><br><span class="line">   __m256i select_vector;</span><br><span class="line">   <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(data_size == <span class="number">2</span>)</span> </span>&#123;</span><br><span class="line">     select_vector = _mm256_set1_epi16(select_mask);</span><br><span class="line">     <span class="type">const</span> __m256i data_mask = _mm256_setr_epi16(</span><br><span class="line">       <span class="number">0x0001</span>, <span class="number">0x0002</span>, <span class="number">0x0004</span>, <span class="number">0x0008</span>, <span class="number">0x0010</span>, <span class="number">0x0020</span>, <span class="number">0x0040</span>, <span class="number">0x0080</span>, </span><br><span class="line">       <span class="number">0x0100</span>, <span class="number">0x0200</span>, <span class="number">0x0400</span>, <span class="number">0x0800</span>, <span class="number">0x1000</span>, <span class="number">0x2000</span>, <span class="number">0x4000</span>, <span class="number">0x8000</span>);</span><br><span class="line"></span><br><span class="line">     select_vector &amp;= data_mask;</span><br><span class="line">     select_vector = _mm256_cmpeq_epi16(select_vector, _mm256_setzero_si256());</span><br><span class="line">     select_vector = ~select_vector;</span><br><span class="line">   &#125; <span class="keyword">else</span> <span class="keyword">if</span> <span class="built_in">constexpr</span> (data_size == <span class="number">4</span>) &#123;</span><br><span class="line">     select_vector = _mm256_set1_epi8(select_mask);</span><br><span class="line">     <span class="type">const</span> __m256i data_mask = _mm256_setr_epi8(</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x01</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x02</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x04</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x08</span>,</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x10</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x20</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x40</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x80</span>);</span><br><span class="line">     </span><br><span class="line">     select_vector &amp;= data_mask;</span><br><span class="line">     select_vector = _mm256_cmpeq_epi32(select_vector, _mm256_setzero_si256());</span><br><span class="line">     select_vector = ~select_vector;</span><br><span class="line">   &#125; <span class="keyword">else</span> <span class="keyword">if</span> <span class="built_in">constexpr</span> (data_size == <span class="number">8</span>) &#123;</span><br><span class="line">     select_vector = _mm256_set1_epi8(select_mask);</span><br><span class="line">     <span class="type">const</span> __m256i data_mask = _mm256_setr_epi8(</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x01</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x02</span>,</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x04</span>, </span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>,</span><br><span class="line">       <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x00</span>, <span class="number">0x08</span>);</span><br><span class="line"></span><br><span class="line">     select_vector &amp;= data_mask;</span><br><span class="line">     select_vector = _mm256_cmpeq_epi64(select_vector, _mm256_setzero_si256());</span><br><span class="line">     select_vector = ~select_vector;</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   vec_dst[i] = _mm256_blendv_epi8(vec_b[i], vec_a[i], select_vector);</span><br><span class="line">   mask &gt;&gt;= each_loop_handle_sz;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">//...</span></span><br></pre></td></tr></table></figure>
+<h3 id="T3-store"><a href="#T3-store" class="headerlink" title="T3-store"></a>T3-store</h3><p>T3-store 就是存储结果：将寄存器 vec_dst 中的数据存储到内存 dst 中，并继续迭代下一个 256bit。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, <span class="type">bool</span> left_const = <span class="literal">false</span>, <span class="type">bool</span> right_const = <span class="literal">false</span>&gt;</span><br><span class="line"><span class="keyword">inline</span> <span class="type">void</span> <span class="built_in">avx2_select_if_common_impl</span>(<span class="type">uint8_t</span>*&amp; selector, T*&amp; dst,</span><br><span class="line">                                            <span class="type">const</span> T*&amp; a, <span class="type">const</span> T*&amp; b, <span class="type">int</span> size) &#123;</span><br><span class="line">   <span class="keyword">while</span> (dst + <span class="number">32</span> &lt; dst_end) &#123;</span><br><span class="line">       <span class="comment">//...</span></span><br><span class="line">       <span class="comment">// 3. 保存结果</span></span><br><span class="line">       <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; data_size; ++i) &#123;</span><br><span class="line">         _mm256_storeu_si256(<span class="built_in">reinterpret_cast</span>&lt;__m256i*&gt;(dst) + i, vec_dst[i]);</span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">       <span class="comment">// 4. 迭代</span></span><br><span class="line">       dst += <span class="number">32</span>;</span><br><span class="line">       selector += <span class="number">32</span>;</span><br><span class="line">       <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(!left_const)</span> </span>&#123;</span><br><span class="line">         a += <span class="number">32</span>;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(!right_const)</span> </span>&#123;</span><br><span class="line">         b += <span class="number">32</span>;</span><br><span class="line">       &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="avx2-select-if"><a href="#avx2-select-if" class="headerlink" title="avx2_select_if"></a>avx2_select_if</h2><p>这个版本的 avx2_select_if 是一个特化，只适用于 sizeof(T) 为 1 的情况，是 avx2_select_if_common_impl 的简略版，不需要 data_mask 了。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, </span><br><span class="line">          <span class="type">bool</span> left_const = <span class="literal">false</span>, <span class="type">bool</span> right_const = <span class="literal">false</span>,</span><br><span class="line">          std::<span class="type">enable_if_t</span>&lt;<span class="built_in">sizeof</span>(T) == <span class="number">1</span>, <span class="type">int</span>&gt; = <span class="number">1</span>&gt;</span><br><span class="line"><span class="keyword">inline</span> <span class="type">void</span> <span class="built_in">avx2_select_if</span>(<span class="type">uint8_t</span>*&amp; selector, T*&amp; dst,</span><br><span class="line">                           <span class="type">const</span> T*&amp; a, <span class="type">const</span> T*&amp; b, <span class="type">int</span> size) &#123;</span><br><span class="line">  <span class="type">const</span> T* dst_end = dst + size;</span><br><span class="line">  <span class="keyword">while</span> (dst + <span class="number">32</span> &lt; dst_end) &#123;</span><br><span class="line">    <span class="keyword">auto</span> loaded_mask = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;__m256i*&gt;(selector));</span><br><span class="line">    loaded_mask = _mm256_cmpeq_epi8(loaded_mask, _mm256_setzero_si256());</span><br><span class="line">    loaded_mask = ~loaded_mask;</span><br><span class="line">    __m256i vec_a;</span><br><span class="line">    __m256i vec_b;</span><br><span class="line">    <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(!left_const)</span> </span>&#123;</span><br><span class="line">      vec_a = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> __m256i*&gt;(a));</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      vec_a = _mm256_set1_epi8(*a);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(!right_const)</span> </span>&#123;</span><br><span class="line">      vec_b = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> __m256i*&gt;(b));</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      vec_b = _mm256_set1_epi8(*b);</span><br><span class="line">    &#125;</span><br><span class="line">    __m256i res = _mm256_blendv_epi8(vec_b, vec_a, loaded_mask);</span><br><span class="line">    _mm256_storeu_si256(<span class="built_in">reinterpret_cast</span>&lt;__m256i*&gt;(dst), res);</span><br><span class="line">    dst += <span class="number">32</span>;</span><br><span class="line">    selector += <span class="number">32</span>;</span><br><span class="line">    <span class="keyword">if</span> (!left_const) &#123;</span><br><span class="line">      a += <span class="number">32</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!right_const) &#123;</span><br><span class="line">      b += <span class="number">32</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="avx2-select-if-1"><a href="#avx2-select-if-1" class="headerlink" title="avx2_select_if"></a>avx2_select_if</h2><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T, std::<span class="type">enable_if_t</span>&lt;<span class="built_in">sizeof</span>(T) == <span class="number">4</span>, <span class="type">int</span>&gt; = <span class="number">4</span>&gt;</span><br><span class="line"><span class="keyword">inline</span> <span class="type">void</span> <span class="built_in">avx2_select_if</span>(<span class="type">uint8_t</span>*&amp; selector, T*&amp; dst,</span><br><span class="line">                           <span class="type">const</span> T*&amp; a, <span class="type">const</span> T*&amp; b, <span class="type">int</span> size) &#123;</span><br><span class="line">  <span class="type">const</span> T* dst_end = dst + size;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (dst + <span class="number">8</span> &lt; dst_end) &#123;</span><br><span class="line">    <span class="type">uint64_t</span> value = <span class="built_in">UNALIGNED_LOAD64</span>(selector);</span><br><span class="line">    __m128i v = _mm_set1_epi64x(value);</span><br><span class="line">    __m256i loaded_mask = _mm256_cvtepi8_epi32(v);</span><br><span class="line">    __m256i cond = _mm256_cmpeq_epi8(loaded_mask, _mm256_setzero_si256());</span><br><span class="line">    cond = ~cond;</span><br><span class="line"></span><br><span class="line">    __m256i mask = _mm256_set_epi8(</span><br><span class="line">        <span class="number">0x0c</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>,</span><br><span class="line">        <span class="number">0x08</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>,</span><br><span class="line">        <span class="number">0x04</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>,</span><br><span class="line">        <span class="number">0x00</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>,</span><br><span class="line">        <span class="number">0x0c</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>,</span><br><span class="line">        <span class="number">0x08</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>,</span><br><span class="line">        <span class="number">0x04</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>,</span><br><span class="line">        <span class="number">0x00</span>, <span class="number">0xff</span>, <span class="number">0xff</span>, <span class="number">0xff</span>);</span><br><span class="line">    cond = _mm256_shuffle_epi8(cond, mask);</span><br><span class="line"></span><br><span class="line">    __m256i vec_a = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> __m256i*&gt;(a));</span><br><span class="line">    __m256i vec_b = _mm256_loadu_si256(<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> __m256i*&gt;(b));</span><br><span class="line">    __m256 res = _mm256_blendv_ps(_mm256_castsi256_ps(vec_b), </span><br><span class="line">                                  _mm256_castsi256_ps(vec_a),</span><br><span class="line">                                  _mm256_castsi256_ps(cond));</span><br><span class="line">    _mm256_storeu_si256(</span><br><span class="line">        <span class="built_in">reinterpret_cast</span>&lt;__m256i*&gt;(dst), _mm256_castps_si256(res));</span><br><span class="line"></span><br><span class="line">    dst += <span class="number">8</span>;</span><br><span class="line">    selector += <span class="number">8</span>;</span><br><span class="line">    a += <span class="number">8</span>;</span><br><span class="line">    b += <span class="number">8</span>;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="SIMD-selector"><a href="#SIMD-selector" class="headerlink" title="SIMD_selector"></a>SIMD_selector</h2><p>SIMD_selector 其中的一个 select_if 函数封装上述三个函数，其他也类似。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;PrimitiveType TYPE&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SIMD_selector</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line"> <span class="keyword">using</span> Container = <span class="keyword">typename</span> RunTimeColumnType&lt;TYPE&gt;::Container;</span><br><span class="line"> <span class="keyword">using</span> CppType = RunTimeCppType&lt;TYPE&gt;;</span><br><span class="line"> <span class="keyword">using</span> SelectVec = <span class="type">uint8_t</span>*;</span><br><span class="line"></span><br><span class="line"> <span class="comment">// select if var var</span></span><br><span class="line"> <span class="comment">// dst[i] = select_vec[i] ? a[i] : b[i]</span></span><br><span class="line"> <span class="function"><span class="type">static</span> <span class="type">void</span> <span class="title">select_if</span><span class="params">(SelectVec select_vec, Container&amp; dst,</span></span></span><br><span class="line"><span class="params"><span class="function">                       <span class="type">const</span> Container&amp; a, <span class="type">const</span> Container&amp; b)</span> </span>&#123;</span><br><span class="line">  <span class="type">int</span> size = dst.<span class="built_in">size</span>();</span><br><span class="line">  <span class="keyword">auto</span>* start_dst = dst.<span class="built_in">data</span>();</span><br><span class="line">  <span class="keyword">auto</span>* end_dst = dst.<span class="built_in">data</span>() + size;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span>* start_a = a.<span class="built_in">data</span>();</span><br><span class="line">  <span class="keyword">auto</span>* start_b = b.<span class="built_in">data</span>();</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> __AVX2__</span></span><br><span class="line">  <span class="function"><span class="keyword">if</span> <span class="title">constexpr</span> <span class="params">(<span class="keyword">sizeof</span>(CppType) == <span class="number">1</span>)</span> </span>&#123;</span><br><span class="line">      <span class="built_in">avx2_select_if</span>(select_vec, start_dst, start_a, start_b, size);</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> <span class="built_in">constexpr</span> (<span class="built_in">sizeof</span>(CppType) == <span class="number">4</span>) &#123;</span><br><span class="line">      <span class="built_in">avx2_select_if</span>(select_vec, start_dst, start_a, start_b, size);</span><br><span class="line">  &#125; <span class="keyword">else</span> <span class="keyword">if</span> <span class="built_in">constexpr</span> (<span class="built_in">could_use_common_select_if</span>&lt;CppType&gt;()) &#123;</span><br><span class="line">      <span class="built_in">avx2_select_if_common_impl</span>(select_vec, start_dst, start_a, start_b, size);</span><br><span class="line">  &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line"></span><br><span class="line">  <span class="keyword">while</span> (start_dst &lt; end_dst) &#123;</span><br><span class="line">   *start_dst = *select_vec ? *start_a : *start_b;</span><br><span class="line">   select_vec++;</span><br><span class="line">   start_dst++;</span><br><span class="line">   start_a++;</span><br><span class="line">   start_b++;</span><br><span class="line">  &#125;</span><br><span class="line"> &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#avx2-select-if-common-impl"><span class="toc-number">1.</span> <span class="toc-text">avx2_select_if_common_impl</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#T1-load"><span class="toc-number">1.1.</span> <span class="toc-text">T1-load</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T2-Blendv"><span class="toc-number">1.2.</span> <span class="toc-text">T2-Blendv</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T3-store"><span class="toc-number">1.3.</span> <span class="toc-text">T3-store</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#avx2-select-if"><span class="toc-number">2.</span> <span class="toc-text">avx2_select_if</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#avx2-select-if-1"><span class="toc-number">3.</span> <span class="toc-text">avx2_select_if</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SIMD-selector"><span class="toc-number">4.</span> <span class="toc-text">SIMD_selector</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/10/29/SIMD/selector/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/10/29/SIMD/selector/&text=SIMD: avx2_select_if 函数实现"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/10/29/SIMD/selector/&is_video=false&description=SIMD: avx2_select_if 函数实现"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=SIMD: avx2_select_if 函数实现&body=Check out this article: https://szza.github.io/2023/10/29/SIMD/selector/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/10/29/SIMD/selector/&title=SIMD: avx2_select_if 函数实现"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/10/29/SIMD/selector/&name=SIMD: avx2_select_if 函数实现&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/10/29/SIMD/selector/&t=SIMD: avx2_select_if 函数实现"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

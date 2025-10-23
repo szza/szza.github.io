@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="输入的 SQL 经过 Parser 后生成 AST 并最终转化为 Relation Tree， 基于 Relation 生成逻辑计划 logicalPlan，逻辑计划再经过优化器生成物理计划 PhysicalPlan，最终生成执行计划 ExecPlan。从 LogicalPlan 到 ExecPlan 的三个步骤如下。 123456789101112131415161718192021222324">
+<meta property="og:type" content="article">
+<meta property="og:title" content="PlanFragmentBuilder: 构建执行计划">
+<meta property="og:url" content="https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="输入的 SQL 经过 Parser 后生成 AST 并最终转化为 Relation Tree， 基于 Relation 生成逻辑计划 logicalPlan，逻辑计划再经过优化器生成物理计划 PhysicalPlan，最终生成执行计划 ExecPlan。从 LogicalPlan 到 ExecPlan 的三个步骤如下。 123456789101112131415161718192021222324">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-10-03T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-10-16T05:39:11.313Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>PlanFragmentBuilder: 构建执行计划</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" href="/2023/08/20/Pipeline/Aggregator-1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&text=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&is_video=false&description=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=PlanFragmentBuilder: 构建执行计划&body=Check out this article: https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&name=PlanFragmentBuilder: 构建执行计划&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&t=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#PlanFragmentBuilder"><span class="toc-number">1.</span> <span class="toc-text">PlanFragmentBuilder</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#createPhysicalPlan"><span class="toc-number">1.1.</span> <span class="toc-text">createPhysicalPlan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#visitPhysicalOlapScan"><span class="toc-number">1.2.</span> <span class="toc-text">visitPhysicalOlapScan</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#addScanRangeLocationsp"><span class="toc-number">1.2.1.</span> <span class="toc-text">addScanRangeLocationsp</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#TScanRangeLocations"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">TScanRangeLocations</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#visitPhysicalHashJoin"><span class="toc-number">1.3.</span> <span class="toc-text">visitPhysicalHashJoin</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#visitPhysicalJoin"><span class="toc-number">1.3.1.</span> <span class="toc-text">visitPhysicalJoin</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#finalizeFragments"><span class="toc-number">1.4.</span> <span class="toc-text">finalizeFragments</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        PlanFragmentBuilder: 构建执行计划
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-10-03T02:00:01.000Z" itemprop="datePublished">2023-10-03</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>输入的 SQL 经过 Parser 后生成 AST 并最终转化为 Relation Tree， 基于 Relation 生成逻辑计划 logicalPlan，逻辑计划再经过优化器生成物理计划 PhysicalPlan，最终生成执行计划 ExecPlan。从 LogicalPlan 到 ExecPlan 的三个步骤如下。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> ExecPlan <span class="title function_">createQueryPlan</span><span class="params">(Relation relation, ConnectContext session,</span></span><br><span class="line"><span class="params">                                       TResultSinkType resultSinkType)</span> &#123;</span><br><span class="line">    <span class="type">QueryRelation</span> <span class="variable">query</span> <span class="operator">=</span> (QueryRelation) relation;</span><br><span class="line">    List&lt;String&gt; colNames = query.getColumnOutputNames();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//1. Build Logical plan</span></span><br><span class="line">    <span class="type">ColumnRefFactory</span> <span class="variable">columnRefFactory</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ColumnRefFactory</span>();</span><br><span class="line">    <span class="type">LogicalPlan</span> <span class="variable">logicalPlan</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">RelationTransformer</span>(</span><br><span class="line">            columnRefFactory, session).transformWithSelectLimit(query);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//2. Optimize logical plan and build physical plan</span></span><br><span class="line">    <span class="type">OptExpression</span> <span class="variable">optimizedPlan</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Optimizer</span>().optimize(</span><br><span class="line">            session,</span><br><span class="line">            logicalPlan.getRoot(),</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">PhysicalPropertySet</span>(),</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">ColumnRefSet</span>(logicalPlan.getOutputColumn()),</span><br><span class="line">            columnRefFactory);</span><br><span class="line"></span><br><span class="line">    <span class="comment">//3. Build fragment exec plan</span></span><br><span class="line">    <span class="keyword">return</span> <span class="keyword">new</span> <span class="title class_">PlanFragmentBuilder</span>().createPhysicalPlan(</span><br><span class="line">            optimizedPlan, session, </span><br><span class="line">            logicalPlan.getOutputColumn(), </span><br><span class="line">            columnRefFactory, colNames,</span><br><span class="line">            resultSinkType,</span><br><span class="line">            !session.getSessionVariable().isSingleNodeExecPlan());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>本节主要讲解 PlanFragmentBuilder 是何将物理计划 optimizedPlan 转化成执行计划 ExecPlan。</p>
+<h2 id="PlanFragmentBuilder"><a href="#PlanFragmentBuilder" class="headerlink" title="PlanFragmentBuilder"></a>PlanFragmentBuilder</h2><h3 id="createPhysicalPlan"><a href="#createPhysicalPlan" class="headerlink" title="createPhysicalPlan"></a>createPhysicalPlan</h3><p>经过优化器后生成的物理计划 optimizedPlan 是由 OptExpression 构成的树。createPhysicalPlan 函数主要有两步：</p>
+<ol>
+<li><p>createOutputFragment 函数将 OptExpression 转化为 PlanNode</p>
+<p>一个 Fragment 包含由 PlanNode 组成的子树，每个 Fragment.PlanNode Tree 的叶结点是 ScanNode 或者 ExchangeNode：ScanNode 用于从 BE 节点存储层读取数据，ExchangeNode 用于接受其他的 Fragments 的输出。 生成的 Fragments 保存在 ExecPlan.fragments 中</p>
+</li>
+<li><p>finalizeFragments 函数为生成的 ExecPlan.fragments 中的每个 Fragment 都分配一个 DataSink，</p>
+<p>DataSink 和 ExchangeNode 配对，即 DataSink 是数据发送端，ExchangeNode 是数据接收端，这样 Fragments 才串成完整的 tree，形成 MPP 架构。</p>
+</li>
+</ol>
+<p>createPhysicalPlan 函数逻辑如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">static</span> ExecPlan <span class="title function_">createPhysicalPlan</span><span class="params">(OptExpression plan, </span></span><br><span class="line"><span class="params">                                          ConnectContext connectContext,</span></span><br><span class="line"><span class="params">                                          List&lt;ColumnRefOperator&gt; outputColumns,</span></span><br><span class="line"><span class="params">                                          ColumnRefFactory columnRefFactory,</span></span><br><span class="line"><span class="params">                                          List&lt;String&gt; colNames,</span></span><br><span class="line"><span class="params">                                          TResultSinkType resultSinkType,</span></span><br><span class="line"><span class="params">                                          <span class="type">boolean</span> hasOutputFragment)</span> &#123;</span><br><span class="line">    <span class="type">ExecPlan</span> <span class="variable">execPlan</span> <span class="operator">=</span> </span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">ExecPlan</span>(connectContext, colNames, plan, outputColumns);</span><br><span class="line">    createOutputFragment(</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">PhysicalPlanTranslator</span>(columnRefFactory).visit(plan, execPlan),</span><br><span class="line">        execPlan, outputColumns, hasOutputFragment);</span><br><span class="line">    execPlan.setPlanCount(plan.getPlanCount());</span><br><span class="line">    <span class="keyword">return</span> finalizeFragments(execPlan, resultSinkType);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面以 OlapScanNode、JoinNode 为例进行说明如何生成 Fragments。</p>
+<h3 id="visitPhysicalOlapScan"><a href="#visitPhysicalOlapScan" class="headerlink" title="visitPhysicalOlapScan"></a>visitPhysicalOlapScan</h3><p>OptExpression Tree 采用的是后序递归遍历，因为会先遍历到叶节点，比如 OlapScanNode。</p>
+<p>下面就需要根据 PhysicalOlapScanOperator 中的信息生成 OlapScanNode，并生成 ExecPlan.fragments 中的第一个 Fragment, 而 OlapScanNode 即该 Fragment 的 root node。</p>
+<p>因为 OlapScanNode 最终是要在BE上执行的，因此要包含具体的存储信息的，比如要访问的列（tupleDescriptor）、要访问的 Tablets 位于哪些BE节点上，以及一些能下推到存储层的谓词等。</p>
+<p>下面代码重点关注设置 tablet 信息部分，其余部分略去。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> PlanFragment <span class="title function_">visitPhysicalOlapScan</span><span class="params">(OptExpression optExpr, ExecPlan context)</span> &#123;</span><br><span class="line">    <span class="type">PhysicalOlapScanOperator</span> <span class="variable">node</span> <span class="operator">=</span> (PhysicalOlapScanOperator) optExpr.getOp();</span><br><span class="line"></span><br><span class="line">   <span class="type">OlapTable</span> <span class="variable">referenceTable</span> <span class="operator">=</span> (OlapTable) node.getTable();</span><br><span class="line">   context.getDescTbl().addReferencedTable(referenceTable);</span><br><span class="line">   <span class="comment">// 构造 tupleDescriptor，后面填充要访问的列信息</span></span><br><span class="line">   <span class="type">TupleDescriptor</span> <span class="variable">tupleDescriptor</span> <span class="operator">=</span> context.getDescTbl().createTupleDescriptor();</span><br><span class="line">   tupleDescriptor.setTable(referenceTable);</span><br><span class="line"></span><br><span class="line">   <span class="comment">// 构造 ScanNode 对象</span></span><br><span class="line">   <span class="type">OlapScanNode</span> <span class="variable">scanNode</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">OlapScanNode</span>(context.getNextNodeId(),</span><br><span class="line">                                            tupleDescriptor,</span><br><span class="line">                                             <span class="string">&quot;OlapScanNode&quot;</span>);</span><br><span class="line">   scanNode.setLimit(node.getLimit());</span><br><span class="line">   scanNode.computeStatistics(optExpr.getStatistics());</span><br><span class="line"></span><br><span class="line">   <span class="comment">// 1. set tablet</span></span><br><span class="line">   <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="comment">// &#123;index_id, partition_ids, tablet_ids&#125;</span></span><br><span class="line">       scanNode.updateScanInfo(node.getSelectedPartitionId(),</span><br><span class="line">               node.getSelectedTabletId(),</span><br><span class="line">               node.getSelectedIndexId());</span><br><span class="line">       <span class="type">long</span> <span class="variable">selectedIndexId</span> <span class="operator">=</span> node.getSelectedIndexId();</span><br><span class="line">       <span class="type">long</span> <span class="variable">totalTabletsNum</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">       <span class="type">long</span> <span class="variable">localBeId</span> <span class="operator">=</span> -<span class="number">1</span>;</span><br><span class="line">       <span class="comment">// 1.1. 筛选出非空分区</span></span><br><span class="line">       List&lt;Long&gt; selectedNonEmptyPartitionIds = </span><br><span class="line">            node.getSelectedPartitionId().stream().filter(p -&gt; &#123;</span><br><span class="line">                List&lt;Long&gt; selectTabletIds = scanNode.getPartitionToScanTabletMap().get(p);</span><br><span class="line">                <span class="keyword">return</span> selectTabletIds != <span class="literal">null</span> &amp;&amp; !selectTabletIds.isEmpty();</span><br><span class="line">            &#125;).collect(Collectors.toList());</span><br><span class="line">       scanNode.setSelectedPartitionIds(selectedNonEmptyPartitionIds);</span><br><span class="line">       <span class="comment">// 1.2 设置要访问的 tablet</span></span><br><span class="line">       <span class="keyword">for</span> (Long partitionId : selectedNonEmptyPartitionIds) &#123;</span><br><span class="line">           List&lt;Long&gt; selectTabletIds = scanNode.getPartitionToScanTabletMap().get(partitionId);</span><br><span class="line">           <span class="keyword">final</span> <span class="type">Partition</span> <span class="variable">partition</span> <span class="operator">=</span> referenceTable.getPartition(partitionId);</span><br><span class="line">           <span class="keyword">final</span> <span class="type">MaterializedIndex</span> <span class="variable">selectedTable</span> <span class="operator">=</span> partition.getIndex(selectedIndexId);</span><br><span class="line">           Map&lt;Long, Integer&gt; tabletId2BucketSeq = Maps.newHashMap();</span><br><span class="line">           List&lt;Long&gt; allTabletIds = selectedTable.getTabletIdsInOrder();</span><br><span class="line">           <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; allTabletIds.size(); i++) &#123;</span><br><span class="line">               tabletId2BucketSeq.put(allTabletIds.get(i), i);</span><br><span class="line">           &#125;</span><br><span class="line">           scanNode.setTabletId2BucketSeq(tabletId2BucketSeq);</span><br><span class="line">           <span class="comment">// ScanNode 本次要访问的所有 tablets</span></span><br><span class="line">           List&lt;Tablet&gt; tablets = selectTabletIds.stream().map(</span><br><span class="line">                selectedTable::getTablet).collect(Collectors.toList());</span><br><span class="line">           <span class="comment">// &#123;table, partition, tablets&#125; 确定了本次访问的 tablets</span></span><br><span class="line">           scanNode.addScanRangeLocations(partition,</span><br><span class="line">                                          selectedTable, </span><br><span class="line">                                          tablets,</span><br><span class="line">                                          localBeId);</span><br><span class="line">           <span class="comment">// totalTabletsNum 用于 explain 显示</span></span><br><span class="line">           totalTabletsNum += selectedTable.getTablets().size();</span><br><span class="line">       &#125;</span><br><span class="line">       scanNode.setTotalTabletsNum(totalTabletsNum);</span><br><span class="line">   &#125; <span class="keyword">catch</span> (UserException e) &#123;</span><br><span class="line">       <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">StarRocksPlannerException</span>(</span><br><span class="line">            <span class="string">&quot;Build Exec OlapScanNode fail, scan info is invalid,&quot;</span> + e.getMessage(),</span><br><span class="line">            INTERNAL_ERROR);</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line">   <span class="comment">//...</span></span><br><span class="line">   context.getScanNodes().add(scanNode);</span><br><span class="line">   <span class="comment">// 5. 生成新的 Fragment</span></span><br><span class="line">   <span class="type">PlanFragment</span> <span class="variable">fragment</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">PlanFragment</span>(</span><br><span class="line">        context.getNextFragmentId(), </span><br><span class="line">        scanNode,  <span class="comment">// 根节点</span></span><br><span class="line">        DataPartition.RANDOM);</span><br><span class="line">   fragment.setQueryGlobalDicts(node.getGlobalDicts());</span><br><span class="line">   context.getFragments().add(fragment);</span><br><span class="line">   <span class="keyword">return</span> fragment;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="addScanRangeLocationsp"><a href="#addScanRangeLocationsp" class="headerlink" title="addScanRangeLocationsp"></a>addScanRangeLocationsp</h4><p>addScanRangeLocationsp 函数是为了记录 tablets 在 BE 节点上的位置，为后续下发计算任务准备。</p>
+<h5 id="TScanRangeLocations"><a href="#TScanRangeLocations" class="headerlink" title="TScanRangeLocations"></a>TScanRangeLocations</h5><p>这里是用的 thrift protoc 定义的 TScanRangeLocations，</p>
+<figure class="highlight thrift"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">TScanRangeLocations</span> </span>&#123;</span><br><span class="line">  <span class="number">1</span>: <span class="keyword">required</span> PlanNodes.TScanRange scan_range</span><br><span class="line">  <span class="number">2</span>: <span class="type">list</span>&lt;TScanRangeLocation&gt; locations  <span class="comment">// non-empty list</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">TScanRange</span> </span>&#123;</span><br><span class="line">  <span class="number">4</span>: <span class="keyword">optional</span> TInternalScanRange internal_scan_range</span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li>TScanRangeLocations.scan_range 记录的本次 scan_range 的元信息，在 BE 中会根据这些元信息找到每个 tablet 中要访问的 rowsets。  <figure class="highlight thrift"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">TInternalScanRange</span> </span>&#123;</span><br><span class="line">  <span class="number">1</span>: <span class="keyword">required</span> <span class="type">list</span>&lt;Types.TNetworkAddress&gt; hosts</span><br><span class="line">  <span class="number">2</span>: <span class="keyword">required</span> <span class="type">string</span> schema_hash</span><br><span class="line">  <span class="number">3</span>: <span class="keyword">required</span> <span class="type">string</span> version</span><br><span class="line">  <span class="number">4</span>: <span class="keyword">required</span> <span class="type">string</span> version_hash <span class="comment">// Deprecated</span></span><br><span class="line">  <span class="number">5</span>: <span class="keyword">required</span> Types.TTabletId tablet_id</span><br><span class="line">  <span class="number">6</span>: <span class="keyword">required</span> <span class="type">string</span> db_name</span><br><span class="line">  <span class="number">7</span>: <span class="keyword">optional</span> <span class="type">list</span>&lt;TKeyRange&gt; partition_column_ranges</span><br><span class="line">  <span class="number">8</span>: <span class="keyword">optional</span> <span class="type">string</span> index_name</span><br><span class="line">  <span class="number">9</span>: <span class="keyword">optional</span> <span class="type">string</span> table_name </span><br><span class="line">  <span class="number">10</span>: <span class="keyword">optional</span> <span class="type">i64</span> partition_id</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>TScanRangeLocations.locations 则记录的的是该 tablet 所有副本在BE上的位置  <figure class="highlight thrift"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">TScanRangeLocation</span> </span>&#123;</span><br><span class="line">  <span class="number">1</span>: <span class="keyword">required</span> Types.TNetworkAddress server</span><br><span class="line">  <span class="number">2</span>: <span class="keyword">optional</span> <span class="type">i32</span> volume_id = -<span class="number">1</span> <span class="comment">// Just used for hdfs</span></span><br><span class="line">  <span class="number">3</span>: <span class="keyword">optional</span> <span class="type">i64</span> backend_id</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>addScanRangeLocations 函数就是填充 TScanRangeLocations 对象，然后所有 tablets 的 scanRangeLocations 结构都保存到 result 中。这一步主要是为后面 Coordinator 中调度准备，完整代码详见 <a target="_blank" rel="noopener" href="https://github.com/StarRocks/starrocks/blob/a4c842cc3d5b506ae1d9f40f2acac85e5f2e78c3/fe/fe-core/src/main/java/com/starrocks/planner/OlapScanNode.java#L441">addScanRangeLocations</a> 。</p>
+<h3 id="visitPhysicalHashJoin"><a href="#visitPhysicalHashJoin" class="headerlink" title="visitPhysicalHashJoin"></a>visitPhysicalHashJoin</h3><p>HashJoin 先生成左右两个子节点的 Fragment 作为输入，再来生成执行 HashJoin 的 Fragment。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> PlanFragment <span class="title function_">visitPhysicalHashJoin</span><span class="params">(OptExpression optExpr, ExecPlan context)</span> &#123;</span><br><span class="line">    <span class="type">PlanFragment</span> <span class="variable">leftFragment</span> <span class="operator">=</span> visit(optExpr.inputAt(<span class="number">0</span>), context);</span><br><span class="line">    <span class="type">PlanFragment</span> <span class="variable">rightFragment</span> <span class="operator">=</span> visit(optExpr.inputAt(<span class="number">1</span>), context);</span><br><span class="line">    <span class="keyword">return</span> visitPhysicalJoin(leftFragment, rightFragment, optExpr, context);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="visitPhysicalJoin"><a href="#visitPhysicalJoin" class="headerlink" title="visitPhysicalJoin"></a>visitPhysicalJoin</h4><p>主要分为三个部分:</p>
+<ol>
+<li><p>获取 PhysicalJoinOperator 中的信息，并专递给 HashJoinNode </p>
+<p> 比如 join 的 on-predicate、shuffle-parition columns 以及 distributionMode 分区方式等。这里着重说下分区方式。</p>
+ <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> PlanFragment <span class="title function_">visitPhysicalJoin</span><span class="params">(PlanFragment leftFragment, PlanFragment rightFragment,</span></span><br><span class="line"><span class="params">                                       OptExpression optExpr, ExecPlan context)</span> &#123;</span><br><span class="line">    <span class="type">PhysicalJoinOperator</span> <span class="variable">node</span> <span class="operator">=</span> (PhysicalJoinOperator) optExpr.getOp();</span><br><span class="line"></span><br><span class="line">    <span class="type">ColumnRefSet</span> <span class="variable">leftChildColumns</span> <span class="operator">=</span> optExpr.inputAt(<span class="number">0</span>).getLogicalProperty().getOutputColumns();</span><br><span class="line">    <span class="type">ColumnRefSet</span> <span class="variable">rightChildColumns</span> <span class="operator">=</span> optExpr.inputAt(<span class="number">1</span>).getLogicalProperty().getOutputColumns();</span><br><span class="line"></span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    JoinNode.DistributionMode distributionMode;</span><br><span class="line">    <span class="keyword">if</span> (isExchangeWithDistributionType(leftFragmentPlanRoot, DistributionSpec.DistributionType.SHUFFLE) &amp;&amp;</span><br><span class="line">            isExchangeWithDistributionType(rightFragmentPlanRoot,</span><br><span class="line">                    DistributionSpec.DistributionType.SHUFFLE)) &#123;</span><br><span class="line">        distributionMode = JoinNode.DistributionMode.PARTITIONED;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isExchangeWithDistributionType(rightFragmentPlanRoot,</span><br><span class="line">            DistributionSpec.DistributionType.BROADCAST)) &#123;</span><br><span class="line">        distributionMode = JoinNode.DistributionMode.BROADCAST;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!(leftFragmentPlanRoot <span class="keyword">instanceof</span> ExchangeNode) &amp;&amp;</span><br><span class="line">            !(rightFragmentPlanRoot <span class="keyword">instanceof</span> ExchangeNode)) &#123;</span><br><span class="line">        <span class="keyword">if</span> (isColocateJoin(optExpr)) &#123;</span><br><span class="line">            distributionMode = HashJoinNode.DistributionMode.COLOCATE;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (ConnectContext.get().getSessionVariable().isEnableReplicationJoin() &amp;&amp;</span><br><span class="line">                rightFragmentPlanRoot.canDoReplicatedJoin()) &#123;</span><br><span class="line">            distributionMode = JoinNode.DistributionMode.REPLICATED;</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isShuffleJoin(optExpr)) &#123;</span><br><span class="line">            distributionMode = JoinNode.DistributionMode.SHUFFLE_HASH_BUCKET;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            Preconditions.checkState(<span class="literal">false</span>, <span class="string">&quot;Must be colocate/bucket/replicate join&quot;</span>);</span><br><span class="line">            distributionMode = JoinNode.DistributionMode.COLOCATE;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (isShuffleJoin(optExpr)) &#123;</span><br><span class="line">        distributionMode = JoinNode.DistributionMode.SHUFFLE_HASH_BUCKET;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        distributionMode = JoinNode.DistributionMode.LOCAL_HASH_BUCKET;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure></li>
+</ol>
+<h3 id="finalizeFragments"><a href="#finalizeFragments" class="headerlink" title="finalizeFragments"></a>finalizeFragments</h3><p>Fragment tree 构建完毕，在 finalizeFragments 函数中为每个 Fragment 设置DataSink，并翻转fragments，使 fragments[0] 是root-fragment。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">static</span> ExecPlan <span class="title function_">finalizeFragments</span><span class="params">(ExecPlan execPlan, TResultSinkType resultSinkType)</span> &#123;</span><br><span class="line">    List&lt;PlanFragment&gt; fragments = execPlan.getFragments();</span><br><span class="line">    <span class="keyword">for</span> (PlanFragment fragment : fragments) &#123;</span><br><span class="line">        fragment.createDataSink(resultSinkType);</span><br><span class="line">    &#125;</span><br><span class="line">    Collections.reverse(fragments);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#PlanFragmentBuilder"><span class="toc-number">1.</span> <span class="toc-text">PlanFragmentBuilder</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#createPhysicalPlan"><span class="toc-number">1.1.</span> <span class="toc-text">createPhysicalPlan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#visitPhysicalOlapScan"><span class="toc-number">1.2.</span> <span class="toc-text">visitPhysicalOlapScan</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#addScanRangeLocationsp"><span class="toc-number">1.2.1.</span> <span class="toc-text">addScanRangeLocationsp</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#TScanRangeLocations"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">TScanRangeLocations</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#visitPhysicalHashJoin"><span class="toc-number">1.3.</span> <span class="toc-text">visitPhysicalHashJoin</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#visitPhysicalJoin"><span class="toc-number">1.3.1.</span> <span class="toc-text">visitPhysicalJoin</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#finalizeFragments"><span class="toc-number">1.4.</span> <span class="toc-text">finalizeFragments</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&text=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&is_video=false&description=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=PlanFragmentBuilder: 构建执行计划&body=Check out this article: https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&title=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&name=PlanFragmentBuilder: 构建执行计划&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/10/03/Pipeline/PlanFragment-1/&t=PlanFragmentBuilder: 构建执行计划"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

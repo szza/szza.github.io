@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="在前面几篇已经叙述了 PipelineDriver、DriverQueue、PipelinePoller 等设计，下面再来看看是 GlobalDriverExecutor 怎么将他们组合在一起的。  由于 _driver_queue 和 _blocked_driver_poller 是在 _thread_pool 中所有 workers 间共享的。一个 query FragemntInstance">
+<meta property="og:type" content="article">
+<meta property="og:title" content="GloablDriverExecutor: 实现协程模型的执行器">
+<meta property="og:url" content="https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="在前面几篇已经叙述了 PipelineDriver、DriverQueue、PipelinePoller 等设计，下面再来看看是 GlobalDriverExecutor 怎么将他们组合在一起的。  由于 _driver_queue 和 _blocked_driver_poller 是在 _thread_pool 中所有 workers 间共享的。一个 query FragemntInstance">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-1.svg?raw=true">
+<meta property="article:published_time" content="2023-07-25T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-26T02:32:57.262Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-1.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>GloablDriverExecutor: 实现协程模型的执行器</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/07/31/Pipeline/FragmentInstance/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/07/19/Pipeline/DriverQueue_1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&text=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&is_video=false&description=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=GloablDriverExecutor: 实现协程模型的执行器&body=Check out this article: https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&name=GloablDriverExecutor: 实现协程模型的执行器&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&t=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#worker"><span class="toc-number">1.</span> <span class="toc-text">worker</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Coroutione"><span class="toc-number">2.</span> <span class="toc-text">Coroutione</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        GloablDriverExecutor: 实现协程模型的执行器
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-07-25T02:00:01.000Z" itemprop="datePublished">2023-07-25</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在前面几篇已经叙述了 PipelineDriver、DriverQueue、PipelinePoller 等设计，下面再来看看是 GlobalDriverExecutor 怎么将他们组合在一起的。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-1.svg?raw=true" alt="pipeline-1"></p>
+<p>由于 _driver_queue 和 _blocked_driver_poller 是在 _thread_pool 中所有 workers 间共享的。一个 query FragemntInstance 划分成 dop 个 PipelineDrivers 分发（dispatch）给 n 个 worker 去执行。但是有可能 driver0 开始分配给 worker0，在执行过程中被添加到 blocked_driver_poller，后又被 worker1 取出，最终 driver0 在 work1 中执行。</p>
+<blockquote>
+<p>这里是不是能优化下？分为两个队列 LocalReadyQueue，RemoteReadyQueue：只有 local_ready_queue 中满了，才会从其他 workers 中窃取(steal) PipelineDrivers 放到 remote_ready_queue，<u>减少 corss-core 通信</u>。</p>
+</blockquote>
+<h2 id="worker"><a href="#worker" class="headerlink" title="worker"></a>worker</h2><p>Executor 的所有 workers 都是阻塞等待在 DrvierQueue::take 处，当 DriverQueue 中有添加了新的 Ready PipelineDrvier 时，就会有一个 worker 解除阻塞。</p>
+<ol>
+<li>对于取出的 ready_driver，worker 会先检测其状态，过滤一些已经处于终态（CANCELED、FINISH、INTERNEL_ERROR）的 Driver，会调用 GlobalDriverExecutor::_finalize_driver 函数，如果是 FragementInstance 的最后一个 PipelineDriver，则生成该 FragmentInstance 的查询统计信息（即 profile），汇报给 Frontend。</li>
+<li>对于正常处于 READY&#x2F;Running 状态的 driver，则调用 PipelineDriver::process 函数，推动 pipeline 状态机前进。</li>
+</ol>
+<ul>
+<li>如果返回的状态 <strong>maybe_state</strong>.is_not_ok，则通过 QueryContext::cancel 将当前 Backend 上该 query 的所有 FragmentInstances 标记为取消状态。后续该 query 所有的 drivers，无论是在 Poller 中或者正在 Executor 中的，在执行前会去检测 fragment_ctx::is_canceled，如果返回 true，则取消本次执行，进入 step(1)</li>
+<li>如果 maybe_state.is_ok，则会根据此时 driver 的状态，判断是重新放回到 driver_queue、或是 blocked_driver_poller，或者说直接完成了。</li>
+</ul>
+<p>在执行过程中，会设置并更新 Driver、DriverQueue 的统计信息，便于 DrvierQueue 更为准确地调度。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> GlobalDriverExecutor::_worker_thread() &#123;</span><br><span class="line">    <span class="keyword">auto</span> current_thread = Thread::<span class="built_in">current_thread</span>();</span><br><span class="line">    <span class="type">const</span> <span class="type">int</span> worker_id = _next_id++;</span><br><span class="line">    <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">        <span class="keyword">if</span> (_num_threads_setter.<span class="built_in">should_shrink</span>()) &#123;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 0. 取出 READY 状态的 driver</span></span><br><span class="line">        <span class="keyword">auto</span> maybe_driver = <span class="keyword">this</span>-&gt;_driver_queue-&gt;<span class="built_in">take</span>();</span><br><span class="line">        <span class="keyword">auto</span> driver = maybe_driver.<span class="built_in">value</span>();</span><br><span class="line">        <span class="built_in">DCHECK</span>(driver != <span class="literal">nullptr</span>);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">auto</span>* query_ctx = driver-&gt;<span class="built_in">query_ctx</span>();</span><br><span class="line">        <span class="keyword">auto</span>* fragment_ctx = driver-&gt;<span class="built_in">fragment_ctx</span>();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 统计信息</span></span><br><span class="line">        driver-&gt;<span class="built_in">increment_schedule_times</span>();</span><br><span class="line">        _schedule_count++;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">auto</span> runtime_state_ptr = fragment_ctx-&gt;<span class="built_in">runtime_state_ptr</span>();</span><br><span class="line">        <span class="keyword">auto</span>* runtime_state = runtime_state_ptr.<span class="built_in">get</span>();</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="built_in">SCOPED_THREAD_LOCAL_MEM_TRACKER_SETTER</span>(</span><br><span class="line">                runtime_state-&gt;<span class="built_in">instance_mem_tracker</span>());</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 1.1 终态检测: 检测 fragment 是否已经取消</span></span><br><span class="line">            <span class="keyword">if</span> (fragment_ctx-&gt;<span class="built_in">is_canceled</span>()) &#123;</span><br><span class="line">                driver-&gt;<span class="built_in">cancel_operators</span>(runtime_state);</span><br><span class="line">                <span class="keyword">if</span> (driver-&gt;<span class="built_in">is_still_pending_finish</span>()) &#123;</span><br><span class="line">                    driver-&gt;<span class="built_in">set_driver_state</span>(DriverState::PENDING_FINISH);</span><br><span class="line">                    _blocked_driver_poller-&gt;<span class="built_in">add_blocked_driver</span>(driver);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    _finalize_driver(driver,</span><br><span class="line">                                     runtime_state,</span><br><span class="line">                                     DriverState::CANCELED);</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">continue</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            <span class="comment">//1.2 终态检测：driver 是否已经处于终态</span></span><br><span class="line">            <span class="keyword">if</span> (driver-&gt;<span class="built_in">is_finished</span>()) &#123;</span><br><span class="line">                _finalize_driver(driver, runtime_state, driver-&gt;<span class="built_in">driver_state</span>());</span><br><span class="line">                <span class="keyword">continue</span>;</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 统计信息 </span></span><br><span class="line">            <span class="type">int64_t</span> start_time = driver-&gt;<span class="built_in">get_active_time</span>();</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 2. 推动 PipelineDriver</span></span><br><span class="line">            StatusOr&lt;DriverState&gt; maybe_state;</span><br><span class="line">            <span class="built_in">TRY_CATCH_ALL</span>(maybe_state, driver-&gt;<span class="built_in">process</span>(runtime_state, worker_id));</span><br><span class="line"></span><br><span class="line">            Status status = maybe_state.<span class="built_in">status</span>();</span><br><span class="line">            <span class="keyword">this</span>-&gt;_driver_queue-&gt;<span class="built_in">update_statistics</span>(driver);</span><br><span class="line">            <span class="type">int64_t</span> end_time = driver-&gt;<span class="built_in">get_active_time</span>();</span><br><span class="line">            _driver_execution_ns += end_time - start_time;</span><br><span class="line"></span><br><span class="line">            <span class="comment">// 2.1  PipelineDriver 执行过程出错</span></span><br><span class="line">            <span class="keyword">if</span> (!status.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">                <span class="comment">// 取消整个 query</span></span><br><span class="line">                query_ctx-&gt;<span class="built_in">cancel</span>(status);</span><br><span class="line">                driver-&gt;<span class="built_in">cancel_operators</span>(runtime_state);</span><br><span class="line">                <span class="keyword">if</span> (driver-&gt;<span class="built_in">is_still_pending_finish</span>()) &#123;</span><br><span class="line">                    driver-&gt;<span class="built_in">set_driver_state</span>(DriverState::PENDING_FINISH);</span><br><span class="line">                    _blocked_driver_poller-&gt;<span class="built_in">add_blocked_driver</span>(driver);</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    _finalize_driver(driver, </span><br><span class="line">                                     runtime_state,</span><br><span class="line">                                     DriverState::INTERNAL_ERROR);</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">continue</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            <span class="comment">// 2.2 没有出错则更新状态，重新放回 driver_queue 或是添加到 poller</span></span><br><span class="line">            <span class="keyword">auto</span> driver_state = maybe_state.<span class="built_in">value</span>();</span><br><span class="line">            <span class="keyword">switch</span> (driver_state) &#123;</span><br><span class="line">            <span class="comment">// 重新放回 ready_driver</span></span><br><span class="line">            <span class="keyword">case</span> READY:</span><br><span class="line">            <span class="keyword">case</span> RUNNING: &#123;</span><br><span class="line">                <span class="keyword">this</span>-&gt;_driver_queue-&gt;<span class="built_in">put_back_from_executor</span>(driver);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">// 终态</span></span><br><span class="line">            <span class="keyword">case</span> FINISH:</span><br><span class="line">            <span class="keyword">case</span> CANCELED:</span><br><span class="line">            <span class="keyword">case</span> INTERNAL_ERROR: &#123;</span><br><span class="line">                _finalize_driver(driver, runtime_state, driver_state);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">// 阻塞</span></span><br><span class="line">            <span class="keyword">case</span> INPUT_EMPTY:</span><br><span class="line">            <span class="keyword">case</span> OUTPUT_FULL:</span><br><span class="line">            <span class="keyword">case</span> PENDING_FINISH:</span><br><span class="line">            <span class="keyword">case</span> PRECONDITION_BLOCK: &#123;</span><br><span class="line">                _blocked_driver_poller-&gt;<span class="built_in">add_blocked_driver</span>(driver);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">default</span>:</span><br><span class="line">                <span class="built_in">DCHECK</span>(<span class="literal">false</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Coroutione"><a href="#Coroutione" class="headerlink" title="Coroutione"></a>Coroutione</h2><p>那么这个协程模型体现在哪呢？</p>
+<p>PipelineDriver::process 中变量 <em>should_yield</em> 被设置为 true 时，</p>
+<ul>
+<li>要么是当前状态受阻，则该 driver 放入到 _blocked_driver_poller</li>
+<li>或者是当前时间片用完，都会重新放回到 _driver_queue，重新调度分发，给其他 drivers 执行的可能</li>
+</ul>
+<p>只要有 Ready&#x2F;Running 状态的 driver，Executor 的 worker 就不会阻塞。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#worker"><span class="toc-number">1.</span> <span class="toc-text">worker</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Coroutione"><span class="toc-number">2.</span> <span class="toc-text">Coroutione</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&text=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&is_video=false&description=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=GloablDriverExecutor: 实现协程模型的执行器&body=Check out this article: https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&title=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&name=GloablDriverExecutor: 实现协程模型的执行器&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/25/Pipeline/PipelineExecutor/&t=GloablDriverExecutor: 实现协程模型的执行器"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

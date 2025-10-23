@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="Overview尽管 rocksdb wiki 中 rocksdb-overview 已经描述了，本文以自己的理解作为一个补充。 如图 rocksdb 的总体架构图中主要由 MemTable, WAL 和 sstfile 三个基本组件组成，本文主要阐述下他们之间的协作关系。 MemTable写入的kv数据会先写入 WriteBatch， 在经过 WriteBatchInternal 封装后写入 M">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MemTable、WAL、ColumnFamily 简述">
+<meta property="og:url" content="https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="Overview尽管 rocksdb wiki 中 rocksdb-overview 已经描述了，本文以自己的理解作为一个补充。 如图 rocksdb 的总体架构图中主要由 MemTable, WAL 和 sstfile 三个基本组件组成，本文主要阐述下他们之间的协作关系。 MemTable写入的kv数据会先写入 WriteBatch， 在经过 WriteBatchInternal 封装后写入 M">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l0_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l0_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l1_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l1_compaction.png?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_cf.png?raw=true">
+<meta property="article:published_time" content="2022-01-08T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="RocksDb">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>MemTable、WAL、ColumnFamily 简述</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/01/10/rocksdb/WritePath/write_thread_1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&text=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&is_video=false&description=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MemTable、WAL、ColumnFamily 简述&body=Check out this article: https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&name=MemTable、WAL、ColumnFamily 简述&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&t=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Overview"><span class="toc-number">1.</span> <span class="toc-text">Overview</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MemTable"><span class="toc-number">1.0.1.</span> <span class="toc-text">MemTable</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B"><span class="toc-number">1.0.1.1.</span> <span class="toc-text">案例</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SST"><span class="toc-number">1.0.2.</span> <span class="toc-text">SST</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ColumnFamily"><span class="toc-number">1.1.</span> <span class="toc-text">ColumnFamily</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Get-MultiGet"><span class="toc-number">1.2.</span> <span class="toc-text">Get&#x2F;MultiGet</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        MemTable、WAL、ColumnFamily 简述
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-08T06:15:35.000Z" itemprop="datePublished">2022-01-08</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h1><p>尽管 rocksdb wiki 中 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/wiki">rocksdb-overview</a> 已经描述了，本文以自己的理解作为一个补充。</p>
+<p>如图 rocksdb 的总体架构图中主要由 <code>MemTable</code>, <code>WAL</code> 和 <code>sstfile</code> 三个基本组件组成，本文主要阐述下他们之间的协作关系。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb-overview.png?raw=true" alt="rocksdb-overview"></p>
+<h3 id="MemTable"><a href="#MemTable" class="headerlink" title="MemTable"></a>MemTable</h3><p>写入的kv数据会先写入 <code>WriteBatch</code>， 在经过 <code>WriteBatchInternal</code> 封装后写入 MemTable。</p>
+<p>MemTable 是在读写路径中共享，这样可以减少读写路径中和磁盘交互的频次。但由于 MemTable 是个内存结构，为了防止各种故障导致 MemTable 中数据丢失，进而引入 WAL (<code>W</code>rite <code>A</code>head <code>L</code>og)，即每次写入的数据，会先写入 WAL，成功后再写入 MemTable，如果 MemTable 中的数据丢失则从 WAL 中恢复。</p>
+<p>正常情况下，写入的数据会持续写入 MemTable，直到 MemTable 的大小超过阈值，则会变成只具有只读属性的 ImutableMemTable, 同时创建新的 MemTable 接受后续的写入。等待后台线程 <em>Pickup</em> 合适的 ImmutableMemTables，将其 Flush 到 $Level_0$ 中，那么选中的 ImmutableMemTables 对应的 WALs 也可以删除了。</p>
+<p>这里为什么用了 <em>Pickup</em> 这个说法？在 RocksDB-3.0 引入 cf(<code>C</code>olumn<code>F</code>amily) 设计，每个 cf 都有一个自己的 MemTable，但是所有的 cfs 共享一个 WAL：当向其中一个 cf 写入大量数据会导致它的 MemTable full 并转为 ImmtableMemTable。此时能直接删除当前 WAL 吗，由于WAL 可能仍保存着其他 cfs 的 MemTable 数据，这就涉及到 WAL 生命周期的问题。因此在删除 WALs 时，需要挑选出 WALs 生命周期结束的才能删除。</p>
+<h4 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h4><p>TiKV 原本的架构是一个 TiKV-Server 上的所有 regions 共享两个 RocksDB 实例: <code>raft-rocksdb</code> 用于存放 raft log，<code>kv-rocksdb</code> 用于存放状态机数据，kv-rocksdb 实例有三个 column family，</p>
+<ol>
+<li>事务 T1 在 prewrite 阶段写入 MemTable 的 lock 信息，在事务 T1 commit 阶段之前可能有其他热点 regions 写入大量数据导致 Flush MemTable，进而导致事务 T1 commit 阶段原本可以在 MemTable 中就可以查询到 lock 信息，现在需要去 sst 文件中查询，无疑增加了成本。</li>
+<li>那么我们是否可以通过每个 region 一个 cf 来实现 region 的隔离？</li>
+</ol>
+<p>  显然也是不行，因为 cf 只是逻辑上的隔离，所有的 cf 仍共享一个 WAL：如果上万个 regions 对应上万个 cfs，如果会造成很多 WALs 生命周期无法结束、得不到释放，势必生成占用大量资源。<br>3. 每个 region 一个 RocksDB 实例</p>
+<p>  在 Release-6.6 提出 Partitioned-TiKV 架构，即每个 region 分配一个 rocksdb 实例，从物理层上实现 region 隔离，这样原本一个 region 只能存储 64M 的存储，现在可以存储10G+的数据，减少了写入过程 region-leader 分裂的频次。</p>
+<p>  <em>Question</em>: 但是也有其他问题，比如 每个 region 一个 rocksdb，是否会因为 MemTable 导致占用的内存增加？尤其本来 TiKV 对硬件要求就很高，如此硬件成本是否会更高，以及内部 region 合并时 两个不同 RocksDB 实例的 regions 数据如何合并。不过由于 tikv region 本身就是按照 kv-range 划分的，不存在重复，合并可能主要需要修改元数据信息。</p>
+<p>  这个设计可以参考: <a target="_blank" rel="noopener" href="https://cn.pingcap.com/blog/principle-analysis-of-partitioned-raft-kv">partitioned-raft-kv</a></p>
+<h3 id="SST"><a href="#SST" class="headerlink" title="SST"></a>SST</h3><p>Rocksdb 引擎是个 LSM (<code>L</code>og <code>S</code>tructured <code>M</code>erge) Tree， 其中 $level_0$ ~ $level_N$ 都由 sst(<code>S</code>orted <code>S</code>tring <code>T</code>able) files 组成。</p>
+<p>sstfile 是已经将 kv 数据有序存储在磁盘上，因此和 sstfile 有关的问题不再是数据有没有可能丢失，而是如何减少 LSM Tree 中不同 level 的 sstfiles 中存储的冗余数据。这种方式即 compaction。</p>
+<ul>
+<li>$Level_0$ 存储最新的数据， $Level_N$ 存储最旧的数据。</li>
+<li>$Level_0$ 中的 sstfiles 可能会有重复，$Level_1$ ~ $Level_N$ 中的数据不重复</li>
+</ul>
+<p>当 Compaction 方式是 <code>Level Compaction</code> 时:</p>
+<ul>
+<li><p>$level_0$: 当 MemTable 中的数据 Flush 到 $Level_0$ 时，会导致 $Level_0$ 存在重复的 kv range。当 $Level_0$ 的文件数量达到阈值 <code>$Level_0$_file_num_compaction_trigger</code>，$Level_0$ 会被合并到会和 $Level_1$，并保持使得 $Level_1$ 层的 sstfiles 仍然有序且无重复。</p>
+<p>如图是 $level_0$ 的 compaction 前后过程：</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l0_compaction.png?raw=true" alt="pre_l0_compaction"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l0_compaction.png?raw=true" alt="post_l0_compaction"></p>
+</li>
+<li><p>当 $$Level_1$$ 的数据量越来越大，会触发 $Level_1$(inpit-level)层和 $level_2$ (output-level)层的 compaction。</p>
+<p>如图是 $level_1$ 的 compaction 前后过程：</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_pre_l1_compaction.png?raw=true" alt="rocksdb_pre_l1_compaction"></p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_post_l1_compaction.png?raw=true" alt="rocksdb_post_l1_compaction"></p>
+</li>
+<li><p>以此类推到 LSM 最底层。</p>
+</li>
+</ul>
+<p>这里面需要研究的细节:</p>
+<ul>
+<li>input&#x2F;output level 中的哪些 sstfiles 进行 compaction</li>
+<li>如何选择合适的 compaction 方式，平衡读写放大</li>
+<li>当 value 较大，进行 kv 分离来降低写方大问题</li>
+</ul>
+<p>由于现在新型的数据库的存储引擎基本都是以 LSM Tree 为蓝本， compaction 对内存和磁盘的影响就显得愈发重要，几乎都会借鉴 RocksDB 的设计。因此，在学习 RocksDB 时，compaction 是不可或缺的一点。 </p>
+<h2 id="ColumnFamily"><a href="#ColumnFamily" class="headerlink" title="ColumnFamily"></a>ColumnFamily</h2><p>上面已经简述了 cf，它在逻辑上将 RocksDB 划分为多个 cf，每个 cf 类似一个关系数据库中的分区表的概念。</p>
+<p>如图，cf 的实体是 <code>class ColumnFamilyData</code>，一个 RocksDB 实例可以有多个 cfs，都保存在 <code>ColumnFamilySet</code> 对象中。一个 cf 中要记录三大部分:</p>
+<ul>
+<li><code>version</code>: 表征的是 lsm tree 的 $Level_0$ - $Level_N$ 信息</li>
+<li><code>imm</code>: 表征的是只读的 MemTable，不再接受写入的 MemTable；</li>
+<li><code>mm</code>: 当前最新的 MemTable，接受读写</li>
+</ul>
+<p>同样这里也存在<code>version</code>、<code>imm</code> 生命周期的问题，因为每次 flush&#x2F;comapction，都会对 imm&#x2F;version 产生影响，为了追踪生命周期，</p>
+<ul>
+<li><code>MemTableList</code> 对象 imm 中有个 <code>MemTableListVersion</code> 对象，并有 <em>Ref()</em>&#x2F;<em>Unref()</em> 函数来追踪生命周期；</li>
+<li><code>Version</code> 对象 version 也有 <em>Ref()</em>&#x2F;<em>Unref()</em> 函数来追踪生命周期；</li>
+</ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_cf.png?raw=true" alt="rocksdb-cf"></p>
+<p>因此，关于 cf 也好理解，在分析这块的时候可以多关注下 WALs、Version 等生命周期的起始。</p>
+<h2 id="Get-MultiGet"><a href="#Get-MultiGet" class="headerlink" title="Get&#x2F;MultiGet"></a>Get&#x2F;MultiGet</h2><p>读取路径会比较复杂，主要是将 mm&#x2F;imm、sstfile 数据有序合并起来再取最新的数据输出，相关的三个迭代器 <code>MergingIterator</code>，<code>CompactionIterator</code>、<code>RangeTomeStoneIterator</code> 放在后续慢慢再讲解。这一部分还有一点就是利用 C++20 的协程实现异步IO来提取读取性能。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Overview"><span class="toc-number">1.</span> <span class="toc-text">Overview</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MemTable"><span class="toc-number">1.0.1.</span> <span class="toc-text">MemTable</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B"><span class="toc-number">1.0.1.1.</span> <span class="toc-text">案例</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SST"><span class="toc-number">1.0.2.</span> <span class="toc-text">SST</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ColumnFamily"><span class="toc-number">1.1.</span> <span class="toc-text">ColumnFamily</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Get-MultiGet"><span class="toc-number">1.2.</span> <span class="toc-text">Get&#x2F;MultiGet</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&text=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&is_video=false&description=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MemTable、WAL、ColumnFamily 简述&body=Check out this article: https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&title=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&name=MemTable、WAL、ColumnFamily 简述&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/08/rocksdb/WritePath/overview/&t=MemTable、WAL、ColumnFamily 简述"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

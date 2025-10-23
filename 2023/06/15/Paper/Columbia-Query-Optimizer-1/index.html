@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="ABSTRACTCOLUMBIA 项目聚焦于效率：如何在不损害拓展性的前提下，使设计实现的 Columbia Query Optimizer 获得巨大的性能提升。 本项目是基于 Cascades Optimizer Framework 的 Top-Down 优化算法，并通过重构搜索空间和搜索算法来简化 Top-Down 优化器设计：通过实现两种裁剪技术（pruning techniques）取得了">
+<meta property="og:type" content="article">
+<meta property="og:title" content="COLUMBIA 查询优化器如何提升性能（上）">
+<meta property="og:url" content="https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="ABSTRACTCOLUMBIA 项目聚焦于效率：如何在不损害拓展性的前提下，使设计实现的 Columbia Query Optimizer 获得巨大的性能提升。 本项目是基于 Cascades Optimizer Framework 的 Top-Down 优化算法，并通过重构搜索空间和搜索算法来简化 Top-Down 优化器设计：通过实现两种裁剪技术（pruning techniques）取得了">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-1.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-2.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-3.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-4.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-5.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-6.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-7.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-table-1.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-8.jpg?raw=true">
+<meta property="article:published_time" content="2023-06-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Papers">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-1.jpg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>COLUMBIA 查询优化器如何提升性能（上）</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/07/02/StarRocks/Pipeline/MorselQueue_1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/05/07/StarRocks/Pipeline/Overview/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&text=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&is_video=false&description=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=COLUMBIA 查询优化器如何提升性能（上）&body=Check out this article: https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&name=COLUMBIA 查询优化器如何提升性能（上）&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&t=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ABSTRACT"><span class="toc-number">1.</span> <span class="toc-text">ABSTRACT</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-Terminology"><span class="toc-number">3.</span> <span class="toc-text">2. Terminology</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-Query-Optimization"><span class="toc-number">3.1.</span> <span class="toc-text">2.1. Query Optimization</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-Logical-Operators-and-Query-Tree"><span class="toc-number">3.2.</span> <span class="toc-text">2.2. Logical Operators and Query Tree</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-Physical-Operators-and-Execution-Plan"><span class="toc-number">3.3.</span> <span class="toc-text">2.3. Physical Operators and Execution Plan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-Groups"><span class="toc-number">3.4.</span> <span class="toc-text">2.4. Groups</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#logical-properties"><span class="toc-number">3.4.1.</span> <span class="toc-text">logical properties</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-The-Search-Space"><span class="toc-number">3.5.</span> <span class="toc-text">2.5. The Search Space</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-6-Rules"><span class="toc-number">3.6.</span> <span class="toc-text">2.6. Rules</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        COLUMBIA 查询优化器如何提升性能（上）
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-06-15T02:20:00.000Z" itemprop="datePublished">2023-06-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Papers/" rel="tag">Papers</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="ABSTRACT"><a href="#ABSTRACT" class="headerlink" title="ABSTRACT"></a>ABSTRACT</h2><p>COLUMBIA 项目聚焦于效率：如何在不损害拓展性的前提下，使设计实现的 Columbia Query Optimizer 获得巨大的<em>性能</em>提升。</p>
+<p>本项目是基于 Cascades Optimizer Framework 的 Top-Down 优化算法，并通过重构搜索空间和搜索算法来简化 Top-Down 优化器设计：通过实现两种裁剪技术（pruning techniques）取得了极大的性能提升。此外，通过增加友好的用户接口和广泛的跟踪支持（extensive tracing support）来提升本项目的可用性。</p>
+<h2 id="1-Introduction"><a href="#1-Introduction" class="headerlink" title="1. Introduction"></a>1. Introduction</h2><p>尽管查询优化（query optimization）成为研究项目已经超过15年，但是 query optimizers 仍是关系数据库中最大最复杂模型之一，这使得他们的开发和变动成为困难且耗时的任务。随着现代数据库的需要发展，这一情形会变得更加复杂，因此催生了新的技术。</p>
+<p>在过去的几年里，也开发了几代商业和研究性质的优化器，在拓展性和效率做出提升：</p>
+<ol>
+<li>第一代致力于可拓展的优化器技术，认识到在新数据模型（new data models）、查询类别（query class）、语言和评估技术（evaluation techniques）等方面存在需求。因此诞生了一些列项目，诸如 Exodus、Starburst，他们的目标是使优化器更加模块化，更易于拓展。他们使用到的技术包括 layering of components、基于规则的转化等。这些成果存在一些短处，比如增加拓展的复杂度、搜索性能以及更加偏向于于面向记录的数据模型(record-oriented data module)</li>
+<li>第二代可拓展的优化器，诸如 Volcano optimizer generator，增加了更加复杂的搜索技术，更多地使用了物理属性来指导搜索以及更好地控制搜索策略来实现更好的搜索性能。虽然这些优化器在一定程度上更加灵活了，但是仍难以拓展</li>
+<li>第三代优化器，诸如 Cascades、OPT++, EROC 和 METU，开始使用面向对象技术（object-oriented design）来简化实现、拓展和更改优化器，与之同时保持效率并且是的搜索策略更为灵活。这最新一代的优化器已经达到的复杂程度，已可以满足现代商业数据库系统的要求。这一点可以从他们的工业实现（Cascades by Microsoft and Tandem, EROC by NCR）也可以看出。</li>
+</ol>
+<p>按照<em>搜索策略</em>划分，这三代查询优化器可以被归位两类：</p>
+<ol>
+<li>Starburst style: bottom-up dynamic programming optimizers </li>
+<li>Cascades style: top-down branch and bound rule-driven cost based optimizers</li>
+</ol>
+<p>bottom-up 优化算法当前广泛用于传统商业数据库系统中，因为至少在传统应用中被认为是有效的。但是由于 bottom-up 算法要求将原始问题分解为子问题，使其相比较 Top-down 算法，bottom-up 优化算法与生俱来就缺乏可拓展性。此外，为了在大查询中实现可以接受的性能，bottom-up 类算法中必须要用启发式（heuristics）策略。</p>
+<p>尽管在此之前的 top-down 优化器实现已表明此类优化器难以实现和 DownTop相匹敌的性能，但是本论文认为 top-down 优化器在<em>效率</em>上和拓展能力一样有优势。因此为论证这一观点，本论文的剩余部分就是描述我们如何设计另一个 top-down 优化器: Columbia </p>
+<p>Columbia 优化器在 Cascades Optimizer Framework 的基础上，广泛利用 C++ 面向对象的特性以及细心的工程师，来啊简化 top-down 算法，进而维持 top-down 拓展性的同时实现提升性能的目的，本论文算法只定义了少量关键的带有虚函数的抽象基类，根据这些基类来完整实现搜索策略。这些搜索策略调用这些基类的虚函数来执行具体地搜索，并基于成本（cost-based）对搜索空间进行裁剪。</p>
+<p>因此，<em>从这些抽象基类派生新的子类并重写基类虚函数</em>，就可以轻松拓展优化器来操作其他的复杂数据模型、添加新的 operators 和转化规则。故而本文聚焦于关系数据模型中的优化，不再讨论优化器的拓展性。</p>
+<p>为了，减少 CPU 和 Memory 的使用率，本论文的 Columbia 框架会使用几个工程技术来提升效率，诸如：</p>
+<ul>
+<li>一个快速的 hash function 来消除重复的表达式；</li>
+<li>一个 group exepression 中 logical expressions 和 physical expressions 的分离</li>
+<li>小而紧凑的数据结构</li>
+<li>有效的算法来优化分组和输入</li>
+<li>efficient way to handle enforcers (that is what</li>
+</ul>
+<p>Columbia 优化器提供了两个重要的技术：</p>
+<ol>
+<li><p><em>group pruning</em>：这个技术这极大地裁剪了搜索空间，并且毫不损害生成的执行计划。在低层次（low-level）物理计划生成前，优化器会先计算高层次（high-level）物理计划的代价（cost），这些提前计算的代价用于后续优化代价上限，本文后面将会展示在很多场景下，这些上限可以避免生成整个 group expressions，进而裁剪搜索空间中大量可能的查询计划。</p>
+</li>
+<li><p><em>global epsilon pruning</em>：这个技术通过生成可以接受的次优方案（close-to-optimal solutions）来裁剪搜索空间。当一个solution足够接近最优方案，那么这个优化目标就算完成了，进而许多其他的路径就可以忽略。</p>
+</li>
+</ol>
+<h2 id="2-Terminology"><a href="#2-Terminology" class="headerlink" title="2. Terminology"></a>2. Terminology</h2><p>本章主要回顾查询优化文献中的术语和基本概念，这些也将用于描述 Columbia 框架的设计和实现。</p>
+<h3 id="2-1-Query-Optimization"><a href="#2-1-Query-Optimization" class="headerlink" title="2.1. Query Optimization"></a>2.1. Query Optimization</h3><p>查询处理的目的是从 DML 提取出表达式，并基于数据库的数据进行评估。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-1.jpg?raw=true" alt="optimizer-1"></p>
+<p>图1 展示了查询处理的步骤，</p>
+<ol>
+<li>DML 语句中的原始查询被解析成代数上的逻辑表达式树（logical expression tree），</li>
+<li>接着这逻辑表达式树传递给查询优化器，将逻辑查询转换为物理计划：物理执行计划就可以在真正持有数据的数据结构上执行</li>
+</ol>
+<p>这个过程会执行两种转化：</p>
+<ul>
+<li><p><em>Logical transformations</em>：创建查询可能的逻辑形式（logical forms）</p>
+</li>
+<li><p><em>physical transformations</em>：选择一个特别的物理算法来实现一个逻辑算子（logical operator），比如使用 sort-merge join 来实现 logical join</p>
+<p>  通常，这个过程会生成大量的执行计划来实现逻辑查询树，因此需要查询优化器主要关注的就是如何找到最优的执行计划，即代价最低的路径。只要选中一个最优物理计划，就会被传递给查询执行引擎（query execution engine）。查询执行引擎使用有序数据作为输入来执行物理计划，得到的查询到结果即整个输出。</p>
+</li>
+</ul>
+<p>如果我们只关注用户层，那么查询处理过程就被隐藏在查询处理器的黑盒之中。用户提交SQL请求时，希望系统正确又快速输出结果。正确性（Correctness）是查询处理器的基本要求，而性能（performance）是查询处理器所需要的特性和主要关注点。从查询处理的系统层次看，查询优化器在数据库系统的高性能至关重要。</p>
+<p>生成的物理计划中，包含了大量能完成正确性的执行计划，但是具有迥异的执行性能（execution performance），优化器的目标之一就是发现最佳执行性能的物理计划。<code>一个朴素的方法就是生成所有可能的路径，然后遍历选择代价最低的路径</code>。但是，遍历所有可能的路径的代价是极其高的，因此即便是非常简单的查询语句都会生成大量的路径，因此优化器必须以某种方式缩小搜索空间。</p>
+<p>查询优化是个复杂的搜索问题，研究表名这个问题的简单版本就是NP-hard。一个搜索策略对于优化器成功与否至关重要。</p>
+<h3 id="2-2-Logical-Operators-and-Query-Tree"><a href="#2-2-Logical-Operators-and-Query-Tree" class="headerlink" title="2.2. Logical Operators and Query Tree"></a>2.2. Logical Operators and Query Tree</h3><p>逻辑算子 <em>Logical operators</em> 属于高级（high level）算子，仅表征了数据转换关系，并不指定使用哪种具体的物理执行算法。在关系数据模型中，Logical operators 接受多个表作为输入，并产生单表输出。每个 logical operator 接受固定数量的输入（输入的数量叫做 <em>arity</em>），并有多个用于区分 operators 变体的参数。</p>
+<p>有两个经典的 logical operators：</p>
+<ul>
+<li><em>GET Operator</em>：即Scan操作，他没有输入的table，并且有一个表名参数。GET Operator 从磁盘中获取数据，并输出给后续的Operators</li>
+<li><em>EQJOIN Operator</em>：有两个输入table，即进行JOIN操作的左表、右表，输入的参数包含着和左表、右表相关的predicates。</li>
+</ul>
+<p>查询树（query tree） 是 query 的树形结构表征方式，并被用于优化器的输入。一般地，查询树会被表征为 logical operators 的树形结构，每个 TreeNode 都是一个 logical operator，有零个或者多个 logical operators 作为输入，这个 TreeNode 的子节点数量等于输入的 logical operators 的数量，也即 <em>arity</em>。这个查询树的叶结点即 <em>arity &#x3D; 0</em> 的 operators（比如 GET Operator）。</p>
+<p>图-2 是个查询的树形表征的例子。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-2.jpg?raw=true" alt="optimizer-2"></p>
+<p>query trees 用于指定执行 operators 的顺序，比如为了执行查询树上的 top operator，那他的输入就必须先执行。在图-2的例子中 EQJOIN operator 的两个输入，接受的就是两个 GET operators 的输出。而 EQJOIN 的输入参数，即 <code>Emp.dno=Dept.dno</code>，描述的就是 JOIN 的条件。而这个 EQJOIN 的输出即整个查询所需的结果。GET operators 没有输入，因此他们就是叶节点，用于产生本次查询评估所需的数据源，而 GET operator 的输入参数表征的是所需读取表的表名，比如 Empt、Dept。</p>
+<h3 id="2-3-Physical-Operators-and-Execution-Plan"><a href="#2-3-Physical-Operators-and-Execution-Plan" class="headerlink" title="2.3. Physical Operators and Execution Plan"></a>2.3. Physical Operators and Execution Plan</h3><p>Physical operators 表征的实现特定数据操作的具体算法。在数据库中，对于一个 logical operators，通常存在一个或者多个 physical operators 实现。</p>
+<ul>
+<li>EQJOIN logical operator 可以使用 nested-loops、sort-merge join 或者其他算法来啊实现，而具体的算法也可以使用不同的 physical operator来实现，比如 nested-loops 一般是用 LOOP-JOIN physical operator实现，而 sort-merge 算法一般是用 MERGE-JOIN physical operator实现。</li>
+<li>GET logical operator 的经典实现算法是按照表的存储顺序进行 scan，一般是使用 FILE_SCAN physcail operator。</li>
+</ul>
+<p>将查询树中的 logical operators 替换为 physical operators 就产生了一棵 physical operators 树，一般叫做执行计划（<em>Execution Plan</em>）。图-3 展示了由图-2查询计划生成的两个执行计划。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-3.jpg?raw=true" alt="optimizer-3"></p>
+<p>执行计划具体说明了如何评估查询（evaluate the query）：每个执行计划都有一个执行成本，对应着 cost model 和catalog infomation。对于一个指定查询，优化器生成的最优执行计划会作为查询执行引擎的输入，执行引擎会基于数据库系统中的数据执行整个算法来产生本次查询的输出结果。</p>
+<h3 id="2-4-Groups"><a href="#2-4-Groups" class="headerlink" title="2.4. Groups"></a>2.4. Groups</h3><p>给定的查询可以由另一个在逻辑上等价的查询树来表征：如果两个查询树在任何主流的数据库上的输出都完全相同，则他们是 <em>逻辑上等价的</em>。通常，每一个查询树都有一个或者多个执行计划来实现查询树并产生完全相同的结果，那么这些执行计划就是逻辑上等价的。</p>
+<p>图-4 展示了几个逻辑等价的查询树以及实现这些查询树产生逻辑等价的执行计划。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-4.jpg?raw=true" alt="optimizer-4"></p>
+<p>如图-4所示，我们使用 $\Join$ 符号来表征 EQJOIN operator，$\Join_L$ 表征 LOOPS_JOIN operator，$\Join_M$ 表征 MERGE_JOIN。出于简洁的目的，使用参数表征 GET，加上下标F表征 FILE_SCAN，比如图-4中使用 $C$ 表征 GET(“C”)，用 $C_F$ 表征 FILE_SCAN(“C”)。</p>
+<p>图4(a) 和 图4(b) 是两个逻辑等价的查询树，差别只在于 logical operator 的顺序；(a-i) 个 (a-ii)是两个逻辑等价的执行计划，他们的区别在于使用不同的JOIN算法。</p>
+<p>那么我就可以使用 <em>expressions</em> 来表征查询树和执行计划（以及他们的子节点）：一个 expression 由一个 operator 和它的零个或者多个输入组成，根据 operator 的类型这个 expression 也被区分为 logical expression 和 physical expression，因此查询树即 <em>logical expressions</em>，执行计划即 <em>physcical expressions</em>。</p>
+<p>考虑到一个 logical expression 就存在大量逻辑等价的 logical expressions 以及生成的 physical expressions，如果将他们都放入到一个 <em>group</em> 中并定义他们的共同特征（common characteristics）就变得非常有用。</p>
+<p><em>Group</em> 是一组逻辑等价的 exprssions 集合。<code>一般地，一个 group 包含所有逻辑等价的 logical expressions，以及基于他们生成的逻辑等价的 physical expressions</code>。显然，group 中的每个 logical expression 对应的 physical expressions 不止一个。图-5展示的 group 包含了图-4中表达式的以及其他的等价表达式，</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-5.jpg?raw=true" alt="optimizer-5"></p>
+<p>我们通常用其中一个 logical expressions 来表示一个 <em>group</em>，比如 $(A \Join B) \Join C$，或直接使用 $[ABC]$。图-5 中展示了 $[ABC]$ group 中所有等价的逻辑表达式及部分物理表达式。从图-5中可以看到，即便是逻辑表达式也存在大量等价的表达形式。</p>
+<p>为了减少 group 中表达式的数量，引入 <em>Multi-Expressions</em>。一个  <em>Multi-Expressions</em> 有一个 logical&#x2F;physical operator，并将 groups 作为输入。 multi-expression 和 expression 不同点在于输入： 前者以 groups 作为输入，后者以其他 expressions 作为输入。比如 Multi-expression $[A \Join B] \Join [C]$ 表示 EQJOIN operator 的输入是 $[A \Join B]$ 和  $[C]$ 两个 group。由于在一个 group 中鲜有等价的 multi-expression，因此能极大得节省搜索空间。</p>
+<p>图-6 展示了 group [ABC] 中等价的 <em>Multi-Expressions</em>，相比较图-5 中 Expression 的数量更少。 也就说通过使用 <em>Multi-Expressions</em>，就可以将 group 重新定义为一系列等价 <em>Multi-Expressions</em> 的集合。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-6.jpg?raw=true" alt="optimizer-6"></p>
+<p>在查询的通用处理过程中，在生成最终结果前会先产生许多中间结果，即许多tuples的集合。而中间结果就是通过计算一个 group 对应的执行计划得到的。换言之，group 就对应着中间结果，而这些groups被叫为 <em>intermediate groups</em>，而生成最终结果的group，就叫做 <em>final group</em>。</p>
+<p>The Logical properties of a group are defined as the logical properties of the result, regardless of how the result is physically computed and organized. These properties include the cardinality (number of tuples), the schema, and other properties. Logical properties apply to all expressions in a group</p>
+<h4 id="logical-properties"><a href="#logical-properties" class="headerlink" title="logical properties"></a>logical properties</h4><p>一个group中的所有expressions共享一个 <em>logical properties</em>，它被定义为这个group输出结果的逻辑属性，而不在乎结果实际上的计算、组织方式。 <em>logical properties</em> 包括：</p>
+<ul>
+<li>cardinality: tuples 的数量，即行数</li>
+<li>schema</li>
+<li>其他属性</li>
+</ul>
+<h3 id="2-5-The-Search-Space"><a href="#2-5-The-Search-Space" class="headerlink" title="2.5. The Search Space"></a>2.5. The Search Space</h3><p><em>search space</em> 表示给定初始查询的逻辑查询树和物理计划。为了节省搜索空间，将 search space 表征为 group 集合，每个 group 都将其他 groups 作为输入，而最上层的 group 也就是 final group(root group)，它对应着初始查询的最终结果。 图-7 展示了一个查询的初始搜索空间(initial search space)。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-7.jpg?raw=true" alt="optimizer-7"></p>
+<p>在 initial search space 中，每个 group 仅包含一个源自于 initial query tree 的 logical expression。</p>
+<blockquote>
+<p>也就是说，在生成初始搜索空间后，每个 group 需要基于已有的 logical expression 生成逻辑等价的新表达式。</p>
+</blockquote>
+<p>在图-7 中，最上层的 group $[ABC]$ 就是该查询的最终输出，即 final group，它就是图-7中三个 join 的最终结果。</p>
+<p>我们可以从一个 <em>initial search space</em> 获得一个 <em>initial query tree</em>。query tree 上的每个节点（node）都对应着搜索空间中每个 group 的 Multi-expression 上的 operator。</p>
+<p>比如，fig-7 中有 final group $[ABC]$ ，它由 $EQJOIN$ operator 和 $[AB], [C]$ 两个输入 groups 组成。我们可以获得这么一个 query tree：以 EQJOIN 作为最上层的 operator，输入的 Operator 源于 $[AB], [C]$  两个 groups，然后分别递归 $[AB], [C]$ 两个 groups 直到遇到没有输入的groups，即叶子组。</p>
+<p>从 initial search space 派生出来的 query tree 就刚好是 initial query tree。换言之，initial search space 表征了 initial query tree。</p>
+<p>在优化的过程中， 每个 group 会生成大量逻辑上等价的 logical expressions 和 physical expressions，进而导致搜索空间急剧膨胀。与此同时，在生成 physical expressions 的过程中，这些 physical expressions 的执行代价（ execution costs）也都会被计算出来。在某种意义上，生成所有的 physical expressions 就是优化器的目标，然后从中找到代价最低的 physical expression即可。但是为了生成所有 physical expressions，就必须先构造出所有的 logical expressions，这是因为physical expression 只是 logical expression 的一种实现。</p>
+<p>一个完全被膨胀的搜索空间被叫作 final search space，即表示了一个查询的所有逻辑上等价的 expressions。</p>
+<p>实际上，使用递归的方式可以从 final search space 获得所有可能的 query tree 和 exec plan，就像使用递归方式从 initial serach space 获得 initial query tree。 在搜索空间中，每个 Multi-expressions 上的 operator 对应着着 query tree 上的一个 operator node 或者一个执行计划。</p>
+<p>由于搜索空间中的一个 group 就包含了大量逻辑上等价的表达式，那么 final search space 也会呈现了大量的 query trees 和 execution plans。</p>
+<p>表-1 显示了由 N 个表 JOIN 得到的完整逻辑搜索空间（仅显示了 logical expressions 的数量）。比如， 4 个表进行 JOIN 的逻辑搜索空间就有15个 groups，包含了 54 个 logical expressions，呈现了120个query trees。</p>
+<p>从表-1可以看出，即便只考虑 logical expressions，搜索空间的大小也会随着 JOIN 的表增多而呈现指数趋势增长。而 logical expressions 的数量取决于 logical operator 有多少种算法实现。比如当前搜索空间中有 N 个 logical expressions，并且数据库系统支持 M (M &gt;&#x3D; 1) 种  join 算法实现，那么搜索空间就将会有 $M * N$ 个 logical expressions，也就说 physical expressions 的数量不会少于 logical expressions 的数量。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-table-1.jpg?raw=true" alt="optimizer-table-1"></p>
+<h3 id="2-6-Rules"><a href="#2-6-Rules" class="headerlink" title="2.6. Rules"></a>2.6. Rules</h3><p><em>rule</em> 描述得是如何将一个表达式转化为一个在逻辑上等价的新表达式。因此，许多优化器会通过使用 rules 来对一个 initial query 生成一系列逻辑上等价的表达式，达到扩充 initial search space 的目的。</p>
+<p>每个 rule 都会被定义为一个pair:</p>
+<ul>
+<li><em>pattern</em>: 定义的是输入的 logical expressions 的结构，即什么样的输入表达式可以应用这条 rule（注意: rule 仅能用应用于 logical expressions），</li>
+<li><em>subsitute</em>: 定义的是输入表达式在应用这条规则之后，输出结果的结构</li>
+</ul>
+<p>当扩充搜索空间时，优化器会审视每个 logical expression 并检查 rules set 中是否存在 rule 的 pattern 能与该表达式相匹配。如果存在，则会根据 rule 中 substitute 定义的输出表达式结构，应用这条规则来生成新的逻辑上等价的表达式。</p>
+<p>Cascades 使用表达式来表示 pattern 和 substitues: 其中 pattern 总是 logical expressions，而 subsitutes 即可以是 logical expressions 也可以是 physical expressions。</p>
+<p>rules 的两种通用类型是:</p>
+<ul>
+<li><em>Transformation rules</em>: 当 substitute 是 logical expression 时， rule 被叫做 transformation rules。</li>
+<li><em>implementation rules</em>: 当 substitute 是 physical expression 时， rule 被叫做 implementation rules。</li>
+</ul>
+<p>如图-8，$EQJOIN_LTOR$ 就是一种 transformation rule，$EQJOIN_MERGEJOIN$ 就是一种 implementation rules。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/optimizer-8.jpg?raw=true" alt="optimizer-8"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ABSTRACT"><span class="toc-number">1.</span> <span class="toc-text">ABSTRACT</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-Introduction"><span class="toc-number">2.</span> <span class="toc-text">1. Introduction</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-Terminology"><span class="toc-number">3.</span> <span class="toc-text">2. Terminology</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-Query-Optimization"><span class="toc-number">3.1.</span> <span class="toc-text">2.1. Query Optimization</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-Logical-Operators-and-Query-Tree"><span class="toc-number">3.2.</span> <span class="toc-text">2.2. Logical Operators and Query Tree</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-Physical-Operators-and-Execution-Plan"><span class="toc-number">3.3.</span> <span class="toc-text">2.3. Physical Operators and Execution Plan</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-Groups"><span class="toc-number">3.4.</span> <span class="toc-text">2.4. Groups</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#logical-properties"><span class="toc-number">3.4.1.</span> <span class="toc-text">logical properties</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-The-Search-Space"><span class="toc-number">3.5.</span> <span class="toc-text">2.5. The Search Space</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-6-Rules"><span class="toc-number">3.6.</span> <span class="toc-text">2.6. Rules</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&text=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&is_video=false&description=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=COLUMBIA 查询优化器如何提升性能（上）&body=Check out this article: https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&title=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&name=COLUMBIA 查询优化器如何提升性能（上）&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1/&t=COLUMBIA 查询优化器如何提升性能（上）"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

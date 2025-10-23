@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="在 初探值与引用：学会正确地使用右值引用 一文中，讲解了右值引用的正确用法。本节继续在前文基础上，讲解值与引用在模板函数中的关系。 在C++11中，有三种引用类型：  const T&amp;：const 左值引用 T&amp;：非const的左值引用 T&amp;&amp;：右值引用  在非模板函数中，常常使用引用类型来作为参数类型，以避免不必要的赋值。但是在模板函数中，却并不总是建议使用引用类">
+<meta property="og:type" content="article">
+<meta property="og:title" content="再探值与引用：函数模板的类型推导规则辨析">
+<meta property="og:url" content="https://szza.github.io/2021/03/04/C++/reference_2/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="在 初探值与引用：学会正确地使用右值引用 一文中，讲解了右值引用的正确用法。本节继续在前文基础上，讲解值与引用在模板函数中的关系。 在C++11中，有三种引用类型：  const T&amp;：const 左值引用 T&amp;：非const的左值引用 T&amp;&amp;：右值引用  在非模板函数中，常常使用引用类型来作为参数类型，以避免不必要的赋值。但是在模板函数中，却并不总是建议使用引用类">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-03-04T08:21:51.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Modern C++">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>再探值与引用：函数模板的类型推导规则辨析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2021/11/24/rocksdb/Table/builder/5_Footer/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/03/04/C++/reference_1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/04/C++/reference_2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/04/C++/reference_2/&text=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/04/C++/reference_2/&is_video=false&description=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=再探值与引用：函数模板的类型推导规则辨析&body=Check out this article: https://szza.github.io/2021/03/04/C++/reference_2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/04/C++/reference_2/&name=再探值与引用：函数模板的类型推导规则辨析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/04/C++/reference_2/&t=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.</span> <span class="toc-text">值传递</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">引用传递</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#const-T"><span class="toc-number">2.1.</span> <span class="toc-text">const T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T"><span class="toc-number">2.2.</span> <span class="toc-text">T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-1"><span class="toc-number">2.3.</span> <span class="toc-text">T&amp;&amp;</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        再探值与引用：函数模板的类型推导规则辨析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-03-04T08:21:51.000Z" itemprop="datePublished">2021-03-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Modern-C/" rel="tag">Modern C++</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在 <a href="https://szza.github.io/2021/03/04/C++/reference/">初探值与引用：学会正确地使用右值引用</a> 一文中，讲解了右值引用的正确用法。本节继续在前文基础上，讲解值与引用在模板函数中的关系。</p>
+<p>在C++11中，有三种引用类型：</p>
+<ul>
+<li><code>const T&amp;</code>：const 左值引用</li>
+<li><code>T&amp;</code>：非const的左值引用</li>
+<li><code>T&amp;&amp;</code>：右值引用</li>
+</ul>
+<p>在非模板函数中，常常使用引用类型来作为参数类型，以避免不必要的赋值。但是在模板函数中，却并不总是建议使用引用类型作为模板参数类型，应优先选择值传递，除非遇到以下情况：</p>
+<ul>
+<li>对象不允许复制：即拷贝构造函数加上<code>=delete</code>或设置为<code>private</code>；</li>
+<li>对象用于返回数据（<code>T&amp;</code>）；</li>
+<li>转发引用（<code>T&amp;&amp;</code>）；</li>
+<li>引用传递可以获得明显的性能提升。</li>
+</ul>
+<h2 id="值传递"><a href="#值传递" class="headerlink" title="值传递"></a>值传递</h2><p>引用传递是为了避免复制，但是值传递也不一定就会发生copy。</p>
+<p>基于【初探右值引用】中的Foo类，有如下按值传递的模板函数<code>pass_by_value</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_value</span><span class="params">(Foo arg)</span> </span>&#123; </span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">pass_by_value</span>(Foo&#123;<span class="number">100</span>&#125;);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>也许你认为<code>pass_by_value(Foo&#123;100&#125;);</code>会调用一次默认构造函数 + 一次<code>ctor</code>，但实际上在C++11之后，编译器发生了优化只是会调用一次默认构造函数，禁止了优化则会调用一次构造函数 + 一次<code>mtor</code>。输出如下：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta prompt_">$ </span><span class="language-bash">g++ reference.cc -o ref &amp;&amp; ./ref							<span class="comment"># 默认情况</span></span></span><br><span class="line">default</span><br><span class="line"><span class="meta prompt_">$ </span><span class="language-bash">g++ -fno-elide-constructors reference.cc -o ref &amp;&amp; ./ref	  <span class="comment"># 禁止编译器优化</span></span></span><br><span class="line">default</span><br><span class="line">mtor</span><br></pre></td></tr></table></figure>
+
+<p>说明，当模板参数<code>T</code>具有移动构造函数时，即便是按照值传递也会优先调用移动构造函数，那么这种情况下值传递性能也并没有发生损失。</p>
+<p>即使对于比较复杂的类型<code>std::string</code>，由于<code>std::string</code>也实现了移动构造函数，因此使用<code>std::string</code>来实例化<code>pass_by_value</code>函数也是一样的情况：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">std::string str&#123;<span class="string">&quot;hello Cpp&quot;</span>&#125;;			</span><br><span class="line"></span><br><span class="line"><span class="built_in">pass_by_value</span>(std::<span class="built_in">move</span>(str));				<span class="comment">// 默认优化；禁止优化则触发移动构造函数</span></span><br><span class="line"><span class="built_in">pass_by_value</span>(std::string&#123;<span class="string">&quot;pass_by_move&quot;</span>&#125;);	 <span class="comment">// 默认优化；禁止优化则触发移动构造函数</span></span><br><span class="line">std::cout&lt;&lt;str.<span class="built_in">length</span>()&lt;&lt;std::endl;			<span class="comment">// 输出 0 </span></span><br></pre></td></tr></table></figure>
+<ul>
+<li><p>对于纯右值<code>std::string&#123;&quot;pass_by_move&quot;&#125;</code>：传入<code>pass_value_by</code>函数时，无论是否开启优化，都不会产生性能损失。甚至在C++17中，强制实现优化，省去中间的移动构造函数，即不加 <code>-fno-elide-constructors</code> 编译标志都不会有移动构造的过程，仅一次默认构造函数，就类似上面<code>pass_by_value(Foo&#123;100&#125;);</code>输出。</p>
+</li>
+<li><p>对于已经存在的<code>std::string</code>对象<code>str</code>，如果确认不再使用<code>str</code>，则以<code>std::move(obj)</code>形式传入，告知编译器调用移动构造函数，因此也不会有性能损失。</p>
+</li>
+</ul>
+<p><strong>by the way</strong></p>
+<ul>
+<li><p><code>std::move(str)</code>之后<code>str</code>的值就处于未定义状态，不可再使用，除非再次初始化。</p>
+</li>
+<li><p>如果 <code>str</code> 有<code>const</code>修饰，经过<code>std::move</code>转换也无法触发移动构造函数。为什么？</p>
+<p>因为 <code>pass_by_value(std::string arg)</code>本质上就是如下一个初始化过程：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> std::string str_const &#123;<span class="string">&quot;hello Cpp&quot;</span>&#125;;</span><br><span class="line">std::string arg&#123;std::<span class="built_in">move</span>(str_const)&#125;;	</span><br></pre></td></tr></table></figure>
+<p>没有加上<code>const</code>修饰时，<code>static_cast</code>是可以将左值<code>str</code>转化为右值，触发移动构造函数。</p>
+<p>当加上<code>const</code>修饰时，<code>static_cast</code>就不管用了，因为这中间设计到了两个步骤：1）先将<code>const</code>修饰符去掉，这是<code>const_cast</code>的任务，不是<code>static_cast</code>的；2）才是将左值转换为右值。第一步就失败了。因此，加上const修饰时无法调用移动构造函数。</p>
+<p>进一步，尝试如下类型转换，直接查看编译器错误，会报错：*error: binding reference of type ‘std::string&amp;&amp;’ to ‘const std::string’*。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">std::string&amp;&amp; rv = std::<span class="built_in">move</span>(str_const);</span><br></pre></td></tr></table></figure>
+
+<p>但是如果你将鼠标放在<code>pass_by_value(std::move(str_const));</code>函数上，可以发现IDE显示推断出来的类型是<code>std::string</code>。这又是为什么呢？？？</p>
+<p>答案是类型退化，这是接下来<strong>类型退化</strong>知识。</p>
+</li>
+</ul>
+<p>上述总结，在模板函数以值传递时，只有一种情况会产生复制：若对象<code>obj</code>已经存在，再调用<code>pass_by_value(obj)</code>才会产生复制，那么有没有可以解决的办法，由调用者决定不复制呢？答案是 <code>pass_by_value(std::ref(obj))</code>。</p>
+<p>因此，在值传递时，调用者可以自主选择是否复制、移动，具有很大便利性。</p>
+<p><strong>类型退化</strong></p>
+<p>值传递还有一个重要特性，会导致参数类型<code>T</code>发生退化：</p>
+<ul>
+<li>C-style的裸数组、字符串常量会退化成指针</li>
+<li>变量的<code>const</code>和<code>volatile</code>修饰符会自动消失，指针变量除外。</li>
+<li><strong>引用会退化成普通类型</strong></li>
+</ul>
+<p>第二条也解释了为什么类型是<code>const std::string</code>的<code>str_const</code>传入<code>pass_by_value</code>函数后推断为<code>std::string</code>类型。</p>
+<p>现有如下的demo：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">   <span class="type">const</span> <span class="type">int</span>  a = <span class="number">10</span>;</span><br><span class="line">   <span class="type">const</span> <span class="type">char</span> b = <span class="string">&#x27;c&#x27;</span>;</span><br><span class="line">   <span class="type">const</span> <span class="type">int</span> array[] = &#123;<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>,<span class="number">4</span>&#125;;</span><br><span class="line">   <span class="type">const</span> <span class="type">char</span>* ch = <span class="string">&quot;Hello world&quot;</span>;</span><br><span class="line">   <span class="type">const</span> <span class="type">int</span>*  pa = &amp;a;</span><br><span class="line">   <span class="type">const</span> std::string&amp; str_const_ref = str_const;</span><br><span class="line"></span><br><span class="line"><span class="comment">// const 退化</span></span><br><span class="line">   <span class="built_in">pass_by_value</span>(a);	  <span class="comment">// 退化成：int</span></span><br><span class="line">   <span class="built_in">pass_by_value</span>(b);	  <span class="comment">// 退化成: char</span></span><br><span class="line">   <span class="comment">// 数组退化成指针</span></span><br><span class="line">   <span class="built_in">pass_by_value</span>(array); <span class="comment">// const int*</span></span><br><span class="line">   <span class="built_in">pass_by_value</span>(ch);    <span class="comment">// const char*</span></span><br><span class="line"><span class="comment">// 指针的const不退化</span></span><br><span class="line">   <span class="built_in">pass_by_value</span>(pa);    <span class="comment">// const int*</span></span><br><span class="line"><span class="comment">// 引用退化</span></span><br><span class="line">   <span class="built_in">pass_by_value</span>(str_const_ref);<span class="comment">// !!! 退化成：const std::string&amp; --&gt; std::string</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li><p><code>const</code>除了修饰指针，其余都会退化掉</p>
+<p>但是可以发现特列：如果<code>const</code>修饰裸数组是不会退化的，这是为啥？因为裸数组会退化成指针，<code>const</code>修饰指针不会退化，使得<code>const</code>修饰数组时就推导出<code>const T*</code></p>
+</li>
+<li><p>引用会退化成普通类型。</p>
+<p>即使是<code>const T&amp;</code>也会退化成<code>T</code></p>
+</li>
+</ul>
+<p>思考下参数退化会带来什么问题？</p>
+<h2 id="引用传递"><a href="#引用传递" class="headerlink" title="引用传递"></a>引用传递</h2><p>引用传递，与值传递则相反：</p>
+<ul>
+<li>任何情况下都不会造成copy</li>
+<li>不会造成模板参数类型退化</li>
+</ul>
+<p>下面对三种引用类型进行说明。</p>
+<h3 id="const-T"><a href="#const-T" class="headerlink" title="const T&amp;"></a>const T&amp;</h3><p><code>const T&amp;</code> 引用类型：既可以接受左值，也可以接受右值。</p>
+<p>假定存在<code>pass_by_const_ref</code>函数，参数<code>arg</code>是<code>const T&amp;</code>引用类型，在函数内部打印传入的<code>arg</code>对象地址：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_const_ref</span><span class="params">(<span class="type">const</span> T&amp; arg)</span> </span>&#123; </span><br><span class="line">    std::cout&lt;&lt;&amp;arg&lt;&lt;std::endl;	</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    Foo foo&#123;<span class="number">10</span>&#125;;					<span class="comment">// 调用构造函数</span></span><br><span class="line">    <span class="built_in">pass_by_const_ref</span>(foo);</span><br><span class="line">    <span class="built_in">pass_by_const_ref</span>(std::<span class="built_in">move</span>(foo));</span><br><span class="line">    <span class="built_in">pass_by_const_ref</span>(Foo&#123;<span class="number">100</span>&#125;);	 <span class="comment">// 调用构造函数</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>最终的输出打印如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ g++ reference.cc -o ref &amp;&amp; ./ref</span><br><span class="line">default	</span><br><span class="line">0x7fffd68902c0</span><br><span class="line">0x7fffd68902c0</span><br><span class="line">default</span><br><span class="line">0x7fffd68902c4</span><br></pre></td></tr></table></figure>
+
+<p>一共进行了两次构造函数，没有发生copy，符合预期。而且前两次调用<code>pass_by_const_ref</code>函数打印的地址都一致，是因为<code>arg</code>都是指向了<code>foo</code>，但是第三次调用打印的地址增加了4个字节，是因为临时对象<code>Foo&#123;100&#125;</code>和<code>foo</code>在同一个连续的栈空间中，而<code>Foo</code>类大小只有四个字节（只有一个<code>int</code>类型成员变量<code>num_</code>）。</p>
+<p>因此，<code>const T&amp;</code>引用类型，无论传入左值还是右值，都不会发生copy。</p>
+<p><strong>类型不退化</strong></p>
+<p>同样以值传递中退化，传入<code>pass_bt_const_ref</code>函数：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">  <span class="built_in">pass_by_const_ref</span>(str_const); <span class="comment">// const std::string&amp;</span></span><br><span class="line">  <span class="built_in">pass_by_const_ref</span>(a);         <span class="comment">// const int&amp; </span></span><br><span class="line">  <span class="built_in">pass_by_const_ref</span>(b);         <span class="comment">// const char&amp; </span></span><br><span class="line">  <span class="built_in">pass_by_const_ref</span>(array);     <span class="comment">// const int(&amp;)[4]</span></span><br><span class="line">  <span class="built_in">pass_by_const_ref</span>(ch);        <span class="comment">// const char* const &amp;</span></span><br><span class="line">  <span class="built_in">pass_by_const_ref</span>(pa);        <span class="comment">// const int* </span></span><br><span class="line"><span class="built_in">pass_by_const_ref</span>(str_ref_const); <span class="comment">// const std::string&amp;</span></span><br></pre></td></tr></table></figure>
+<p>分析如下：</p>
+<ul>
+<li><code>pass_by_const_ref</code>函数，传入<code>const std::string</code>类型的对象<code>str_const</code>时，<code>arg</code>推理为<code>const std::string&amp;</code>，没有发生类型退化。其中，<code>T</code>被推理为<code>std::string</code>，<code>const</code>由于出现在<code>pass_by_const_ref</code>函数的模板参数中，因此不会出现在<code>T</code>中；</li>
+<li><code>array</code>也是被推断为<strong>固定长度类型</strong>的<code>const int[&amp;][4]</code>，而不是单纯的指针<code>const int*</code>；</li>
+<li><code>ch</code>被推断为 <code>const char* const&amp;</code>：<code>ch</code>原本类型是<code>const char*</code>，表示无法修改<code>ch</code>指向的字符值，但是可以修改<code>ch</code>值，即可以执行<code>++ch</code>这类操作，而<code>pass_by_const_ref</code>函数给<code>ch</code>加上了一个<code>const</code>修饰，使得<code>ch</code>本身的值也无法修改，即<code>const char* const</code>。</li>
+</ul>
+<p>因此，<code>const T&amp;</code>，不会退化模板参数T的类型，反而会加强没有const修饰的输入参数的类型。</p>
+<p><strong>by the way</strong></p>
+<p>即使<code>pass_by_const_ref</code>函数，可以接受常量，比如<code>pass_by_const_ref(Foo&#123;100&#125;)</code>，但是如果<code>pass_by_const_ref</code>内部如下，最终触发的也是复制构造函数。</p>
+<p>或者，<code>arg</code>被用于其他函数<code>xxxx_func(arg)</code>的参数，也是触发<code>const Foo&amp;</code>版本，而不是<code>Foo&amp;&amp;</code>函数版本。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_const_ref</span><span class="params">(<span class="type">const</span> T&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="function">Foo <span class="title">foo</span><span class="params">(arg)</span></span>;</span><br><span class="line">    <span class="comment">// xxx_func(arg);</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="T"><a href="#T" class="headerlink" title="T&amp;"></a>T&amp;</h3><p>假定有<code>pass_by_lv_ref</code>函数，以<code>T&amp;</code>为模板参数类型：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_lv_ref</span><span class="params">(T&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="comment">//...   </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>T&amp;</code> 与 <code>const T&amp;</code>区别有两点：</p>
+<ol>
+<li><p><code>pass_by_lv_ref</code>函数可以修改<code>arg</code>参数，并且修改后的<code>arg</code>值可以传递给<code>pass_by_lv_ref</code>函数的调用者，避免了return返回。</p>
+</li>
+<li><p><code>T&amp;</code> 不能接受右值，但如果先以<code>const T</code>类型的变量<code>var</code>指向一个<code>T</code>类型的常量，再把<code>var</code>传递给<code>pass_by_ref</code>函数是允许的。</p>
+<p> 如果直接给<code>pass_by_ref</code>函数传递右值，则报错：<em>error: cannot bind non-const lvalue reference of type ‘std::string&amp;’ to an rvalue of type ‘std::string’</em>。 </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    <span class="built_in">pass_by_lv_ref</span>(std::string&#123;<span class="string">&quot;temp value&quot;</span>&#125;);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>如果传入 <code>pass_by_lv_ref</code>函数的参数就带有<code>const</code>修饰，那么将会把<code>arg</code>推导为<code>const</code>类型引用，且这个<code>const</code>修饰符是出现在<code>T</code>中。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">pass_by_lv_ref</span>(str_const);			<span class="comment">// 推导为：const std::string&amp;</span></span><br><span class="line"><span class="built_in">pass_by_lv_ref</span>(std::<span class="built_in">move</span>(str_const));  <span class="comment">// 推导为：const std::string&amp;</span></span><br></pre></td></tr></table></figure>
+
+<p><font color="red">但是!!!</font> <code>pass_by_lv_ref</code>函数内部默认<code>arg</code>是可以修改的。当<code>pass_by_lv_ref</code>函数接受了const类型变量，<code>arg</code>被推导为<code>const T&amp;</code>，变成只能读，那么就会导致一个问题：如果在<code>pass_by_lv_ref</code>函数内部修改<code>str_const</code>、<code>ch</code>等const修饰的传入参数，将会编译报错。</p>
+<p>怎么办？</p>
+<p> 在C++20之前，使用<code>std::enable_if_t</code>，直接禁止给<code>pass_by_lv_ref</code>函数传入const类型变量。此时，给 <code>pass_by_lv_ref</code> 函数传递const类型变量，在IDE中这个函数下方出现红色波浪线，提示不存在这个函数，就不需要等到编译期才发现。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T, <span class="keyword">typename</span> = std::<span class="type">enable_if_t</span>&lt; !std::is_const&lt;T&gt;::value&gt;&gt;</span><br><span class="line"><span class="type">void</span> <span class="built_in">pass_by_lv_ref</span>(T&amp; arg) &#123; </span><br><span class="line"> <span class="comment">//...  </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ol>
+<h3 id="T-1"><a href="#T-1" class="headerlink" title="T&amp;&amp;"></a>T&amp;&amp;</h3><p><code>T&amp;&amp;</code>，即右值引用模板化，此时的类型推导原则是：<strong>引用折叠</strong>。</p>
+<p>假定有<code>pass_by_perfect_ref</code>函数，如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_perfect_ref</span><span class="params">(T&amp;&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="comment">// ... std::forward&lt;T&amp;&amp;&gt;(arg)</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>依赖于引用折叠，<code>pass_by_perfect_ref</code>函数能推导出任意类型的输入参数。此时在<code>pass_by_perfect_ref</code>函数内部就能知道传入的参数是什么类型：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">pass_by_perfect_ref</span>(str);           <span class="comment">// 左值推导为：string&amp;，</span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(str_const);     <span class="comment">// const 左值：const string&amp;    </span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(str_ref_const); <span class="comment">// const 左值：const string&amp;    </span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(std::string&#123;<span class="string">&quot;hello perfect_ref&quot;</span>&#125;); <span class="comment">// 右值：std::string&amp;&amp; </span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(std::<span class="built_in">move</span>(str));                   <span class="comment">// 右值：std::string&amp;&amp;</span></span><br></pre></td></tr></table></figure>
+
+<p>一般地，当模板函数使用<code>T&amp;&amp;</code>作为参数类型时，函数内部需使用<code>std::forward&lt;T&amp;&amp;&gt;(arg)</code>来转发输入参数，目的就是为了保持住输入参数的原来类型。</p>
+<p>下面先讲解下<code>forward</code>函数：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 用于接收 const T&amp;、T&amp;</span></span><br><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="keyword">constexpr</span> T&amp;&amp; <span class="title">forward</span><span class="params">(<span class="keyword">typename</span> std::remove_reference&lt;T&gt;::type&amp; <span class="type">__t</span>)</span> <span class="keyword">noexcept</span> </span>&#123; </span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;T&amp;&amp;&gt;(<span class="type">__t</span>); </span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 用于接收 T&amp;&amp;</span></span><br><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="keyword">constexpr</span> T&amp;&amp; <span class="title">forward</span><span class="params">(<span class="keyword">typename</span> std::remove_reference&lt;T&gt;::type&amp;&amp; <span class="type">__t</span>)</span> <span class="keyword">noexcept</span> </span>&#123;</span><br><span class="line">    <span class="built_in">static_assert</span>(!std::is_lvalue_reference&lt;T&gt;::value, </span><br><span class="line">                <span class="string">&quot;template argument substituting _Tp is an lvalue reference type&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;_Tp&amp;&amp;&gt;(<span class="type">__t</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li><p>当<code>forward</code>函数的输入参数是 <code>const T&amp;</code>类型时，</p>
+<ul>
+<li><code>std::remove_reference</code>函数会消去<code>T</code>的引用，变成<code>const T</code>，那么<code>forward</code>函数的<code>__t</code>类型即 <code>const T&amp;</code></li>
+<li>再经过<code>static_cast&lt;const T&amp;&amp;&amp;&gt;(_t)</code>，其中目的类型是<code>const T&amp;&amp;&amp;</code>，经引用折叠变成<code>const T&amp;</code></li>
+</ul>
+<p>因此，当输入类型是<code>const T&amp;</code>时，输出还是这个类型</p>
+</li>
+<li><p>当<code>forward</code>函数的输入是<code>T&amp;</code>类型时，分析同上，输出还是<code>T&amp;</code></p>
+</li>
+<li><p>当<code>forward</code>函数的输入是<code>T</code>或者<code>T&amp;&amp;</code>类型时，经过<code>std::remove_reference</code>函数都会变成<code>T</code>类型，再经过<code>static_cast&lt;T&amp;&amp;&gt;</code>转换，都变成<code>T&amp;&amp;</code>。</p>
+<p>右值传递到<code>pass_by_perfect_ref</code>函数时，<code>arg</code>指向的是右值，但<code>arg</code>本身是左值，如果不经过<code>std::forward</code>转换，<code>arg</code>将以左值角色参与后续操作，违背了调用者意图。</p>
+</li>
+</ol>
+<p>因此<code>std::forward</code>函数，搭配模板使用时，比如上面的 <code>pass_by_perfect_ref</code> 函数，<code>arg</code>无论传递给<code>std::forward</code>什么类型，<code>std::forward</code>都能输出相同的类型。因此，<code>std::forward&lt;T&amp;&amp;&gt;(arg)</code>可以触发以<code>arg</code>对象为参数的最合适、正确的的函数，或者构造函数：</p>
+<ul>
+<li>如果<code>arg</code>是作为其他函数的参数，那么<code>std::forward&lt;T&amp;&amp;&gt;(arg)</code>则是为了调用该函数的正确模板</li>
+<li>如果<code>arg</code>是作为同类型的构造函数的参数，那么<code>std::forward&lt;T&amp;&amp;&gt;(arg)</code>就是为了调用正确的构造函数版本。</li>
+</ul>
+<p>因此，对于下面的demo，<code>pass_by_perfect_ref</code>能正确推断出输入参数<code>arg</code>的类型，将<code>arg</code>传给<code>std::forward</code>时，仍然能保持原类型，这就保证了合理的调用后续函数。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">pass_by_perfect_ref</span>(str_const); <span class="comment">// const string&amp;    </span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(str);       <span class="comment">// string&amp;</span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(std::string&#123;<span class="string">&quot;hello perfeect ref&quot;</span>&#125;); <span class="comment">// std::string&amp;&amp; </span></span><br></pre></td></tr></table></figure>
+
+<p><strong>by the way</strong></p>
+<p>提一下，<code>std::forward</code>与<code>std::move</code>的区别，再理解下<code>std:forward</code>的完美转发的含义。</p>
+<p>有<code>pass_by_perfect_ref</code>和<code>pass_by_move_ref</code>两个函数，内部分别是调用<code>std::forward</code>和<code>std::move</code>进行转发后，再用于构造<code>Foo</code>对象。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_perfect_ref</span><span class="params">(T&amp;&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="function">Foo <span class="title">foo</span><span class="params">(std::forward&lt;T&amp;&amp;&gt;(arg))</span></span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_move_ref</span><span class="params">(T&amp;&amp; arg)</span> </span>&#123; </span><br><span class="line">    <span class="function">Foo <span class="title">foo</span><span class="params">(std::move(arg))</span></span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>对于下面的函数调用，都是将左值<code>foo</code>作为传入参数：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    Foo foo&#123;<span class="number">10</span>&#125;;</span><br><span class="line">    </span><br><span class="line">    <span class="built_in">pass_by_perfect_ref</span>(foo);</span><br><span class="line">    <span class="built_in">pass_by_move_ref</span>(foo);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>输出却不同：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ g++ reference.cc -o ref &amp;&amp; ./ref</span><br><span class="line">default</span><br><span class="line">ctor</span><br><span class="line">mtor</span><br></pre></td></tr></table></figure>
+
+<p><code>std::forward&lt;T&amp;&amp;&gt;(arg)</code> 输出后<code>arg</code>仍然是左值角色，最后调用的是<code>Foo</code>的复制构造函数，这也符合调用<code>pass_by_perfect_ref</code>函数调用者的预期，因为自己传入的就是<code>foo</code>，就是想要触发<code>ctor</code>。</p>
+<p><code>std::move(arg)</code>输出后<code>arg</code>变成右值角色，最后调用的是<code>Foo</code>的移动构造函数，这会导致<code>pass_by_move_ref</code>函数的调用者传入的<code>foo</code>对象处于未定义状态，这符合调用者的预期吗？明显不是。</p>
+<p>对于调用者而言，是否要触发移动构造函数，应该由于调用调用者自己掌控：</p>
+<ul>
+<li>想触发复制构造函数时，就如下（1）调用</li>
+<li>想触发移动构造函数时，就如下（2）调用</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">pass_by_perfect_ref</span>(foo);	<span class="comment">// (1)</span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(std::<span class="built_in">move</span>(foo)); <span class="comment">// (2)</span></span><br></pre></td></tr></table></figure>
+
+<p>这也就是经常各个书籍上看到将<code>std::move</code>称为无条件转发，而<code>std::forward</code>是完美转发的理由。</p>
+<p><strong>by the way, Again !!!</strong></p>
+<p>还记得在本文开篇说，模板函数不选择值传递的四种情况之一是：<code>转发引用(T&amp;&amp;)</code>。现在理解了一点没有？</p>
+<p>因为在<code>T&amp;&amp;</code>下，<code>pass_by_perfect_ref</code>可以推导出任意类型的输入参数，调用合适的函数版本。这一过程像值传递一样，完全可以由调用者掌握。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 调用者自己可以选择</span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(foo);</span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(std::<span class="built_in">move</span>(foo));</span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(FOO&#123;<span class="number">10</span>&#125;);		 </span><br></pre></td></tr></table></figure>
+
+<p><strong>T&amp;&amp;也不会退化</strong></p>
+<p>自然，<code>T&amp;&amp;</code>引用也不会发生类型退化，传入的裸数组参数<code>arg</code>是什么类型就会变成相应类型的引用，不会加强也不会退化，类似于<code>T&amp;</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">pass_by_perfect_ref</span>(<span class="string">&quot;hello perfect_ref&quot;</span>);  <span class="comment">// const char (&amp;rhs)[18]</span></span><br><span class="line"><span class="built_in">pass_by_perfect_ref</span>(array);                <span class="comment">// const int (&amp;rhs)[4]</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>T&amp;&amp;的缺点</strong></p>
+<p><code>T&amp;&amp;</code>就当真那么perfect？</p>
+<p>如果你在 <code>pass_by_perfect_ref</code> 函数内部使用<code>T</code>定义一个对象，那么当 <code>pass_by_perfect_ref</code>函数传入一个左值时，<code>T</code>此时会被推断为<code>const T&amp;</code>或者<code>T&amp;</code>，由于引用未初始化而报错：<strong>error: ‘obj’ declared as reference but not initialized</strong>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T&gt;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">pass_by_perfect_ref</span><span class="params">(T&amp;&amp; arg)</span> </span>&#123; </span><br><span class="line">    T obj;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>本文，主要讲解了值传递和引用传递的优缺点，但还有一个遗留问题：当模板函数的传入参数类型是<strong>字符串常量和裸数组</strong>时，该如何更好地处理？</p>
+<ul>
+<li>值传递：字符串常量&#x2F;数组会退化成指针，那如果想判断数组是否相等怎么办？</li>
+<li>引用传递：字符串&#x2F;数组会被推导出固定长度类型，比如上面的 <code>const int (&amp;rhs)[4]</code>，模板的灵活性不就丧失了？</li>
+</ul>
+<p>敬请期待下一次更新，奥里给！！！</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%80%BC%E4%BC%A0%E9%80%92"><span class="toc-number">1.</span> <span class="toc-text">值传递</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%BC%95%E7%94%A8%E4%BC%A0%E9%80%92"><span class="toc-number">2.</span> <span class="toc-text">引用传递</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#const-T"><span class="toc-number">2.1.</span> <span class="toc-text">const T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T"><span class="toc-number">2.2.</span> <span class="toc-text">T&amp;</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#T-1"><span class="toc-number">2.3.</span> <span class="toc-text">T&amp;&amp;</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/04/C++/reference_2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/04/C++/reference_2/&text=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/04/C++/reference_2/&is_video=false&description=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=再探值与引用：函数模板的类型推导规则辨析&body=Check out this article: https://szza.github.io/2021/03/04/C++/reference_2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/04/C++/reference_2/&title=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/04/C++/reference_2/&name=再探值与引用：函数模板的类型推导规则辨析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/04/C++/reference_2/&t=再探值与引用：函数模板的类型推导规则辨析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

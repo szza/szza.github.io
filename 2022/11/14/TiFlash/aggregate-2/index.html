@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="Aggregate各个线程的聚合完毕后，进入线程间聚合，  如果聚合的数据没有超过阈值，不会落盘到 disk,在内存中完成 此时聚合各个线程据的函数入口 mergeAndConvertToBlocks; 如果带聚合的数据过多超过阈值，则需要落盘，此时进入 MergingAggregatedMemoryEfficientBlockInputStream  下面以不落盘的情况为主。 123456789">
+<meta property="og:type" content="article">
+<meta property="og:title" content="tiflash: 多线程二阶段 Aggregate 实现(2)">
+<meta property="og:url" content="https://szza.github.io/2022/11/14/TiFlash/aggregate-2/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="Aggregate各个线程的聚合完毕后，进入线程间聚合，  如果聚合的数据没有超过阈值，不会落盘到 disk,在内存中完成 此时聚合各个线程据的函数入口 mergeAndConvertToBlocks; 如果带聚合的数据过多超过阈值，则需要落盘，此时进入 MergingAggregatedMemoryEfficientBlockInputStream  下面以不落盘的情况为主。 123456789">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-11-14T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-02T04:46:52.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="tidb-v6.1">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>tiflash: 多线程二阶段 Aggregate 实现(2)</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/04/02/Paper/Morsel-Driven-Parallelism/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/11/11/TiFlash/aggregate-1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&text=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&is_video=false&description=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tiflash: 多线程二阶段 Aggregate 实现(2)&body=Check out this article: https://szza.github.io/2022/11/14/TiFlash/aggregate-2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&name=tiflash: 多线程二阶段 Aggregate 实现(2)&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&t=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Aggregate"><span class="toc-number">1.</span> <span class="toc-text">Aggregate</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggregator-mergeAndConvertToBlocks"><span class="toc-number">1.1.</span> <span class="toc-text">Aggregator::mergeAndConvertToBlocks</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MergingAndConvertingBlockInputStream"><span class="toc-number">1.2.</span> <span class="toc-text">MergingAndConvertingBlockInputStream</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-mergeWithoutKeyDataImpl"><span class="toc-number">1.2.1.</span> <span class="toc-text">Aggregator::mergeWithoutKeyDataImpl</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-mergeSingleLevelDataImpl"><span class="toc-number">1.2.2.</span> <span class="toc-text">Aggregator::mergeSingleLevelDataImpl</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-mergeDataImpl"><span class="toc-number">1.2.3.</span> <span class="toc-text">Aggregator::mergeDataImpl</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-convertToBlockImpl"><span class="toc-number">1.2.4.</span> <span class="toc-text">Aggregator::convertToBlockImpl</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#Aggregator-convertToBlockImplFinal"><span class="toc-number">1.2.4.1.</span> <span class="toc-text">Aggregator::convertToBlockImplFinal</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#scheduleThreadForNextBucket"><span class="toc-number">1.2.4.2.</span> <span class="toc-text">scheduleThreadForNextBucket</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#TWO-Level"><span class="toc-number">1.3.</span> <span class="toc-text">TWO-Level</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        tiflash: 多线程二阶段 Aggregate 实现(2)
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-11-14T02:00:01.000Z" itemprop="datePublished">2022-11-14</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/tidb-v6-1/" rel="tag">tidb-v6.1</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="Aggregate"><a href="#Aggregate" class="headerlink" title="Aggregate"></a>Aggregate</h2><p>各个线程的聚合完毕后，进入线程间聚合，</p>
+<ul>
+<li>如果聚合的数据没有超过阈值，不会落盘到 disk,在内存中完成 此时聚合各个线程据的函数入口 <code>mergeAndConvertToBlocks</code>;</li>
+<li>如果带聚合的数据过多超过阈值，则需要落盘，此时进入 <code>MergingAggregatedMemoryEfficientBlockInputStream</code></li>
+</ul>
+<p>下面以不落盘的情况为主。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">    <span class="function">Block <span class="title">ParallelAggregatingBlockInputStream::readImpl</span><span class="params">()</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!executed)</span><br><span class="line">    &#123;</span><br><span class="line">        Aggregator::CancellationHook hook = [&amp;]() &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="keyword">this</span>-&gt;<span class="built_in">isCancelled</span>();</span><br><span class="line">        &#125;;</span><br><span class="line">        aggregator.<span class="built_in">setCancellationHook</span>(hook);</span><br><span class="line"></span><br><span class="line">        <span class="built_in">execute</span>(); <span class="comment">// 各个线程完成聚合</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">isCancelledOrThrowIfKilled</span>())</span><br><span class="line">            <span class="keyword">return</span> &#123;&#125;;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!aggregator.<span class="built_in">hasTemporaryFiles</span>())</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">/** If all partially-aggregated data is in RAM, then merge them in parallel, also in RAM.</span></span><br><span class="line"><span class="comment">                */</span></span><br><span class="line">            impl = aggregator.<span class="built_in">mergeAndConvertToBlocks</span>(many_data, <span class="keyword">final</span>, max_threads);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Aggregator-mergeAndConvertToBlocks"><a href="#Aggregator-mergeAndConvertToBlocks" class="headerlink" title="Aggregator::mergeAndConvertToBlocks"></a>Aggregator::mergeAndConvertToBlocks</h3><p>Of course, <code>mergeAndConvertToBlocks</code> 输入的是各个线程的<code>variant</code>，最终的目的是输出一个 block 给下一个 <code>IBlockInputStream</code>, 这是由内部的<br>&#96;&#96;完成。</p>
+<p>先把 <code>data_variants</code> 中为空的部分排除，因为多线程读取输入的时候可能某些线程没有读取到有效数据，得到的有效数据是<code>non_empty_data</code>， 得到 <code>non_empty_data</code> 之后:</p>
+<ul>
+<li>又基于 <code>vaiant</code> 大小对variant进行排序，大小更大说明其内部的key最多，聚合的时候内存allocation就更少，聚合就更高效。(todo 验证)</li>
+<li>是否需要转化为二阶段，这个取决于是否存在某个<code>variant</code> 是 <code>two-level</code>，这由线程初始化<code>Aggregator</code> 时的 <code>Aggregator::chooseAggregationMethod</code> 函数确定。</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">std::unique_ptr&lt;IBlockInputStream&gt; <span class="title">Aggregator::mergeAndConvertToBlocks</span><span class="params">(ManyAggregatedDataVariants &amp; data_variants,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                                       <span class="type">bool</span> <span class="keyword">final</span>, <span class="type">size_t</span> max_threads)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (data_variants.<span class="built_in">empty</span>())</span><br><span class="line">        <span class="keyword">throw</span> <span class="built_in">Exception</span>(<span class="string">&quot;Empty data passed to Aggregator::mergeAndConvertToBlocks.&quot;</span>, ErrorCodes::EMPTY_DATA_PASSED);</span><br><span class="line"></span><br><span class="line">    <span class="built_in">LOG_FMT_TRACE</span>(log, <span class="string">&quot;Merging aggregated data&quot;</span>);</span><br><span class="line"></span><br><span class="line">    ManyAggregatedDataVariants non_empty_data;</span><br><span class="line">    non_empty_data.<span class="built_in">reserve</span>(data_variants.<span class="built_in">size</span>());</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> &amp; data : data_variants)</span><br><span class="line">        <span class="keyword">if</span> (!data-&gt;<span class="built_in">empty</span>())</span><br><span class="line">            non_empty_data.<span class="built_in">push_back</span>(data);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (non_empty_data.<span class="built_in">empty</span>())</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;NullBlockInputStream&gt;(<span class="built_in">getHeader</span>(<span class="keyword">final</span>));</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (non_empty_data.<span class="built_in">size</span>() &gt; <span class="number">1</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">/// Sort the states in descending order so that the merge is more efficient (since all states are merged into the first).</span></span><br><span class="line">        std::<span class="built_in">sort</span>(non_empty_data.<span class="built_in">begin</span>(), non_empty_data.<span class="built_in">end</span>(),</span><br><span class="line">                  [](<span class="type">const</span> AggregatedDataVariantsPtr &amp; lhs, <span class="type">const</span> AggregatedDataVariantsPtr &amp; rhs)</span><br><span class="line">                  &#123; </span><br><span class="line">                    <span class="keyword">return</span> lhs-&gt;<span class="built_in">sizeWithoutOverflowRow</span>() &gt; rhs-&gt;<span class="built_in">sizeWithoutOverflowRow</span>(); </span><br><span class="line">                  &#125;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/// If at least one of the options is two-level, then convert all the options into two-level ones, if there are not such.</span></span><br><span class="line">    <span class="comment">/// Note - perhaps it would be more optimal not to convert single-level versions before the merge, but merge them separately, at the end.</span></span><br><span class="line">    <span class="type">bool</span> has_at_least_one_two_level = <span class="literal">false</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span> &amp; variant : non_empty_data)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">if</span> (variant-&gt;<span class="built_in">isTwoLevel</span>())</span><br><span class="line">        &#123;</span><br><span class="line">            has_at_least_one_two_level = <span class="literal">true</span>;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (has_at_least_one_two_level)</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> &amp; variant : non_empty_data)</span><br><span class="line">        <span class="keyword">if</span> (!variant-&gt;<span class="built_in">isTwoLevel</span>())</span><br><span class="line">            variant-&gt;<span class="built_in">convertToTwoLevel</span>();</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>接着上面，剩余代码如下:</p>
+<ul>
+<li><code>non_empty_data[0]</code> 存储着最终的聚合结果，即如果<code>non_empty_data[1..N]</code> 中如果存在和<code>non_empty_data[0]</code> 中相同的key，则将其结果都聚合到<code>non_empty_data[0]</code>,<br>因此，<code>non_empty_data[0].aggregates_pools</code>就以此保存着后续每个 <code>variant</code> 的<code>aaggregates_pools</code>，其实就是将整个 <code>non_empty_data</code> 的 <code>aggregates_pools</code><br>flat到 <code>non_empty_data[0].aggregates_pools</code>。</li>
+<li>进入 <code>MergingAndConvertingBlockInputStream</code>，进行聚合</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">std::unique_ptr&lt;IBlockInputStream&gt; <span class="title">Aggregator::mergeAndConvertToBlocks</span><span class="params">(ManyAggregatedDataVariants &amp; data_variants,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                                       <span class="type">bool</span> <span class="keyword">final</span>, <span class="type">size_t</span> max_threads)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    AggregatedDataVariantsPtr &amp; first = non_empty_data[<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">1</span>, size = non_empty_data.<span class="built_in">size</span>(); i &lt; size; ++i)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">if</span> (first-&gt;type != non_empty_data[i]-&gt;type)</span><br><span class="line">            <span class="keyword">throw</span> <span class="built_in">Exception</span>(<span class="string">&quot;Cannot merge different aggregated data variants.&quot;</span>,</span><br><span class="line">                            ErrorCodes::CANNOT_MERGE_DIFFERENT_AGGREGATED_DATA_VARIANTS);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/** Elements from the remaining sets can be moved to the first data set.</span></span><br><span class="line"><span class="comment">          * Therefore, it must own all the arenas of all other sets.</span></span><br><span class="line"><span class="comment">          */</span></span><br><span class="line">        first-&gt;aggregates_pools.<span class="built_in">insert</span>(first-&gt;aggregates_pools.<span class="built_in">end</span>(),</span><br><span class="line">                                       non_empty_data[i]-&gt;aggregates_pools.<span class="built_in">begin</span>(),</span><br><span class="line">                                       non_empty_data[i]-&gt;aggregates_pools.<span class="built_in">end</span>());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;MergingAndConvertingBlockInputStream&gt;(*<span class="keyword">this</span>, non_empty_data, <span class="keyword">final</span>, max_threads);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="MergingAndConvertingBlockInputStream"><a href="#MergingAndConvertingBlockInputStream" class="headerlink" title="MergingAndConvertingBlockInputStream"></a>MergingAndConvertingBlockInputStream</h3><p>按照惯例，先从没有 key 的特殊聚合场景来，实现逻辑：</p>
+<ul>
+<li>聚合: 在 <code>mergeWithoutKeyDataImpl</code> 函数中完成各个线程variant的聚合</li>
+<li>生成block: 在 <code>prepareBlockAndFillWithoutKey</code> 中将聚合过后的数据转换为 block。</li>
+</ul>
+<p>下面主要讲解 <code>mergeWithoutKeyDataImpl</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Block <span class="title">MergingAndConvertingBlockInputStream::readImpl</span><span class="params">()</span> <span class="keyword">override</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (data.<span class="built_in">empty</span>())</span><br><span class="line">        <span class="keyword">return</span> &#123;&#125;;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (current_bucket_num &gt;= NUM_BUCKETS)</span><br><span class="line">        <span class="keyword">return</span> &#123;&#125;;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">FAIL_POINT_TRIGGER_EXCEPTION</span>(FailPoints::random_aggregate_merge_failpoint);</span><br><span class="line"></span><br><span class="line">    AggregatedDataVariantsPtr &amp; first = data[<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (current_bucket_num == <span class="number">-1</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        ++current_bucket_num;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (first-&gt;type == AggregatedDataVariants::Type::without_key || aggregator.params.overflow_row)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">// |data| is Intermediate buffer to save result.</span></span><br><span class="line">            <span class="comment">// Next, wo need to move |data| to block adn return it</span></span><br><span class="line">            aggregator.<span class="built_in">mergeWithoutKeyDataImpl</span>(data);</span><br><span class="line">            <span class="keyword">return</span> aggregator.<span class="built_in">prepareBlockAndFillWithoutKey</span>(</span><br><span class="line">                *first,</span><br><span class="line">                <span class="keyword">final</span>,</span><br><span class="line">                first-&gt;type != AggregatedDataVariants::Type::without_key);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Aggregator-mergeWithoutKeyDataImpl"><a href="#Aggregator-mergeWithoutKeyDataImpl" class="headerlink" title="Aggregator::mergeWithoutKeyDataImpl"></a>Aggregator::mergeWithoutKeyDataImpl</h4><ul>
+<li>使用 <code>merge</code> 将 <code>non_empty_data[1..N]</code> 的数据merge到 <code>non_empty_data[0]</code>中</li>
+<li>merge完，就调用 <code>destroy</code> 函数调用<code>non_empty_data[1..N]</code> 的 <code>ColumnFunc</code> 的析构函数，析构该内存上的对象，但是内存本身没有free, 便于后续复用。<br>最终聚合的结果就存储在 <code>non_empty_data[0]</code></li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> NO_INLINE <span class="title">Aggregator::mergeWithoutKeyDataImpl</span><span class="params">(ManyAggregatedDataVariants &amp; non_empty_data)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    AggregatedDataVariantsPtr &amp; res = non_empty_data[<span class="number">0</span>];</span><br><span class="line"></span><br><span class="line">    <span class="comment">/// We merge all aggregation results to the first.</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> result_num = <span class="number">1</span>, size = non_empty_data.<span class="built_in">size</span>(); result_num &lt; size; ++result_num)</span><br><span class="line">    &#123;</span><br><span class="line">        AggregatedDataWithoutKey &amp; res_data = res-&gt;without_key;</span><br><span class="line">        AggregatedDataWithoutKey &amp; current_data = non_empty_data[result_num]-&gt;without_key;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; params.aggregates_size; ++i)</span><br><span class="line">            aggregate_functions[i]-&gt;<span class="built_in">merge</span>(res_data + offsets_of_aggregate_states[i],</span><br><span class="line">                                          current_data + offsets_of_aggregate_states[i],</span><br><span class="line">                                          res-&gt;aggregates_pool);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; params.aggregates_size; ++i)</span><br><span class="line">            aggregate_functions[i]-&gt;<span class="built_in">destroy</span>(current_data + offsets_of_aggregate_states[i]);</span><br><span class="line"></span><br><span class="line">        current_data = <span class="literal">nullptr</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>注意，<code>IAggregateFunction::merge</code> 是合并同类的数据，<code>IAggregateFunction::addBatch</code> 是用来构建 data base。</p>
+<h4 id="Aggregator-mergeSingleLevelDataImpl"><a href="#Aggregator-mergeSingleLevelDataImpl" class="headerlink" title="Aggregator::mergeSingleLevelDataImpl"></a>Aggregator::mergeSingleLevelDataImpl</h4><p>下面来看单阶段聚合实现。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Method&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> NO_INLINE <span class="title">Aggregator::mergeSingleLevelDataImpl</span><span class="params">(ManyAggregatedDataVariants &amp; non_empty_data)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    AggregatedDataVariantsPtr &amp; res = non_empty_data[<span class="number">0</span>];</span><br><span class="line">    <span class="type">bool</span> no_more_keys = <span class="literal">false</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/// We merge all aggregation results to the first.</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> result_num = <span class="number">1</span>, size = non_empty_data.<span class="built_in">size</span>(); result_num &lt; size; ++result_num)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">if</span> (!<span class="built_in">checkLimits</span>(res-&gt;<span class="built_in">sizeWithoutOverflowRow</span>(), no_more_keys))</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">        AggregatedDataVariants &amp; current = *non_empty_data[result_num];</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!no_more_keys)</span><br><span class="line">            <span class="built_in">mergeDataImpl</span>&lt;Method&gt;(</span><br><span class="line">                <span class="built_in">getDataVariant</span>&lt;Method&gt;(*res).data,</span><br><span class="line">                <span class="built_in">getDataVariant</span>&lt;Method&gt;(current).data,</span><br><span class="line">                res-&gt;aggregates_pool);</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (res-&gt;without_key)</span><br><span class="line">            <span class="built_in">mergeDataNoMoreKeysImpl</span>&lt;Method&gt;(</span><br><span class="line">                <span class="built_in">getDataVariant</span>&lt;Method&gt;(*res).data,</span><br><span class="line">                res-&gt;without_key,</span><br><span class="line">                <span class="built_in">getDataVariant</span>&lt;Method&gt;(current).data,</span><br><span class="line">                res-&gt;aggregates_pool);</span><br><span class="line">        <span class="keyword">else</span></span><br><span class="line">            <span class="built_in">mergeDataOnlyExistingKeysImpl</span>&lt;Method&gt;(</span><br><span class="line">                <span class="built_in">getDataVariant</span>&lt;Method&gt;(*res).data,</span><br><span class="line">                <span class="built_in">getDataVariant</span>&lt;Method&gt;(current).data,</span><br><span class="line">                res-&gt;aggregates_pool);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/// `current` will not destroy the states of aggregate functions in the destructor</span></span><br><span class="line">        current.aggregator = <span class="literal">nullptr</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>注意：<code>getDataVariant</code> 是将单线程聚合阶段的hashtable给保存起来了，然后现在使用 <code>getDataVariant</code> 给取出来&#96;</p>
+<h4 id="Aggregator-mergeDataImpl"><a href="#Aggregator-mergeDataImpl" class="headerlink" title="Aggregator::mergeDataImpl"></a>Aggregator::mergeDataImpl</h4><p>这是正常情况下的实现。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Method, <span class="keyword">typename</span> HashTable&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> NO_INLINE <span class="title">Aggregator::mergeDataImpl</span><span class="params">(HashTable &amp; table_dst, HashTable &amp; table_src, Arena * arena)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    table_src.<span class="built_in">mergeToViaEmplace</span>(table_dst,</span><br><span class="line">                                [&amp;](AggregateDataPtr &amp; __restrict dst, AggregateDataPtr &amp; __restrict src, <span class="type">bool</span> inserted) &#123;</span><br><span class="line">                                    <span class="keyword">if</span> (!inserted)</span><br><span class="line">                                    &#123;</span><br><span class="line">                                        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; params.aggregates_size; ++i)</span><br><span class="line">                                            aggregate_functions[i]-&gt;<span class="built_in">merge</span>(</span><br><span class="line">                                                dst + offsets_of_aggregate_states[i],</span><br><span class="line">                                                src + offsets_of_aggregate_states[i],</span><br><span class="line">                                                arena);</span><br><span class="line"></span><br><span class="line">                                        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; params.aggregates_size; ++i)</span><br><span class="line">                                            aggregate_functions[i]-&gt;<span class="built_in">destroy</span>(src + offsets_of_aggregate_states[i]);</span><br><span class="line">                                    &#125;</span><br><span class="line">                                    <span class="keyword">else</span></span><br><span class="line">                                    &#123;</span><br><span class="line">                                        dst = src;</span><br><span class="line">                                    &#125;</span><br><span class="line"></span><br><span class="line">                                    src = <span class="literal">nullptr</span>;</span><br><span class="line">                                &#125;);</span><br><span class="line">    table_src.<span class="built_in">clearAndShrink</span>();</span><br><span class="line">&#125;</span><br><span class="line">````</span><br><span class="line"></span><br><span class="line">我们来看下 `HashMapTable::mergeToViaEmplace` 的实现如下，主要是语义就是将当前 hashtable `<span class="string">&#x27;this&#x27;</span>` 中的key给merge 其他 hashtable `<span class="string">&#x27;this&#x27;</span>`:</span><br><span class="line">- 遍历 <span class="keyword">this</span> 中的key-range, 插入到 <span class="keyword">this</span> 中</span><br><span class="line"></span><br><span class="line">  这也是为什么一开始要对`no_empty_data`进行`std::sort`，减少that发生rehash的概率</span><br><span class="line">- 对插入的每个key, 基于传入的 callback |func| 聚合与之对应的vaiant中的数据,比如上面的 `Aggregator::mergeDataImpl` 中传入的lambda表达式。</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">```cpp</span><br><span class="line">    <span class="comment">// in class HashMapTable</span></span><br><span class="line">    <span class="keyword">template</span> &lt;<span class="keyword">typename</span> Func&gt;</span><br><span class="line">    <span class="function"><span class="type">void</span> ALWAYS_INLINE <span class="title">mergeToViaEmplace</span><span class="params">(Self &amp; that, Func &amp;&amp; func)</span></span></span><br><span class="line"><span class="function">    </span>&#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span> it = <span class="keyword">this</span>-&gt;<span class="built_in">begin</span>(), end = <span class="keyword">this</span>-&gt;<span class="built_in">end</span>(); it != end; ++it)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">typename</span> Self::LookupResult res_it;</span><br><span class="line">            <span class="type">bool</span> inserted;</span><br><span class="line">            <span class="comment">// 先插入key: 将 it-&gt;getKey() 插入到 that</span></span><br><span class="line">            that.<span class="built_in">emplace</span>(Cell::<span class="built_in">getKey</span>(it-&gt;<span class="built_in">getValue</span>()), res_it, inserted, it.<span class="built_in">getHash</span>());</span><br><span class="line">            <span class="comment">// 再构造对应的值: 基于 callback |func| 进行构造</span></span><br><span class="line">            <span class="built_in">func</span>(res_it-&gt;<span class="built_in">getMapped</span>(), it-&gt;<span class="built_in">getMapped</span>(), inserted);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Aggregator-convertToBlockImpl"><a href="#Aggregator-convertToBlockImpl" class="headerlink" title="Aggregator::convertToBlockImpl"></a>Aggregator::convertToBlockImpl</h4><p>下面需要把生成的结果转化到block中，这一步取决于是否是 <code>final</code> 阶段:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Method, <span class="keyword">typename</span> HashTable&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">Aggregator::convertToBlockImpl</span><span class="params">(Method &amp; method, HashTable &amp; data,</span></span></span><br><span class="line"><span class="params"><span class="function">                                    MutableColumns &amp; key_columns,</span></span></span><br><span class="line"><span class="params"><span class="function">                                    AggregateColumnsData &amp; aggregate_columns,</span></span></span><br><span class="line"><span class="params"><span class="function">                                    MutableColumns &amp; final_aggregate_columns, </span></span></span><br><span class="line"><span class="params"><span class="function">                                    Arena * arena, <span class="type">bool</span> <span class="keyword">final</span>)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (data.<span class="built_in">empty</span>())</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (key_columns.<span class="built_in">size</span>() != params.keys_size)</span><br><span class="line">        <span class="keyword">throw</span> Exception&#123;<span class="string">&quot;Aggregate. Unexpected key columns size.&quot;</span>, ErrorCodes::LOGICAL_ERROR&#125;;</span><br><span class="line"></span><br><span class="line">    std::vector&lt;IColumn *&gt; raw_key_columns;</span><br><span class="line">    raw_key_columns.<span class="built_in">reserve</span>(key_columns.<span class="built_in">size</span>());</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> &amp; column : key_columns)</span><br><span class="line">        raw_key_columns.<span class="built_in">push_back</span>(column.<span class="built_in">get</span>());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="keyword">final</span>)</span><br><span class="line">        <span class="built_in">convertToBlockImplFinal</span>(method, data, std::<span class="built_in">move</span>(raw_key_columns), final_aggregate_columns, arena);</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        <span class="built_in">convertToBlockImplNotFinal</span>(method, data, std::<span class="built_in">move</span>(raw_key_columns), aggregate_columns);</span><br><span class="line"></span><br><span class="line">    <span class="comment">/// In order to release memory early.</span></span><br><span class="line">    data.<span class="built_in">clearAndShrink</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="Aggregator-convertToBlockImplFinal"><a href="#Aggregator-convertToBlockImplFinal" class="headerlink" title="Aggregator::convertToBlockImplFinal"></a>Aggregator::convertToBlockImplFinal</h5><p>非final阶段和final阶段差别只在于给 <code>aggregate_column</code> 赋值不同。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Method, <span class="keyword">typename</span> HashTable&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> NO_INLINE <span class="title">Aggregator::convertToBlockImplNotFinal</span><span class="params">(Method &amp; method, HashTable &amp; data,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                      std::vector&lt;IColumn *&gt; key_columns,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                      AggregateColumnsData &amp; aggregate_columns)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> shuffled_key_sizes = method.<span class="built_in">shuffleKeyColumns</span>(key_columns, key_sizes);</span><br><span class="line">    <span class="type">const</span> <span class="keyword">auto</span> &amp; key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;</span><br><span class="line"></span><br><span class="line">    data.forEachValue([&amp;](<span class="type">const</span> <span class="keyword">auto</span> &amp; key, <span class="keyword">auto</span> &amp; mapped) &#123;</span><br><span class="line">        method.<span class="built_in">insertKeyIntoColumns</span>(key, key_columns, key_sizes_ref, params.collators);</span><br><span class="line"></span><br><span class="line">        <span class="comment">/// reserved, so push_back does not throw exceptions</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; params.aggregates_size; ++i)</span><br><span class="line">            aggregate_columns[i]-&gt;<span class="built_in">push_back</span>(mapped + offsets_of_aggregate_states[i]);</span><br><span class="line"></span><br><span class="line">        mapped = <span class="literal">nullptr</span>;</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="scheduleThreadForNextBucket"><a href="#scheduleThreadForNextBucket" class="headerlink" title="scheduleThreadForNextBucket"></a>scheduleThreadForNextBucket</h5><p>每个bucket一个线程，每个线程将一个 bucket 转化为 block，按照 bucket 顺序依次读取</p>
+<h3 id="TWO-Level"><a href="#TWO-Level" class="headerlink" title="TWO-Level"></a>TWO-Level</h3><ul>
+<li>转化为两阶段有啥好处</li>
+<li>各个线程自己聚合玩，会尝试是否能转化为二阶段</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (!first-&gt;<span class="built_in">isTwoLevel</span>())</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">//... mergeSingleLevelDataImpl</span></span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">else</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">if</span> (!parallel_merge_data)</span><br><span class="line">    &#123;</span><br><span class="line">        parallel_merge_data = std::<span class="built_in">make_unique</span>&lt;ParallelMergeData&gt;(threads);</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; threads; ++i)</span><br><span class="line">            <span class="built_in">scheduleThreadForNextBucket</span>();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    Block res;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (<span class="literal">true</span>)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="function">std::unique_lock <span class="title">lock</span><span class="params">(parallel_merge_data-&gt;mutex)</span></span>;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (parallel_merge_data-&gt;exception)</span><br><span class="line">            std::<span class="built_in">rethrow_exception</span>(parallel_merge_data-&gt;exception);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">auto</span> it = parallel_merge_data-&gt;ready_blocks.<span class="built_in">find</span>(current_bucket_num);</span><br><span class="line">        <span class="keyword">if</span> (it != parallel_merge_data-&gt;ready_blocks.<span class="built_in">end</span>())</span><br><span class="line">        &#123;</span><br><span class="line">            ++current_bucket_num;</span><br><span class="line">            <span class="built_in">scheduleThreadForNextBucket</span>();</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (it-&gt;second)</span><br><span class="line">            &#123;</span><br><span class="line">                res.<span class="built_in">swap</span>(it-&gt;second);</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">else</span> <span class="keyword">if</span> (current_bucket_num &gt;= NUM_BUCKETS)</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        parallel_merge_data-&gt;condvar.<span class="built_in">wait</span>(lock);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> res;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">Aggregator::createAggregateStates</span><span class="params">(AggregateDataPtr &amp; aggregate_data)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> j = <span class="number">0</span>; j &lt; params.aggregates_size; ++j)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">try</span></span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">/** An exception may occur if there is a shortage of memory.</span></span><br><span class="line"><span class="comment">              * In order that then everything is properly destroyed, we &quot;roll back&quot; some of the created states.</span></span><br><span class="line"><span class="comment">              * The code is not very convenient.</span></span><br><span class="line"><span class="comment">              */</span></span><br><span class="line">            <span class="built_in">FAIL_POINT_TRIGGER_EXCEPTION</span>(FailPoints::random_aggregate_create_state_failpoint);</span><br><span class="line">            <span class="comment">// 调用不同类型的构造函数，初始化 aggregate_data + offsets_of_aggregate_states[j 内存</span></span><br><span class="line">            aggregate_functions[j]-&gt;<span class="built_in">create</span>(aggregate_data + offsets_of_aggregate_states[j]);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">catch</span> (...)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">size_t</span> rollback_j = <span class="number">0</span>; rollback_j &lt; j; ++rollback_j)</span><br><span class="line">                aggregate_functions[rollback_j]-&gt;<span class="built_in">destroy</span>(aggregate_data + offsets_of_aggregate_states[rollback_j]);</span><br><span class="line"></span><br><span class="line">            <span class="keyword">throw</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Aggregate"><span class="toc-number">1.</span> <span class="toc-text">Aggregate</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Aggregator-mergeAndConvertToBlocks"><span class="toc-number">1.1.</span> <span class="toc-text">Aggregator::mergeAndConvertToBlocks</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MergingAndConvertingBlockInputStream"><span class="toc-number">1.2.</span> <span class="toc-text">MergingAndConvertingBlockInputStream</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-mergeWithoutKeyDataImpl"><span class="toc-number">1.2.1.</span> <span class="toc-text">Aggregator::mergeWithoutKeyDataImpl</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-mergeSingleLevelDataImpl"><span class="toc-number">1.2.2.</span> <span class="toc-text">Aggregator::mergeSingleLevelDataImpl</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-mergeDataImpl"><span class="toc-number">1.2.3.</span> <span class="toc-text">Aggregator::mergeDataImpl</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Aggregator-convertToBlockImpl"><span class="toc-number">1.2.4.</span> <span class="toc-text">Aggregator::convertToBlockImpl</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#Aggregator-convertToBlockImplFinal"><span class="toc-number">1.2.4.1.</span> <span class="toc-text">Aggregator::convertToBlockImplFinal</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#scheduleThreadForNextBucket"><span class="toc-number">1.2.4.2.</span> <span class="toc-text">scheduleThreadForNextBucket</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#TWO-Level"><span class="toc-number">1.3.</span> <span class="toc-text">TWO-Level</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&text=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&is_video=false&description=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tiflash: 多线程二阶段 Aggregate 实现(2)&body=Check out this article: https://szza.github.io/2022/11/14/TiFlash/aggregate-2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&title=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&name=tiflash: 多线程二阶段 Aggregate 实现(2)&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/11/14/TiFlash/aggregate-2/&t=tiflash: 多线程二阶段 Aggregate 实现(2)"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

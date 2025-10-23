@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="PipelinePipeline 由一组 Operators 组成，一个 Pipeline 内部 Operator 是串行执行的，第一个是 SourceOperatos，最后一个是 SinkOperator，数据流从 Source 流向 Sink：从前一个 Operator 拉取数据（Operator::pull_chunk），再将该数据推到下一个Operator（Operator::push_c">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pipeline: Operator 状态机(2)">
+<meta property="og:url" content="https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="PipelinePipeline 由一组 Operators 组成，一个 Pipeline 内部 Operator 是串行执行的，第一个是 SourceOperatos，最后一个是 SinkOperator，数据流从 Source 流向 Sink：从前一个 Operator 拉取数据（Operator::pull_chunk），再将该数据推到下一个Operator（Operator::push_c">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/PipelineDriver-2.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/Pipeline-Operator-stage-1.svg?raw=true">
+<meta property="article:published_time" content="2023-07-15T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-26T02:32:59.289Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/PipelineDriver-2.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Pipeline: Operator 状态机(2)</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/07/19/Pipeline/DriverQueue_1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/07/12/Pipeline/PipelineDriver_1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&text=Pipeline: Operator 状态机(2)"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&is_video=false&description=Pipeline: Operator 状态机(2)"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Pipeline: Operator 状态机(2)&body=Check out this article: https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&name=Pipeline: Operator 状态机(2)&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&t=Pipeline: Operator 状态机(2)"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Pipeline"><span class="toc-number">1.</span> <span class="toc-text">Pipeline</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#OperatorStage"><span class="toc-number">1.1.</span> <span class="toc-text">OperatorStage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PipelineDriver-process"><span class="toc-number">1.2.</span> <span class="toc-text">PipelineDriver:process</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Part1-check"><span class="toc-number">1.2.1.</span> <span class="toc-text">Part1: check</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Part2-pull-push"><span class="toc-number">1.3.</span> <span class="toc-text">Part2: pull-push</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#part3-time"><span class="toc-number">1.3.1.</span> <span class="toc-text">part3: time</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Part4"><span class="toc-number">1.4.</span> <span class="toc-text">Part4:</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Pipeline: Operator 状态机(2)
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-07-15T02:00:01.000Z" itemprop="datePublished">2023-07-15</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="Pipeline"><a href="#Pipeline" class="headerlink" title="Pipeline"></a>Pipeline</h2><p>Pipeline 由一组 Operators 组成，一个 Pipeline 内部 Operator 是串行执行的，第一个是 SourceOperatos，最后一个是 SinkOperator，数据流从 Source 流向 Sink：从前一个 Operator 拉取数据（<em>Operator::pull_chunk</em>），再将该数据推到下一个Operator（<em>Operator::push_chunk</em>），这就是 Pipeline 的 pull-push 模型。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/PipelineDriver-2.svg?raw=true" alt="PipelineDriver-2"></p>
+<h3 id="OperatorStage"><a href="#OperatorStage" class="headerlink" title="OperatorStage"></a>OperatorStage</h3><p>每个 Operator 也有对应的状态 OperatorStage，用于保证与 Operator 特定状态相关的 Callback（Preapre、Close 等函数） 只调用一次。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">enum</span> <span class="title class_">OperatorStage</span> &#123;</span><br><span class="line">    INIT = <span class="number">0</span>,</span><br><span class="line">    PREPARED = <span class="number">1</span>,</span><br><span class="line">    PRECONDITION_NOT_READY = <span class="number">2</span>,</span><br><span class="line">    PROCESSING = <span class="number">3</span>,</span><br><span class="line">    FINISHING = <span class="number">4</span>,</span><br><span class="line">    FINISHED = <span class="number">5</span>,</span><br><span class="line">    CANCELLED = <span class="number">6</span>,</span><br><span class="line">    CLOSED = <span class="number">7</span>,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>OperatorStage 的状态流如下图，实际上阻塞只会发生在 SourceOperator&#x2F;SinkOperator，中间的 PipelineJob 是不会阻塞（只会因为时间片用完重新调度）的，只是个计算流。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/Pipeline-Operator-stage-1.svg?raw=true" alt="Pipeline-Operator-stage-1"></p>
+<p>Operator 创建时状态为 OperatorStage::INIT，提交给 GloablDriverExecutor 时，先先会调用 PipelineDriver::prepare 函数将所有的 Operators 设置为 OperatorStage::PREPARED 状态，</p>
+<ul>
+<li>HashJoinProbeOperator 设置为 PRECONDITION_NOT_READY，</li>
+<li>其他的通过 PipelineDriver::submit_operators 函数统一设置为 OperatorStage::PROCESSING 状态</li>
+</ul>
+<p>后续就由 PipelineDriver 状态机推动了，并由 PipelineDriver::_mark_operator_xxx 系列函数更改状态，这些函数可以保证 Operator 每个状态都只被调用一次：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// class PipelineDriver</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 所有的 Operator 设置为 OperatorStage::PROCESSING 状态</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">mark_precondition_ready</span><span class="params">(RuntimeState* runtime_state)</span></span>;</span><br><span class="line"><span class="comment">// 将 operator 设置为 OperatorStage::FINISHING 状态</span></span><br><span class="line">Status _mark_operator_finishing(OperatorPtr&amp; op, RuntimeState* runtime_state);</span><br><span class="line"><span class="comment">// 将 operator 设置为 OperatorStage::FINISHED 状态</span></span><br><span class="line">Status _mark_operator_finished(OperatorPtr&amp; op, RuntimeState* runtime_state);</span><br><span class="line"><span class="comment">// 将 operator 设置为 OperatorStage::CANCELLED 状态</span></span><br><span class="line">Status _mark_operator_cancelled(OperatorPtr&amp; op, RuntimeState* runtime_state);</span><br><span class="line"><span class="comment">// 将 operator 设置为 OperatorStage::CLOSED 状态</span></span><br><span class="line">Status _mark_operator_closed(OperatorPtr&amp; op, RuntimeState* runtime_state);</span><br></pre></td></tr></table></figure>
+<p>对应着 Operator 的不同状态更改函数</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// class Operator</span></span><br><span class="line"><span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">set_precondition_ready</span><span class="params">(RuntimeState* state)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">virtual</span> Status <span class="title">set_finishing</span><span class="params">(RuntimeState* state)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">virtual</span> Status <span class="title">set_finished</span><span class="params">(RuntimeState* state)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">virtual</span> Status <span class="title">set_cancelled</span><span class="params">(RuntimeState* state)</span></span>;</span><br><span class="line"><span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">close</span><span class="params">(RuntimeState* state)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<h3 id="PipelineDriver-process"><a href="#PipelineDriver-process" class="headerlink" title="PipelineDriver:process"></a>PipelineDriver:process</h3><p>PipelineDriver:process 函数会依次处理 PipelineDriver::_operators，但是 process 函数有时间片，超过最大时间片 <strong>YIELD_PREEMPT_MAX_TIME_SPENT</strong>，就需要主动让出 CPU，让其他线程执行，将当前 Driver 放回到 DriverQueue 等待下次调度，如果发生阻塞则放到 poller 中。因此也需要更新统计信息，基于这些统计信息 DriverQueue 决定下次何时调度次 PipelineDriver。</p>
+<p>PipelineDriver::_first_unfinished 记录着当前 Pipelien 的执行进度，即处理到哪一个 Operator，每次都是从 _first_unfinished 开始处理。</p>
+<h4 id="Part1-check"><a href="#Part1-check" class="headerlink" title="Part1: check"></a>Part1: check</h4><p>在 (curr_op, next_op) 传递数据之前，需要先做一些前置校验工作：</p>
+<ol>
+<li><p>curr_op 是否已经处理结束</p>
+<p>对于已经处理结束的，需要通过 _mark_operator_finishing 操作调用 Operator::set_finishing 函数来更改当前 Operator 的状态。通过 new_first_unfinished 记录已经完成的 Operator 的下标索引。</p>
+<blockquote>
+<p>为什么 i &#x3D;&#x3D; 0 时，_mark_operator_finishing 传入的参数包括 curr_op ?</p>
+<ol>
+<li>OperatorStage::FINISHING 表示 Operator 不会再有输入，等之前 pushed chunk 处理完，则进入 OperatorStage::FINISHED 状态。因此当 curr_op-&gt;is_finished() 为 true 时，即表示 next_op 不会再有输入，需要将 next_op 设置为 OperatorStage::FINISHING 状态</li>
+<li>SourceOperator 本身就不需要输入（更准确地说，是没有上游 Operator push_chunk 给 SourceOperator），等 SoureOperator 从网络&#x2F;本地磁盘 pull 所有数据，curr_op-&gt;is_finished() 也会为 true，此时将 SourceOperator 标记为 OperatorStage::FINISHING，来表示 Source 不会再 pull。</li>
+</ol>
+</blockquote>
+</li>
+<li><p>要能在 (curr_op, next_op) 之间完成数据传递，前提是 curr_op 有就绪的数据输出，且 next_op 准备好接受数据</p>
+<p> 这一步通过 Operator::has_output 和 Operator::need_input 判断</p>
+</li>
+<li><p>当前 FragmentInstance 没有取消，这个 Pipeline 才需要继续执行</p>
+</li>
+</ol>
+<p>(curr_op, next_op) 一次数据流处理时间记录在 time_spent。这部分逻辑如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="type">size_t</span> i = _first_unfinished; i &lt; num_operators - <span class="number">1</span>; ++i) &#123;</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">SCOPED_RAW_TIMER</span>(&amp;time_spent);</span><br><span class="line">        <span class="keyword">auto</span>&amp; curr_op = _operators[i];</span><br><span class="line">        <span class="keyword">auto</span>&amp; next_op = _operators[i + <span class="number">1</span>];</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 1.</span></span><br><span class="line">        <span class="keyword">if</span> (curr_op-&gt;<span class="built_in">is_finished</span>()) &#123;</span><br><span class="line">            <span class="keyword">if</span> (i == <span class="number">0</span>) &#123;</span><br><span class="line">                <span class="comment">// For source operators</span></span><br><span class="line">                <span class="built_in">RETURN_IF_ERROR</span>(return_status = _mark_operator_finishing(curr_op, runtime_state));</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="built_in">RETURN_IF_ERROR</span>(return_status = _mark_operator_finishing(next_op, runtime_state));</span><br><span class="line">            new_first_unfinished = i + <span class="number">1</span>;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// try successive operator pairs</span></span><br><span class="line">        <span class="keyword">if</span> (!curr_op-&gt;<span class="built_in">has_output</span>() || !next_op-&gt;<span class="built_in">need_input</span>()) &#123;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (_check_fragment_is_canceled(runtime_state)) &#123;</span><br><span class="line">            <span class="keyword">return</span> _state;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//...</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Part2-pull-push"><a href="#Part2-pull-push" class="headerlink" title="Part2: pull-push"></a>Part2: pull-push</h3><p>for 循环的第二部分，就是从 curr_op 拉取数据流推向 next_op，任何一步失败，都会将 bad status 返回给 GlobalDriverExecutor，进而取消整个 query。</p>
+<p>第二部分代码是比较简单的，如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="type">size_t</span> i = _first_unfinished; i &lt; num_operators - <span class="number">1</span>; ++i) &#123;</span><br><span class="line">  &#123;</span><br><span class="line">    <span class="comment">//...above code</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">//1. pull chunk from current operator</span></span><br><span class="line">    StatusOr&lt;vectorized::ChunkPtr&gt; maybe_chunk;</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">SCOPED_TIMER</span>(curr_op-&gt;_pull_timer);</span><br><span class="line">        maybe_chunk = curr_op-&gt;<span class="built_in">pull_chunk</span>(runtime_state);</span><br><span class="line">    &#125;</span><br><span class="line">    return_status = maybe_chunk.<span class="built_in">status</span>();</span><br><span class="line">    <span class="keyword">if</span> (!return_status.<span class="built_in">ok</span>() &amp;&amp; !return_status.<span class="built_in">is_end_of_file</span>()) &#123;</span><br><span class="line">        <span class="keyword">return</span> return_status;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 快速 check 下 query 是否被取消</span></span><br><span class="line">    <span class="keyword">if</span> (_check_fragment_is_canceled(runtime_state)) &#123;</span><br><span class="line">        <span class="keyword">return</span> _state;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//2. push chunk</span></span><br><span class="line">    <span class="keyword">if</span> (return_status.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">        <span class="keyword">if</span> (maybe_chunk.<span class="built_in">value</span>() &amp;&amp; maybe_chunk.<span class="built_in">value</span>()-&gt;<span class="built_in">num_rows</span>() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// 本次读取的数据超过限制</span></span><br><span class="line">            <span class="type">size_t</span> row_num = maybe_chunk.<span class="built_in">value</span>()-&gt;<span class="built_in">num_rows</span>();</span><br><span class="line">            <span class="keyword">if</span> (<span class="built_in">UNLIKELY</span>(row_num &gt; runtime_state-&gt;<span class="built_in">chunk_size</span>())) &#123;</span><br><span class="line">                <span class="keyword">return</span> Status::<span class="built_in">InternalError</span>(fmt::format(</span><br><span class="line">                    <span class="string">&quot;Intermediate chunk size must noe be greater than &#123;&#125; &quot;</span></span><br><span class="line">                    <span class="string">&quot;actually &#123;&#125; after &#123;&#125;-th operator &#123;&#125; in &#123;&#125;&quot;</span>,</span><br><span class="line">                    runtime_state-&gt;<span class="built_in">chunk_size</span>(), row_num,</span><br><span class="line">                    i, curr_op-&gt;<span class="built_in">get_name</span>(), <span class="built_in">to_readable_string</span>()));</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            &#123;</span><br><span class="line">                <span class="built_in">SCOPED_TIMER</span>(next_op-&gt;_push_timer);</span><br><span class="line">                return_status = next_op-&gt;<span class="built_in">push_chunk</span>(runtime_state, maybe_chunk.<span class="built_in">value</span>());</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">if</span> (!return_status.<span class="built_in">ok</span>() &amp;&amp; !return_status.<span class="built_in">is_end_of_file</span>()) &#123;</span><br><span class="line">                <span class="keyword">return</span> return_status;</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            num_chunks_moved += <span class="number">1</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 3. Check curr_op finished again</span></span><br><span class="line">    <span class="keyword">if</span> (curr_op-&gt;<span class="built_in">is_finished</span>()) &#123;</span><br><span class="line">        <span class="keyword">if</span> (i == <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="comment">// For source operators</span></span><br><span class="line">            <span class="built_in">RETURN_IF_ERROR</span>(return_status = _mark_operator_finishing(curr_op, runtime_state));</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">RETURN_IF_ERROR</span>(return_status = _mark_operator_finishing(next_op, runtime_state));</span><br><span class="line">        new_first_unfinished = i + <span class="number">1</span>;</span><br><span class="line">        <span class="keyword">continue</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">///...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="part3-time"><a href="#part3-time" class="headerlink" title="part3: time"></a>part3: time</h4><p>time_spent 记录了 (curr_op, next_op) 之间一次 {pull, push} 操作耗时。而每次 PipelineDriver 执行的最大时间片是 <strong>YIELD_MAX_TIME_SPENT</strong>，如果 query 设置了具体的 WorkGroup，最大的时间片是 <strong>YIELD_PREEMPT_MAX_TIME_SPENT</strong>，如果 time_spent 超过了这两个阈值的其中一个，则需要主动让出 CPU 给予其他线程机会，此时标记 should_yield 为 true，跳出 for-loop 循环。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> (<span class="type">size_t</span> i = _first_unfinished; i &lt; num_operators - <span class="number">1</span>; ++i) &#123;</span><br><span class="line">   <span class="comment">//...above code</span></span><br><span class="line"></span><br><span class="line">   <span class="keyword">if</span> (time_spent &gt;= OVERLOADED_MAX_TIME_SPEND_NS) &#123;</span><br><span class="line">       StarRocksMetrics::<span class="built_in">instance</span>()-&gt;pipe_driver_overloaded.<span class="built_in">increment</span>(<span class="number">1</span>);</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="comment">// yield when total chunks moved or time spent on-core for evaluation</span></span><br><span class="line">   <span class="comment">// exceed the designated thresholds.</span></span><br><span class="line">   <span class="keyword">if</span> (time_spent &gt;= YIELD_MAX_TIME_SPENT) &#123;</span><br><span class="line">       should_yield = <span class="literal">true</span>;</span><br><span class="line">       <span class="built_in">COUNTER_UPDATE</span>(_yield_by_time_limit_counter, <span class="number">1</span>);</span><br><span class="line">       <span class="keyword">break</span>;</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">if</span> (_workgroup != <span class="literal">nullptr</span> &amp;&amp; time_spent &gt;= YIELD_PREEMPT_MAX_TIME_SPENT &amp;&amp;</span><br><span class="line">       _workgroup-&gt;<span class="built_in">driver_sched_entity</span>()-&gt;<span class="built_in">in_queue</span>()-&gt;<span class="built_in">should_yield</span>(<span class="keyword">this</span>, time_spent)) &#123;</span><br><span class="line">       should_yield = <span class="literal">true</span>;</span><br><span class="line">       <span class="built_in">COUNTER_UPDATE</span>(_yield_by_preempt_counter, <span class="number">1</span>);</span><br><span class="line">       <span class="keyword">break</span>;</span><br><span class="line">   &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Part4"><a href="#Part4" class="headerlink" title="Part4:"></a>Part4:</h3><p>一个 for-loop 完成，要么是本轮时间片用完要么是是当前 Pipeline 执行完。</p>
+<ul>
+<li><p>new_first_unfinished 标记着本轮已经完成 Operator 的下标索引。</p>
+<p>首先要 [_first_unfinished, new_first_unfinished) 区间的 Operator 通过 _mark_operator_finished 函数设置标记为完成， 再用 new_first_unfinished 更新 _first_unfinished。</p>
+</li>
+<li><p>SinkOperator::is_finished 返回 true 表示当前 Pipeline 所有 Operators 执行完毕，</p>
+<p>  finish_operators 函数遍历所有的 Operators，并对所有的 Operator 调用 _mark_operator_finished 函数。</p>
+  <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">PipelineDriver::finish_operators</span><span class="params">(RuntimeState* runtime_state)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; op : _operators) &#123;</span><br><span class="line">      _mark_operator_finished(op, runtime_state);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>  _mark_operator_finished 会调用 Operator::set_finished 函数，使得所有的 Operators 都进入 OperatorStage::FINISHED 状态。</p>
+  <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Status PipelineDriver::_mark_operator_finished(OperatorPtr&amp; op, </span><br><span class="line">                                               RuntimeState* state) &#123;</span><br><span class="line">  <span class="built_in">RETURN_IF_ERROR</span>(_mark_operator_finishing(op, state));</span><br><span class="line">  <span class="keyword">auto</span>&amp; op_state = _operator_stages[op-&gt;<span class="built_in">get_id</span>()];</span><br><span class="line">  <span class="built_in">RETURN_IF</span>(op_state &gt;= OperatorStage::FINISHED, Status::<span class="built_in">OK</span>());</span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">      <span class="built_in">SCOPED_TIMER</span>(op-&gt;_finished_timer);</span><br><span class="line">      op_state = OperatorStage::FINISHED;</span><br><span class="line">      <span class="keyword">return</span> op-&gt;<span class="built_in">set_finished</span>(state);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>  finish_operators 函数结束，再更改 PipelineDrvier 状态，使 drvier 进入 DriverState::PENDING_FINISH 或者 DriverState::FINISH 状态。</p>
+<blockquote>
+<p>正常一个 Operator 生命周期结束时行为:</p>
+<ul>
+<li>Source::is_finished –&gt; Source::set_finishing –&gt;  Source::set_finished</li>
+<li>PrevOperator::is_finished –&gt; Operator::set_finishing –&gt; Operator::set_finished</li>
+<li>PrevOperator::is_finished –&gt;  Sink::set_finishing –&gt; Sink::is_finished –&gt; Sink::set_finished –&gt; Operators::close</li>
+</ul>
+</blockquote>
+</li>
+<li><p>否则， 就说明是本轮时间片用完，会更改当前 PipelineDriver 的状态，让 Executor 根据此状态判断是否加入 blocked_driver_poller 还是放回 _drvier_queue。</p>
+</li>
+</ul>
+<p>代码如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    <span class="built_in">RETURN_IF_LIMIT_EXCEEDED</span>(runtime_state, <span class="string">&quot;Pipeline&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="type">size_t</span> num_chunks_moved = <span class="number">0</span>;</span><br><span class="line">    <span class="type">bool</span> should_yield = <span class="literal">false</span>;</span><br><span class="line">    <span class="type">size_t</span> num_operators = _operators.<span class="built_in">size</span>();</span><br><span class="line">    <span class="type">size_t</span> new_first_unfinished = _first_unfinished;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = _first_unfinished; i &lt; num_operators - <span class="number">1</span>; ++i) &#123;</span><br><span class="line">        <span class="comment">/** above code**/</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// close finished operators and update _first_unfinished index</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> i = _first_unfinished; i &lt; new_first_unfinished; ++i) &#123;</span><br><span class="line">        <span class="built_in">RETURN_IF_ERROR</span>(return_status = _mark_operator_finished(_operators[i], runtime_state));</span><br><span class="line">    &#125;</span><br><span class="line">    _first_unfinished = new_first_unfinished;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">sink_operator</span>()-&gt;<span class="built_in">is_finished</span>()) &#123;</span><br><span class="line">        <span class="built_in">finish_operators</span>(runtime_state);</span><br><span class="line">        <span class="built_in">set_driver_state</span>(</span><br><span class="line">            <span class="built_in">is_still_pending_finish</span>() </span><br><span class="line">            ? DriverState::PENDING_FINISH </span><br><span class="line">            : DriverState::FINISH);</span><br><span class="line">        <span class="keyword">return</span> _state;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// no chunk moved in current round means that the driver is blocked.</span></span><br><span class="line">    <span class="comment">// should yield means that the CPU core is occupied the driver for a</span></span><br><span class="line">    <span class="comment">// very long time so that the driver should switch off the core and</span></span><br><span class="line">    <span class="comment">// give chance for another ready driver to run.</span></span><br><span class="line">    <span class="keyword">if</span> (num_chunks_moved == <span class="number">0</span> || should_yield) &#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">is_precondition_block</span>()) &#123;</span><br><span class="line">            <span class="built_in">set_driver_state</span>(DriverState::PRECONDITION_BLOCK);</span><br><span class="line">            <span class="built_in">COUNTER_UPDATE</span>(_block_by_precondition_counter, <span class="number">1</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!<span class="built_in">sink_operator</span>()-&gt;<span class="built_in">is_finished</span>() </span><br><span class="line">                   &amp;&amp; !<span class="built_in">sink_operator</span>()-&gt;<span class="built_in">need_input</span>()) &#123;</span><br><span class="line">            <span class="built_in">set_driver_state</span>(DriverState::OUTPUT_FULL);</span><br><span class="line">            <span class="built_in">COUNTER_UPDATE</span>(_block_by_output_full_counter, <span class="number">1</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (!<span class="built_in">source_operator</span>()-&gt;<span class="built_in">is_finished</span>()</span><br><span class="line">                   &amp;&amp; !<span class="built_in">source_operator</span>()-&gt;<span class="built_in">has_output</span>()) &#123;</span><br><span class="line">            <span class="built_in">set_driver_state</span>(DriverState::INPUT_EMPTY);</span><br><span class="line">            <span class="built_in">COUNTER_UPDATE</span>(_block_by_input_empty_counter, <span class="number">1</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="built_in">set_driver_state</span>(DriverState::READY);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> _state;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Pipeline"><span class="toc-number">1.</span> <span class="toc-text">Pipeline</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#OperatorStage"><span class="toc-number">1.1.</span> <span class="toc-text">OperatorStage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#PipelineDriver-process"><span class="toc-number">1.2.</span> <span class="toc-text">PipelineDriver:process</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Part1-check"><span class="toc-number">1.2.1.</span> <span class="toc-text">Part1: check</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Part2-pull-push"><span class="toc-number">1.3.</span> <span class="toc-text">Part2: pull-push</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#part3-time"><span class="toc-number">1.3.1.</span> <span class="toc-text">part3: time</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Part4"><span class="toc-number">1.4.</span> <span class="toc-text">Part4:</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&text=Pipeline: Operator 状态机(2)"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&is_video=false&description=Pipeline: Operator 状态机(2)"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Pipeline: Operator 状态机(2)&body=Check out this article: https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&title=Pipeline: Operator 状态机(2)"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&name=Pipeline: Operator 状态机(2)&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2/&t=Pipeline: Operator 状态机(2)"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

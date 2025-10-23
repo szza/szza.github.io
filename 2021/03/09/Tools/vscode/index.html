@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本期分享下自己的C++编码环境。自己目前C++编码环境是基于vscode打造的，再通过vscode远程登录到Linux（remote Linux）。对于Linux环境，可选方式有两种：  WSL（Windows Subsystem Linux） 虚拟机  WSL有诸多好处，它可以和WINDOWs-10更为紧密地联系在一起。比如，随处按下快捷键：shift + 右击，都可以开启 linux shel">
+<meta property="og:type" content="article">
+<meta property="og:title" content="基于vscode 打造C++编码环境">
+<meta property="og:url" content="https://szza.github.io/2021/03/09/Tools/vscode/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本期分享下自己的C++编码环境。自己目前C++编码环境是基于vscode打造的，再通过vscode远程登录到Linux（remote Linux）。对于Linux环境，可选方式有两种：  WSL（Windows Subsystem Linux） 虚拟机  WSL有诸多好处，它可以和WINDOWs-10更为紧密地联系在一起。比如，随处按下快捷键：shift + 右击，都可以开启 linux shel">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://pic3.zhimg.com/80/v2-6999e68486af5ba59a02ffc22699e346_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-50c496e4706860347f1b112708a1df3f_1440w.webp">
+<meta property="og:image" content="https://pic3.zhimg.com/80/v2-60f116aef4d0b73d523f6ca4752e05fe_1440w.webp">
+<meta property="og:image" content="https://pic1.zhimg.com/80/v2-04fb17df3e61eb053c185ff77405be20_1440w.webp">
+<meta property="og:image" content="https://pic2.zhimg.com/80/v2-259f5cf3889e1fb21c69dbb8b6e28055_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-15a6341b06245a652f92abb989bd67df_1440w.webp">
+<meta property="og:image" content="https://pic2.zhimg.com/80/v2-202f3764fa0e44e8ea3bca3c5716f38d_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-1ad24d811af2dc8a9945c51c4c388937_1440w.webp">
+<meta property="og:image" content="https://pic1.zhimg.com/80/v2-35d33bbd2a67dcd6baf17a8f97472854_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-2358b87a36896b9c6a75511a813ac8db_1440w.webp">
+<meta property="og:image" content="https://pic3.zhimg.com/80/v2-27b776ec863e706cfa6f75a5e6609cfe_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-6c2909636816f4fbd2ed590796eee8ab_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-328afe26497546ae82bf9bdc132c1603_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-6b109350d9a613a854484fbf05435ce7_1440w.webp">
+<meta property="og:image" content="https://pic3.zhimg.com/80/v2-f459a6d030e24350fe82b093854911fe_1440w.webp">
+<meta property="og:image" content="https://pic2.zhimg.com/80/v2-2c55e70e9eb6ff30849cfa4dd5ba1c25_1440w.webp">
+<meta property="og:image" content="https://pic4.zhimg.com/80/v2-fc543227fd5a75f67d7f79a05f8c5ccb_1440w.webp">
+<meta property="og:image" content="https://pic2.zhimg.com/80/v2-04264ccb2eb01c231554fb4cc67f5721_1440w.webp">
+<meta property="article:published_time" content="2021-03-09T03:40:15.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.830Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="工具">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic3.zhimg.com/80/v2-6999e68486af5ba59a02ffc22699e346_1440w.webp">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>基于vscode 打造C++编码环境</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+         
+          <li><a href="/about/">About</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2021/11/24/rocksdb/Table/builder/5_Footer/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/03/04/C++/reference_2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/09/Tools/vscode/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/09/Tools/vscode/&text=基于vscode 打造C++编码环境"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/09/Tools/vscode/&is_video=false&description=基于vscode 打造C++编码环境"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=基于vscode 打造C++编码环境&body=Check out this article: https://szza.github.io/2021/03/09/Tools/vscode/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/09/Tools/vscode/&name=基于vscode 打造C++编码环境&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/09/Tools/vscode/&t=基于vscode 打造C++编码环境"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#vscode-WSL"><span class="toc-number">1.</span> <span class="toc-text">vscode +  WSL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E6%9C%BA-vscode"><span class="toc-number">2.</span> <span class="toc-text">虚拟机 +  vscode</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%BC%80%E5%90%AFSSH%E6%9C%8D%E5%8A%A1"><span class="toc-number">2.1.</span> <span class="toc-text">开启SSH服务</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#vscode%E9%93%BE%E6%8E%A5%E8%99%9A%E6%8B%9F%E6%9C%BA"><span class="toc-number">2.2.</span> <span class="toc-text">vscode链接虚拟机</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E8%99%9A%E6%8B%9F%E6%9C%BA"><span class="toc-number">2.3.</span> <span class="toc-text">免密登录虚拟机</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%BF%87%E7%A8%8B%E4%B8%AD%E5%8F%AF%E8%83%BD%E5%87%BA%E7%8E%B0%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-number">2.4.</span> <span class="toc-text">过程中可能出现的问题</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        基于vscode 打造C++编码环境
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-03-09T03:40:15.000Z" itemprop="datePublished">2021-03-09</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/%E5%B7%A5%E5%85%B7/" rel="tag">工具</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本期分享下自己的C++编码环境。自己目前C++编码环境是基于vscode打造的，再通过vscode远程登录到Linux（remote Linux）。对于Linux环境，可选方式有两种：</p>
+<ul>
+<li>WSL（<strong>W</strong>indows <strong>S</strong>ubsystem <strong>L</strong>inux）</li>
+<li>虚拟机</li>
+</ul>
+<p>WSL有诸多好处，它可以和WINDOWs-10更为紧密地联系在一起。比如，随处按下快捷键：<code>shift + 右击</code>，都可以开启 <code>linux shell</code>，然后使用linux的命令来操作WINDOWs。</p>
+<p><img src="https://pic3.zhimg.com/80/v2-6999e68486af5ba59a02ffc22699e346_1440w.webp"></p>
+<p><img src="https://pic4.zhimg.com/80/v2-50c496e4706860347f1b112708a1df3f_1440w.webp"></p>
+<p>但是WSL也有不足，其中关于调试网络的工具一般是用不了，比如有：<code>tcpdump</code>，这个bug自从WSL诞生至今尚未解决：</p>
+<figure class="highlight shell"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta prompt_">$ </span><span class="language-bash">tcpdump</span></span><br><span class="line">tcpdump: socket: Socket type not supported  # 无法启动</span><br><span class="line"><span class="meta prompt_">$ </span><span class="language-bash"><span class="built_in">date</span></span></span><br><span class="line">Sun Mar  7 22:01:11 CST 2021</span><br></pre></td></tr></table></figure>
+
+<p>此时就需要借用虚拟机来完成相关操作。我自己的使用场景：</p>
+<ul>
+<li>WSL能满足要求时，基本都用WSL</li>
+<li>当WSL无法满足时，就使用虚拟机</li>
+</ul>
+<p>当然，嫌麻烦完全可以仅使用虚拟机，除了无法在WINDOWs-10随处开启 <code>Linux shell</code>外，基本无差别。下面讲解下vscode怎么联合WSL &#x2F; 虚拟机打造C++编码环境。</p>
+<h3 id="vscode-WSL"><a href="#vscode-WSL" class="headerlink" title="vscode +  WSL"></a>vscode +  WSL</h3><ol>
+<li><p>安装WSL。在微软官方文档中有安装WSL的详细教程，照着步骤安装即可。地址：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">https://docs.microsoft.com/zh-cn/WINDOWs/wsl/install-win10</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>vscode安装<code>Remote-WSL</code>插件。打开vscode，按快捷键：<code>ctr + shift + X</code> 或者直接点击左侧栏的<code>Extensions</code>，然后在插件商店里，搜索并安装  <code>Remote-WSL</code> 插件：</p>
+<p><img src="https://pic3.zhimg.com/80/v2-60f116aef4d0b73d523f6ca4752e05fe_1440w.webp"></p>
+</li>
+<li><p>在正式介绍之前，先介绍一个vscode的快捷键：<code>ctr + shift + p</code>。按下后，会显示出一个对话框（如下图），可以在里面输入一些命令来设置vscode的相关选项。</p>
+<p><img src="https://pic1.zhimg.com/80/v2-04fb17df3e61eb053c185ff77405be20_1440w.webp"></p>
+<p> 此时，在对话框中输入<code>Remote-WSL</code>，下方列表会显示相关的选项，选择第一个<code>Remote-WSL:New WINDOWs</code>：</p>
+<p><img src="https://pic2.zhimg.com/80/v2-259f5cf3889e1fb21c69dbb8b6e28055_1440w.webp"></p>
+<p>不需要任何配置、输入密码的过程，就自动进入<code>WSL</code>环境中：在左下角的状态栏中会有个<code>WSL:Ubuntu-x</code>的标志，表示你进入了WSL环境，此时按下快捷键：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ctr + `   # 注意后面还有个 `</span><br></pre></td></tr></table></figure>
+
+<p>可以直接唤起终端，比如图中的<code>TERMINAL</code>：</p>
+<p><img src="https://pic4.zhimg.com/80/v2-15a6341b06245a652f92abb989bd67df_1440w.webp"></p>
+</li>
+<li><p>安装编译、调试等必要软件。到此，vscode环境已经基本配置完毕。此时WSL里什么软件也没有，连基本的make命令都不支持，需要自己手动安装C++编译器、调试器：</p>
+ <figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">gcc/g++ ： `sudo apt install g++`</span><br><span class="line">make：`sudo apt install make`</span><br><span class="line">cmake：`sudo apt install cmake`</span><br><span class="line">gdb：`sudo apt install gdb`</span><br></pre></td></tr></table></figure>
+
+<p>由于vscode本身就可以当作一个终端来使用，因此进入WSL环境后，直接在vscode-terminal中输入上述安装命令。由于我已经安装了上述软件，因此继续安装会显示如下：</p>
+<p><img src="https://pic2.zhimg.com/80/v2-202f3764fa0e44e8ea3bca3c5716f38d_1440w.webp"></p>
+</li>
+<li><p>创建文件夹。下面先写简单的demo测试下怎么继续使用。先创建一个名字是<code>demo</code> 的文件夹：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">szza@szza:~$ <span class="built_in">mkdir</span> demo</span><br><span class="line">szza@szza:~$ <span class="built_in">cd</span> demo/</span><br><span class="line">szza@szza:~/demo$ </span><br></pre></td></tr></table></figure>
+
+<p>那么怎么打开刚刚创建的<code>demo</code>文件夹？方法有两种：</p>
+<p><strong>1）</strong> 直接点击vscode左侧的  <code>Open Folder</code>按钮，然后选择刚才创建的<code>/home/szza/demo</code>文件夹即可。</p>
+<p><img src="https://pic4.zhimg.com/80/v2-1ad24d811af2dc8a9945c51c4c388937_1440w.webp"></p>
+<p><strong>2）</strong> 按下快捷键<code>ctr + shift + P</code>，再输入 <code>Open Folder</code>，再选择<code>home/szza/demo</code>文件夹即可。</p>
+<p><img src="https://pic1.zhimg.com/80/v2-35d33bbd2a67dcd6baf17a8f97472854_1440w.webp"></p>
+</li>
+<li><p>安装C++相关插件。</p>
+<ul>
+<li>C&#x2F;C++</li>
+<li>C++ Intellisense</li>
+<li>Visual Studio Intellisense</li>
+<li>Visual Studio Intellisense Insider</li>
+</ul>
+<p><img src="https://pic4.zhimg.com/80/v2-2358b87a36896b9c6a75511a813ac8db_1440w.webp"></p>
+<p>这样在写C++代码时，才会智能提示、调整等一些列功能。上述是基本插件，其他的插件可以自己多去探索发现。写完一个demo，就可以直接在<code>TERMINAL</code>上运行编译，结果如下：</p>
+<p><img src="https://pic3.zhimg.com/80/v2-27b776ec863e706cfa6f75a5e6609cfe_1440w.webp"></p>
+</li>
+</ol>
+<p>到此，从安装WSL到在WSL中编译运行一个cpp程序，大致讲解完毕，整个过程基本没有配置、便于使用。可能你发现了，是不是还缺少一个环节：debug。</p>
+<p>由于在上面步骤【5】中，已经安装了<code>gdb</code>调试软件。如果你会gdb，那么就可以直接使用gdb进行调试了。如果不熟悉，可以自己先行学习，也可以等等我，关于gdb调试的文章我准备等毕业答辩结束再来做个专题吧。回想自己在阅读开源项目redis6.0、libuv时，都是靠gdb帮我理清了回调函数链路。</p>
+<h3 id="虚拟机-vscode"><a href="#虚拟机-vscode" class="headerlink" title="虚拟机 +  vscode"></a>虚拟机 +  vscode</h3><p>继续提供一个【虚拟机+vscode】的方案，最终可以实现和WSL几乎一致的体验。顺便提一下，WINDOWs-10 20H1之前，是不允许同时开启WSL和虚拟机，必须要升级到WINDOWs-10 20H1版本及其之后，才能同时开启。</p>
+<p>关于虚拟机，本文以Ubuntu为准。至于怎么安装虚拟机不介绍了，上网搜索一下即可。</p>
+<h4 id="开启SSH服务"><a href="#开启SSH服务" class="headerlink" title="开启SSH服务"></a>开启SSH服务</h4><p>个人建议：图方便可以直接安装<code>Ubuntu-Studio 2020</code>，它包含了常用的编译器和软件，不用自己去下载和安装了，比较省事，相对也比较稳定。我自己安装的<code>Ubuntu-2020</code>简洁版的虚拟机经常断开链接，但是我同学的又没事。</p>
+<p>查看虚拟机的IP地址：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">$ ifconfig</span><br><span class="line">ens33: flags=4163&lt;UP,BROADCAST,RUNNING,MULTICAST&gt;  mtu 1500</span><br><span class="line">        inet 192.168.183.130  netmask 255.255.255.0  broadcast 192.168.183.255</span><br><span class="line">        inet6 fe80::e8ab:d905:32f5:729e  prefixlen 64  scopeid 0x20&lt;<span class="built_in">link</span>&gt;</span><br><span class="line">        ether 00:0c:29:cb:4a:97  txqueuelen 1000  (Ethernet)</span><br><span class="line">        RX packets 575  bytes 452238 (452.2 KB)</span><br><span class="line">        RX errors 0  dropped 0  overruns 0  frame 0</span><br><span class="line">        TX packets 446  bytes 150254 (150.2 KB)</span><br><span class="line">        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0</span><br><span class="line"></span><br><span class="line">lo: flags=73&lt;UP,LOOPBACK,RUNNING&gt;  mtu 65536</span><br><span class="line">        inet 127.0.0.1  netmask 255.0.0.0</span><br><span class="line">        inet6 ::1  prefixlen 128  scopeid 0x10&lt;host&gt;</span><br><span class="line">        loop  txqueuelen 1000  (Local Loopback)</span><br><span class="line">        RX packets 337  bytes 259455 (259.4 KB)</span><br><span class="line">        RX errors 0  dropped 0  overruns 0  frame 0</span><br><span class="line">        TX packets 337  bytes 259455 (259.4 KB)</span><br><span class="line">        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0</span><br></pre></td></tr></table></figure>
+
+<p>如果是安装的是简洁版，可能连<code>ifconfig</code>命令都不支持，那么需要安装网络工具：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sudo apt instal net-tools</span><br></pre></td></tr></table></figure>
+
+<p>在安装<code>SSH</code>服务之前，先使用<code> ps  -e | grep ssh</code>命令查看自己的虚拟机上是否已经安装了<code>SSH</code>服务：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ps -e | grep ssh</span><br><span class="line">1017 ?        00:00:00 sshd			<span class="comment"># OK</span></span><br><span class="line">1294 ?        00:00:00 ssh-agent</span><br><span class="line">1757 ?        00:00:00 sshd</span><br><span class="line">1836 ?        00:00:00 sshd</span><br></pre></td></tr></table></figure>
+
+<p>否则，下面开始安装、启动SSH服务：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ sudo apt install openssh-server		<span class="comment"># 安装SSH服务</span></span><br><span class="line">$ sudo service ssh start 			    <span class="comment"># 启动SSH服务</span></span><br></pre></td></tr></table></figure>
+
+<p>对于之前没有开启SSH服务的，现在可以再次查看是否启动<code>SSH</code>服务了：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ps -e | grep ssh</span><br><span class="line">1017 ?        00:00:00 sshd</span><br><span class="line">1294 ?        00:00:00 ssh-agent</span><br><span class="line">1757 ?        00:00:00 sshd</span><br><span class="line">1836 ?        00:00:00 sshd</span><br></pre></td></tr></table></figure>
+
+<p>到此，SSH服务器已经开启，下面讲解怎么从vscode remote到虚拟机中。</p>
+<h4 id="vscode链接虚拟机"><a href="#vscode链接虚拟机" class="headerlink" title="vscode链接虚拟机"></a>vscode链接虚拟机</h4><ol>
+<li><p>在<code>Extensions</code>中，安装<code>Remote-SSH</code>插件</p>
+</li>
+<li><p>按住快捷键：<code>ctr + shift + P</code>，在对话中输入：<code>connect</code>，然后选择第一个<code>Remote-SSH:Connect to Host</code>选项即可：</p>
+<p><img src="https://pic4.zhimg.com/80/v2-6c2909636816f4fbd2ed590796eee8ab_1440w.webp"></p>
+</li>
+<li><p>配置虚拟机的IP和端口。在步骤【2】后，会弹出下面的窗口。</p>
+<ul>
+<li>如果你已经连接过虚拟机，那么该虚拟机的IP地址会直接呈现下面。如果确定虚拟机是开启的，那么可以以直接连接即可。</li>
+<li>否则，就需要添加新的虚拟机配置，有两种添加方法：<code>Add New SSH Host</code>选项是引导用户完成<code>Configure SSH Hosts...</code>选项，因此本文直接讲解<code>Configure SSH Hosts...</code>选项。这个选项是直接将虚拟<code>IP</code>地址到配置<code>C:\Users\szza\.ssh\config</code>文件中，极其方便。</li>
+</ul>
+<p><img src="https://pic4.zhimg.com/80/v2-328afe26497546ae82bf9bdc132c1603_1440w.webp"></p>
+<p><img src="https://pic4.zhimg.com/80/v2-6b109350d9a613a854484fbf05435ce7_1440w.webp"></p>
+<p>在<code>C:\Users\szza\.ssh\config</code>文件中，添加虚拟机的信息：</p>
+<p><img src="https://pic3.zhimg.com/80/v2-f459a6d030e24350fe82b093854911fe_1440w.webp"></p>
+<p>设置好后，重复【2】的步骤，再次向虚拟机发起连接，就会发现自己新添加的虚拟机信息已经显示在下方了，直接点击连接即可：</p>
+<p><img src="https://pic2.zhimg.com/80/v2-2c55e70e9eb6ff30849cfa4dd5ba1c25_1440w.webp"></p>
+<p>然后进入下面的界面，输入虚拟机的登录密码即可：</p>
+<p><img src="https://pic4.zhimg.com/80/v2-fc543227fd5a75f67d7f79a05f8c5ccb_1440w.webp"></p>
+<p>输入完毕，则会进入虚拟机的Linux系统，到此连接任务就算完成了。至于该安装的软件和WSL的步骤【5】【6】【7】一致，按照步骤走即可。</p>
+</li>
+</ol>
+<h4 id="免密登录虚拟机"><a href="#免密登录虚拟机" class="headerlink" title="免密登录虚拟机"></a>免密登录虚拟机</h4><p>vscode连接WSL是不需要输入密码，后续任何操作也不需要输入密码。但是vscode和虚拟机的任何操作每次都需要输入密码，就会很影响使用体验，下面讲解如何免密登录虚拟机。</p>
+<p><strong>1）WINDOWs侧</strong></p>
+<p>首先在WINDOWs上的vscode终端上，输入如下的命令，其中<code>&quot;这里任意输入&quot;</code>部分建议使用github账号的邮箱。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ssh-keygen -t rsa -C <span class="string">&quot;这里任意输入&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>一直按<code>enter</code>即可，最终会在<code>C:\Users\szza\.ssh</code>目录下，生成两个文件：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">id_rsa</span><br><span class="line">id_rsa.pub</span><br></pre></td></tr></table></figure>
+
+<p><strong>2） 虚拟机侧</strong></p>
+<p>在vscode的虚拟终端中输入同样的命令，在<code>/home/codespace/.ssh</code>文件下也会生成<code>id_rsa</code> 和<code>id_rsa.pub</code>文件。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">ssh-keygen -t rsa -C <span class="string">&quot;这里任意输入&quot;</span></span><br></pre></td></tr></table></figure>
+
+<p>然后在<code>/home/codespace/.ssh</code>文件下，新建一个文件，名字是<code>authorized_keys</code>，直接将WINDOWs侧目录<code>C:\Users\szza\.ssh</code>下的<code>id_rsa.pub</code>文件内容复制到<code>authorized_keys</code>中，整个免密设置就完成了。</p>
+<p><strong>by the way</strong></p>
+<p>如何将WINDOWs侧的<code>C:\Users\szza\.ssh\id_rsa.pub</code>文件内容复制到虚拟机的<code>/home/codespace/.ssh/authorized_keys</code>中？？？很简单，分别用vscode打开两个文件夹，然后直接复制即可，不需要安装<code>VMWare Tools</code>就能完成。</p>
+<p><img src="https://pic2.zhimg.com/80/v2-04264ccb2eb01c231554fb4cc67f5721_1440w.webp"></p>
+<p>这个方式，也适用于想将WINDOWs的文件传输到虚拟机中，用vscode打开WINDOWs侧的文件，另一个vscode连接上虚拟机并打开到相应的文件夹，直接复制文件。</p>
+<p>到此，整个vscode免密登录虚拟机的过程讲解完毕，以后任何操作都不需要输入密码了。</p>
+<h4 id="过程中可能出现的问题"><a href="#过程中可能出现的问题" class="headerlink" title="过程中可能出现的问题"></a>过程中可能出现的问题</h4><p>vscode +WSL一般都没啥问题，都是WINDOWs原生产品。在remote到虚拟机时，可能会出现问题，我之前遇到过vscode一直连接不上虚拟机，发现是WINDOWs自带的<code>SSH-Client</code>有问题，自己下载一个<code>git</code>客户端，然后重复上述配置，就完成了。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+         
+          <li><a href="/about/">About</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#vscode-WSL"><span class="toc-number">1.</span> <span class="toc-text">vscode +  WSL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%99%9A%E6%8B%9F%E6%9C%BA-vscode"><span class="toc-number">2.</span> <span class="toc-text">虚拟机 +  vscode</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%BC%80%E5%90%AFSSH%E6%9C%8D%E5%8A%A1"><span class="toc-number">2.1.</span> <span class="toc-text">开启SSH服务</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#vscode%E9%93%BE%E6%8E%A5%E8%99%9A%E6%8B%9F%E6%9C%BA"><span class="toc-number">2.2.</span> <span class="toc-text">vscode链接虚拟机</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%85%8D%E5%AF%86%E7%99%BB%E5%BD%95%E8%99%9A%E6%8B%9F%E6%9C%BA"><span class="toc-number">2.3.</span> <span class="toc-text">免密登录虚拟机</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%BF%87%E7%A8%8B%E4%B8%AD%E5%8F%AF%E8%83%BD%E5%87%BA%E7%8E%B0%E7%9A%84%E9%97%AE%E9%A2%98"><span class="toc-number">2.4.</span> <span class="toc-text">过程中可能出现的问题</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/09/Tools/vscode/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/09/Tools/vscode/&text=基于vscode 打造C++编码环境"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/09/Tools/vscode/&is_video=false&description=基于vscode 打造C++编码环境"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=基于vscode 打造C++编码环境&body=Check out this article: https://szza.github.io/2021/03/09/Tools/vscode/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/09/Tools/vscode/&title=基于vscode 打造C++编码环境"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/09/Tools/vscode/&name=基于vscode 打造C++编码环境&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/09/Tools/vscode/&t=基于vscode 打造C++编码环境"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+         
+          <li><a href="/about/">About</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

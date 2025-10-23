@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本期讲解下C++11中引入的 std::unordered_map的设计原理。 std::unordered_map里面has-a哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述std::unordered_map。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="剖析 std::unordered_map O(1) 原理">
+<meta property="og:url" content="https://szza.github.io/2021/03/01/C++/unordered_map_1_/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本期讲解下C++11中引入的 std::unordered_map的设计原理。 std::unordered_map里面has-a哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述std::unordered_map。">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://szza.github.io/2021/03/01/C++/unordered_map_1_/images/unordered_map_1.jpg">
+<meta property="article:published_time" content="2021-03-01T06:09:54.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Modern C++">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://szza.github.io/2021/03/01/C++/unordered_map_1_/images/unordered_map_1.jpg">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>剖析 std::unordered_map O(1) 原理</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2021/03/01/C++/unordered_mpa_2_/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/01/26/Redis/Threads/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/C++/unordered_map_1_/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&text=剖析 std::unordered_map O(1) 原理"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&is_video=false&description=剖析 std::unordered_map O(1) 原理"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map O(1) 原理&body=Check out this article: https://szza.github.io/2021/03/01/C++/unordered_map_1_/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&name=剖析 std::unordered_map O(1) 原理&description=&lt;p&gt;本期讲解下C++11中引入的 &lt;code&gt;std::unordered_map&lt;/code&gt;的设计原理。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;std::unordered_map&lt;/code&gt;里面&lt;code&gt;has-a&lt;/code&gt;哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述&lt;code&gt;std::unordered_map&lt;/code&gt;。&lt;/p&gt;"><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&t=剖析 std::unordered_map O(1) 原理"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#O-1"><span class="toc-number">1.</span> <span class="toc-text">O(1)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hash%E5%86%B2%E7%AA%81"><span class="toc-number">2.</span> <span class="toc-text">hash冲突</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hash%E9%80%80%E5%8C%96"><span class="toc-number">3.</span> <span class="toc-text">hash退化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%B4%9F%E8%BD%BD%E5%9B%A0%E5%AD%90"><span class="toc-number">3.1.</span> <span class="toc-text">负载因子</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Rehash"><span class="toc-number">3.2.</span> <span class="toc-text">Rehash</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        剖析 std::unordered_map O(1) 原理
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-03-01T06:09:54.000Z" itemprop="datePublished">2021-03-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Modern-C/" rel="tag">Modern C++</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本期讲解下C++11中引入的 <code>std::unordered_map</code>的设计原理。</p>
+<p><code>std::unordered_map</code>里面<code>has-a</code>哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述<code>std::unordered_map</code>。</p>
+<span id="more"></span>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// gnu 实现</span></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Key, </span><br><span class="line">         <span class="keyword">typename</span> _Tp,</span><br><span class="line">         <span class="keyword">typename</span> _Hash  = hash&lt;_Key&gt;,</span><br><span class="line">         <span class="keyword">typename</span> _Pred  = equal_to&lt;_Key&gt;,</span><br><span class="line">         <span class="keyword">typename</span> _Alloc = allocator&lt;std::pair&lt;<span class="type">const</span> _Key, _Tp&gt;&gt;&gt;</span><br><span class="line">  <span class="keyword">class</span> unordered_map</span><br><span class="line">  &#123;</span><br><span class="line">    <span class="keyword">typedef</span> __umap_hashtable&lt;_Key, _Tp, _Hash, _Pred, _Alloc&gt;  _Hashtable;</span><br><span class="line">    _Hashtable _M_h; 	<span class="comment">// 内部的唯一成员变量： hashtable</span></span><br><span class="line">   <span class="comment">//...   </span></span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="O-1"><a href="#O-1" class="headerlink" title="O(1)"></a>O(1)</h3><p>数组，可以通过索引<code>index</code>在O(1)的时间复杂度内获取元素，但如果不知道index则要O(N)的时间复杂度来查找该节点。hashtable为了弥补这一缺点，采用一个hash函数来计算元素的索引值，来满足O(1)的搜索时间复杂度。其过程如下。</p>
+<ol>
+<li>计算元素的哈希值。对于单个键值对<code>&#123;key, value&#125;</code>，计算key对应的哈希值 <code>hashcode = hash_func(key)</code> 。</li>
+<li>计算元素在数组中的索引值。由于hashcode不一定处于<code>[0, bucket_count]</code>范围内，因此需要将hashcode映射到该范围：<code>index = hashcode % bucket_count</code>。</li>
+</ol>
+<p>上面两步以O(1)时间复杂度获取了元素在数组中的索引值<code>index</code>，进一步，则能以O(1)时间复杂度给该索引位置赋值或者获取该索引位置的值。两个步骤可实现如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">size_t</span> <span class="title function_">bucket_index</span><span class="params">(<span class="type">const</span> <span class="built_in">std</span>::<span class="built_in">unordered_map</span>&lt;<span class="type">int</span>, <span class="type">int</span>&gt;&amp;  <span class="built_in">map</span>, <span class="type">int</span> key)</span> &#123; </span><br><span class="line">    <span class="type">size_t</span> bucket_count   = <span class="built_in">map</span>.bucket_count();		<span class="comment">// map 的桶的个数</span></span><br><span class="line">    <span class="type">const</span> <span class="keyword">auto</span>&amp; hash_func = <span class="built_in">map</span>.hash_function();	<span class="comment">// hash函数</span></span><br><span class="line">    <span class="type">size_t</span> hash_code      = hash_func(key);			<span class="comment">// 计算hashcode</span></span><br><span class="line"> 	</span><br><span class="line">    <span class="comment">// 键key将插入的桶位置</span></span><br><span class="line">    <span class="keyword">return</span>  hash_code % bucket_count;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>bucket_index</code>函数时间复杂度是O(1)。在C++中，<code>std::unordered_map</code>提供的<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/container/unordered_map/bucket"><code>bucket(key)</code></a>方法实现了相同的功能，即计算键key在数组中位置，下面可以验证下<code>bucket_index(...)</code> 的正确性。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> &#123;</span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">unordered_map</span>&lt;<span class="type">int</span>, <span class="type">int</span>&gt; <span class="title function_">map</span><span class="params">(<span class="number">5</span>)</span>; <span class="comment">// 桶的大小为5</span></span><br><span class="line">    <span class="type">int</span> key = <span class="number">8</span>;</span><br><span class="line">	<span class="comment">// 如果 bucket_index(map, key) != map.bucket(key)， </span></span><br><span class="line">    <span class="comment">// 会触发 abort 中断</span></span><br><span class="line">    assert( bucket_index(<span class="built_in">map</span>, key) == <span class="built_in">map</span>.bucket(key));</span><br><span class="line">    <span class="comment">// 计算结果</span></span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">cout</span>&lt;&lt;<span class="string">&quot;index: &quot;</span>&lt;&lt; bucket_index(<span class="built_in">map</span>, key) &lt;&lt; <span class="built_in">std</span>::<span class="built_in">endl</span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 输出</span></span><br><span class="line">$ g++ main.cc  -o main &amp;&amp; ./main </span><br><span class="line">index: <span class="number">3</span></span><br></pre></td></tr></table></figure>
+
+<p>上面两个步骤，是插入、搜索一个节点的过程，能够以O(1)的时间复杂度。但若同时存在几个节点的hashcode值一样，那么后面插入的节点岂不是会覆盖前面的值?这个问题即 <font color="red"> hash冲突</font>。</p>
+<h3 id="hash冲突"><a href="#hash冲突" class="headerlink" title="hash冲突"></a>hash冲突</h3><p>在正式讲解hash冲突之前，先介绍一个术语：在hashtable中，数组的每一个元素叫做桶（bucket）。</p>
+<p>为了解决hash冲突，hashtable在每个桶里<code>bucket[index]</code>不再直接存储待插入节点的值，而是存储一个哨兵节点，使其指向一个链表，由这个链表来存储每次插入节点的值：</p>
+<ul>
+<li>桶的索引值index依然是<code>bucket_index</code>函数的计算方式，即通过待插入节点的键来获取</li>
+<li>待插入节点的值在哨兵指向的链表头部插入，由于是头部插入整个插入过程还是O(1)时间复杂度。</li>
+</ul>
+<p>当发生hash冲突时，将所有hashcode相同的节点都插入到同一个链表中，如下图所示。由于采用的是头部插入法，那么即便是发生了hash冲突，此时插入时间复杂度也依然是O(1)。</p>
+<img src="./images/unordered_map_1.jpg" style="zoom:80%;">
+
+<p>上述解决hash冲突的方法，叫做<strong>开链法</strong>。此时，hash冲突的问题似乎解决了，能够插入多个hashcode一样的节点，并且插入操作的时间复杂度仍然是O(1)。</p>
+<p>但是!!!，当出现严重的hash冲突，会造成<code>bucket[idx]</code>指向的链表节点很长，此时搜索和删除一个节点的时间复杂度最坏却可能变成O(N)，即<font color="red">哈希表已经退化成链表</font>，那么就违背了一开始设计hashtable的初衷，即弥补数组O(N)的搜索、删除时间复杂度。</p>
+<h3 id="hash退化"><a href="#hash退化" class="headerlink" title="hash退化"></a>hash退化</h3><p>下面分为两个部分讲解hash退化的应对方法。</p>
+<h4 id="负载因子"><a href="#负载因子" class="headerlink" title="负载因子"></a>负载因子</h4><p>为了解决hash退化，引入了两个概念：</p>
+<ul>
+<li>负载因子（load_factor），是hashtable的元素个数与hashtable的桶数之间比值；</li>
+<li>最大负载因子（max_load_factor），是负载因子的上限</li>
+</ul>
+<p>他们之间要满足：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">load_factor = map.<span class="built_in">size</span>() / map.<span class="built_in">buck_count</span>()	<span class="comment">// load_factor 计算方式</span></span><br><span class="line">load_factor &lt;= max_load_factor			   <span class="comment">// 限制条件</span></span><br></pre></td></tr></table></figure>
+
+<p>当hashtable中的元素个数与桶数比值<code>load_factor &gt;= max_load_factor</code>时，hashtable就自动发生<strong>R</strong>ehash行为，来降低load_factor：</p>
+<ul>
+<li>扩容。即使分配一块更大内存，来容纳更多的桶。</li>
+<li>重新插入。按照上述插入步骤将原来桶中的buck_size个节点重新插入到新的桶中。</li>
+</ul>
+<p><strong>R</strong>ehash后，桶数增加了而元素个数不变，再次满足<code>load_factor &lt; max_load_factor</code>条件。</p>
+<h4 id="Rehash"><a href="#Rehash" class="headerlink" title="Rehash"></a>Rehash</h4><p>hashtable，由于要一直满足 <code>load_factor &lt;= max_load_factor</code> ，限制着hash冲突程度，即每个桶的链表节点数不会无限制增加，整个hashtable的节点数达到一定程度就会<strong>R</strong>ehash，确保hashtable的搜索、删除的平均时间复杂度还是O(1)。</p>
+<p>在<code>std::unordered_map</code>有个<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/cpp/container/unordered_map/rehash"><code>rehash</code></a>函数，可以在任意时候使<code>std::unordered_map</code>发生<strong>R</strong>ehash，也可以等<code>load_factor &gt;= max_load_factor</code>时自动发生。注意：</p>
+<ul>
+<li>不同编译器的扩容策略不同，因此不编译器<strong>R</strong>ehash后桶的个数不一致很正常。</li>
+<li>目前msvc和g++中的<code>max_load_factor</code>字段默认值都是1。</li>
+</ul>
+<p>下面以msvc编译触发rehash行为。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">///@brief 向 @c map 中添加 n 个int类型值</span></span><br><span class="line"><span class="type">void</span> <span class="title function_">insert_n</span><span class="params">(<span class="built_in">std</span>::<span class="built_in">unordered_map</span>&lt;<span class="type">int</span>, <span class="type">int</span>&gt;&amp; <span class="built_in">map</span>, <span class="type">int</span> start, <span class="type">int</span> n)</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> idx = start; idx &lt; start + n; ++idx) &#123;</span><br><span class="line">        <span class="built_in">map</span>.insert(&#123; idx, idx &#125;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">cout</span> &lt;&lt; <span class="string">&quot;bucket_cout: &quot;</span> &lt;&lt; <span class="built_in">map</span>.bucket_count()              <span class="comment">// 桶的个数</span></span><br><span class="line">              &lt;&lt; <span class="string">&quot;|size: &quot;</span> &lt;&lt; <span class="built_in">map</span>.size()                            <span class="comment">// 元素个数</span></span><br><span class="line">              &lt;&lt; <span class="string">&quot;|load_factor: &quot;</span> &lt;&lt; <span class="built_in">map</span>.load_factor() &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;     <span class="comment">// 负载因子</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span>* <span class="type">const</span> argv[])</span> &#123;</span><br><span class="line">    <span class="built_in">std</span>::<span class="built_in">unordered_map</span>&lt;<span class="type">int</span>, <span class="type">int</span>&gt; <span class="built_in">map</span>;</span><br><span class="line">    insert_n(<span class="built_in">map</span>, <span class="number">0</span>, <span class="number">0</span>);    <span class="comment">// 初始化状态</span></span><br><span class="line">    insert_n(<span class="built_in">map</span>, <span class="number">0</span>, <span class="number">1</span>);</span><br><span class="line">    insert_n(<span class="built_in">map</span>, <span class="number">1</span>, <span class="number">3</span>);</span><br><span class="line">    insert_n(<span class="built_in">map</span>, <span class="number">3</span>, <span class="number">4</span>);</span><br><span class="line">    insert_n(<span class="built_in">map</span>, <span class="number">7</span>, <span class="number">1</span>);    <span class="comment">// 满负载</span></span><br><span class="line">    insert_n(<span class="built_in">map</span>, <span class="number">8</span>, <span class="number">1</span>);    <span class="comment">// Rehash</span></span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 输出如下：</span></span><br><span class="line">bucket_cout: <span class="number">8</span>|size: <span class="number">1</span>|load_factor: <span class="number">0.125</span></span><br><span class="line">bucket_cout: <span class="number">8</span>|size: <span class="number">4</span>|load_factor: <span class="number">0.5</span></span><br><span class="line">bucket_cout: <span class="number">8</span>|size: <span class="number">7</span>|load_factor: <span class="number">0.875</span></span><br><span class="line">bucket_cout: <span class="number">8</span>|size: <span class="number">8</span>|load_factor: <span class="number">1</span></span><br><span class="line">bucket_cout: <span class="number">64</span>|size: <span class="number">9</span>|load_factor: <span class="number">0.140625</span></span><br></pre></td></tr></table></figure>
+
+<p>下一节从STL源码角度解析上述过程，看看<code>std::unordered_map</code>的底层实现细节。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#O-1"><span class="toc-number">1.</span> <span class="toc-text">O(1)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hash%E5%86%B2%E7%AA%81"><span class="toc-number">2.</span> <span class="toc-text">hash冲突</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#hash%E9%80%80%E5%8C%96"><span class="toc-number">3.</span> <span class="toc-text">hash退化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%B4%9F%E8%BD%BD%E5%9B%A0%E5%AD%90"><span class="toc-number">3.1.</span> <span class="toc-text">负载因子</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Rehash"><span class="toc-number">3.2.</span> <span class="toc-text">Rehash</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/C++/unordered_map_1_/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&text=剖析 std::unordered_map O(1) 原理"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&is_video=false&description=剖析 std::unordered_map O(1) 原理"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map O(1) 原理&body=Check out this article: https://szza.github.io/2021/03/01/C++/unordered_map_1_/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&title=剖析 std::unordered_map O(1) 原理"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&name=剖析 std::unordered_map O(1) 原理&description=&lt;p&gt;本期讲解下C++11中引入的 &lt;code&gt;std::unordered_map&lt;/code&gt;的设计原理。&lt;/p&gt;
+&lt;p&gt;&lt;code&gt;std::unordered_map&lt;/code&gt;里面&lt;code&gt;has-a&lt;/code&gt;哈希表，它提供的的各个方法基本都是由hashtable封装实现，因此在下文使用hashtable来描述&lt;code&gt;std::unordered_map&lt;/code&gt;。&lt;/p&gt;"><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/unordered_map_1_/&t=剖析 std::unordered_map O(1) 原理"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

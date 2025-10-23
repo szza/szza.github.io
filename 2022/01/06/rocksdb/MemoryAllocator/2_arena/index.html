@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="今天，就开始逐步更新剖析 RocksDB 源码的博客。思前想后，准备自下而上，因此还是从内存分配器开始叭。 在 RocksDB 中主要有两类内存分配器MemoryAllocator、Allocator。 MemoryAllocatorMemoryAllocator 是个基类，RocksDB 提供了两个子类：MemkindKmemAllocator、JemallocNodumpAllocator，而">
+<meta property="og:type" content="article">
+<meta property="og:title" content="内存分配器之 arena">
+<meta property="og:url" content="https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="今天，就开始逐步更新剖析 RocksDB 源码的博客。思前想后，准备自下而上，因此还是从内存分配器开始叭。 在 RocksDB 中主要有两类内存分配器MemoryAllocator、Allocator。 MemoryAllocatorMemoryAllocator 是个基类，RocksDB 提供了两个子类：MemkindKmemAllocator、JemallocNodumpAllocator，而">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://szza.github.io/Users/shuzhuangzhuang/self_study/graph/需求/rocksdb/images/Allocator.jpg">
+<meta property="article:published_time" content="2022-01-06T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="RocksDb">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://szza.github.io/Users/shuzhuangzhuang/self_study/graph/需求/rocksdb/images/Allocator.jpg">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>内存分配器之 arena</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/01/01/C++/align/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&text=内存分配器之 arena"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&is_video=false&description=内存分配器之 arena"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=内存分配器之 arena&body=Check out this article: https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&name=内存分配器之 arena&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&t=内存分配器之 arena"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#MemoryAllocator"><span class="toc-number">1.</span> <span class="toc-text">MemoryAllocator</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Allocator"><span class="toc-number"></span> <span class="toc-text">Allocator</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Arena"><span class="toc-number"></span> <span class="toc-text">Arena</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-Arena"><span class="toc-number"></span> <span class="toc-text">Arena::Arena</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateNewBlock"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateNewBlock</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateFromHugePage"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateFromHugePage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateFallback"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateFallback</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateAligned"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateAligned</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-Allocate"><span class="toc-number"></span> <span class="toc-text">Arena::Allocate</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-Arena-1"><span class="toc-number"></span> <span class="toc-text">Arena::~Arena</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Say-Something"><span class="toc-number"></span> <span class="toc-text">Say Something</span></a>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        内存分配器之 arena
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-06T06:15:35.000Z" itemprop="datePublished">2022-01-06</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>今天，就开始逐步更新剖析 RocksDB 源码的博客。思前想后，准备自下而上，因此还是从内存分配器开始叭。</p>
+<p>在 RocksDB 中主要有两类内存分配器<code>MemoryAllocator</code>、<code>Allocator</code>。</p>
+<h4 id="MemoryAllocator"><a href="#MemoryAllocator" class="headerlink" title="MemoryAllocator"></a>MemoryAllocator</h4><p><code>MemoryAllocator</code> 是个基类，RocksDB 提供了两个子类：<code>MemkindKmemAllocator</code>、<code>JemallocNodumpAllocator</code>，而这两个子类，实际上分别是 <a target="_blank" rel="noopener" href="https://github.com/memkind/memkind">memkind</a>、<a target="_blank" rel="noopener" href="https://github.com/jemalloc/jemalloc">jemalloc</a>两个开源库的 wrapper，即利用两个开源库的函数来实现<code>Allocate</code>、<code>Deallocate</code>操作。<code>jemalloc</code>后者有时间再开专题专门细解，这里就不展开说了。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">MemoryAllocator</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">MemoryAllocator</span>() = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">const</span> <span class="type">char</span>* <span class="title">Name</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">	<span class="comment">///@note 需要保证线程安全</span></span><br><span class="line">  <span class="comment">///@param 至少分配的内存大小</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span>* <span class="title">Allocate</span><span class="params">(<span class="type">size_t</span> size)</span> </span>= <span class="number">0</span>;</span><br><span class="line">	</span><br><span class="line">  <span class="comment">///@note 需要保证线程安全</span></span><br><span class="line">  <span class="comment">///@brief 释放之前由 Allocate 分配的内存</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">void</span> <span class="title">Deallocate</span><span class="params">(<span class="type">void</span>* p)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">///@brief 返回 ptr 指向的block的内存大小</span></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">size_t</span> <span class="title">UsableSize</span><span class="params">(<span class="type">void</span>* ptr, <span class="type">size_t</span> allocation_size)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="comment">// default implementation just returns the allocation size</span></span><br><span class="line">    <span class="keyword">return</span> allocation_size;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Allocator"><a href="#Allocator" class="headerlink" title="Allocator"></a>Allocator</h2><p>本节主要详细讲解<code>Allocator</code>及其子类<code>Arena</code>的实现。</p>
+<p>类 <code>Allocator</code> 是个基类，主要有两个接口：</p>
+<ul>
+<li><code>Allocate</code>：分配无须对齐的内存；</li>
+<li><code>AllocateAligned</code>：分配需要经过对齐的内存；</li>
+</ul>
+<p>关于内存对齐，可以参考之前写过的一期博客 [内存对齐之 alignof、alignas 、aligned_storage、align 深度剖析]，在这一期，通过讲解<code>Allocator</code>，会更加深刻的理解内存对齐。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Allocator</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">virtual</span> ~<span class="built_in">Allocator</span>() &#123;&#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">char</span>* <span class="title">Allocate</span><span class="params">(<span class="type">size_t</span> bytes)</span> </span>= <span class="number">0</span>;</span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">char</span>* <span class="title">AllocateAligned</span><span class="params">(<span class="type">size_t</span> bytes, </span></span></span><br><span class="line"><span class="params"><span class="function">                                <span class="type">size_t</span> huge_page_size = <span class="number">0</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">                                Logger* logger = <span class="literal">nullptr</span>)</span> </span>= <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">virtual</span> <span class="type">size_t</span> <span class="title">BlockSize</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>基类<code>Allocator</code> 有两个子类，<code>Arena</code> 和<code>concurrent_arena</code>，分别用于单线程和多线程内存分配，其中 <code>concurrent_arena</code> 也是个<code>Arena</code>的<code>wrapper</code>，外加了一些措施，保证<code>Arnea</code>在多线程下的安全。因此，本文先详细讲解下<code>Arena</code>，下一节再把注意力集中在concurrent_arena&#96;的多线程设计上。</p>
+<img src="/Users/shuzhuangzhuang/self_study/graph/需求/rocksdb/images/Allocator.jpg" style="zoom:50%;">
+
+<h2 id="Arena"><a href="#Arena" class="headerlink" title="Arena"></a>Arena</h2><p>类<code>Arena</code> 在分配内存时，是以 <code>block</code> 为单位，即每次先分配一个<code>block</code>大小的内存，后续所需<code>bytes</code>大小的内存时，会先尝试从<code>block</code> 中获取，如果这个<code>block</code>中剩余的可用内存能满足<code>bytes</code>，则从<code>block</code>中划出一部分给上层使用，否则才从操作系统中获取。</p>
+<p>一个<code>block</code>容纳的内存大小，由<code>kBlockSize</code>参数来指定。</p>
+<p>现在<code>Arena</code>怎么实现基类中<code>Allocate</code>、<code>AllocateAligned</code>两个接口？</p>
+<p><code>Arena</code> 中有两个指针：<code>aligned_alloc_ptr_</code>、<code>unaligned_alloc_ptr_</code>，当一个<code>block</code>的内存创建完毕时：</p>
+<ul>
+<li><code>aligned_alloc_ptr_</code>：指向该<code>block</code>的首地址（低地址），后续用于分配需要对齐的内存；</li>
+<li><code>unaligned_alloc_ptr_</code>：指向该<code>block</code>的末地址（高地址），后续用于分配不需要对齐的内存。</li>
+</ul>
+<p>示意图如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">block : [-------------------------]</span><br><span class="line">        ^                         ^</span><br><span class="line">        |                         | </span><br><span class="line">   aligned_alloc_ptr_    unaligned_alloc_ptr_</span><br></pre></td></tr></table></figure>
+
+<p>为啥要这么做？</p>
+<p>由于每次内存对齐操作可能存在一定的浪费，而同一个类中所需的内存对齐大小一般是固定的，因此从blokc的一端只分配需要对齐的内存，若内存对齐大小是固定的，那么每次分配的内存也都是连续的，如此就可以减少因为内存对齐带来的浪费。</p>
+<p>从<code>block</code>的另一端分配无需对齐的内存，还能提高内存利用率。</p>
+<blockquote>
+<p>比如，block的大小为7个字节，分配一块需要4字节对齐的内存，还剩下3字节的内存，可以继续用于无须对齐的内存。</p>
+</blockquote>
+<p>下面先整体看看类<code>Arean</code>。</p>
+<blockquote>
+<p>在下面的源码分析中，做了一些简化，去除了一些统计内存大小部分的代码，读者可自行追溯RocksDB中该部分的源码。</p>
+</blockquote>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Arena</span> : <span class="keyword">public</span> Allocator &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">// No copying allowed</span></span><br><span class="line">  <span class="built_in">Arena</span>(<span class="type">const</span> Arena&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  <span class="type">void</span> <span class="keyword">operator</span>=(<span class="type">const</span> Arena&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  <span class="type">static</span> <span class="type">const</span> <span class="type">size_t</span> kInlineSize = <span class="number">2048</span>;</span><br><span class="line">  <span class="type">static</span> <span class="type">const</span> <span class="type">size_t</span> kMinBlockSize;</span><br><span class="line">  <span class="type">static</span> <span class="type">const</span> <span class="type">size_t</span> kMaxBlockSize;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">Arena</span><span class="params">(<span class="type">size_t</span> block_size = kMinBlockSize,</span></span></span><br><span class="line"><span class="params"><span class="function">                 AllocTracker* tracker = <span class="literal">nullptr</span>, </span></span></span><br><span class="line"><span class="params"><span class="function">                 <span class="type">size_t</span> huge_page_size = <span class="number">0</span>)</span></span>;</span><br><span class="line">  ~<span class="built_in">Arena</span>();</span><br><span class="line">	</span><br><span class="line">  <span class="comment">/// 分配无需对齐的内存</span></span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">Allocate</span><span class="params">(<span class="type">size_t</span> bytes)</span> <span class="keyword">override</span></span>;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">/// 分配需要对齐的内存</span></span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateAligned</span><span class="params">(<span class="type">size_t</span> bytes, </span></span></span><br><span class="line"><span class="params"><span class="function">                        <span class="type">size_t</span> huge_page_size = <span class="number">0</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">                        Logger* logger = <span class="literal">nullptr</span>)</span> <span class="keyword">override</span></span>;</span><br><span class="line"> </span><br><span class="line">  <span class="comment">/// 当前已使用内存大小</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">ApproximateMemoryUsage</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> blocks_memory_ + blocks_.<span class="built_in">capacity</span>() * <span class="built_in">sizeof</span>(<span class="type">char</span>*) - alloc_bytes_remaining_;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// 总的已分配内存</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">MemoryAllocatedBytes</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> blocks_memory_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// 剩余可用内存</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">AllocatedAndUnused</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> alloc_bytes_remaining_; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// 分配的不对齐block数</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">IrregularBlockNum</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> irregular_block_num; &#125;</span><br><span class="line">	</span><br><span class="line">  <span class="comment">/// 一个 block 的内存大小</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">BlockSize</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">override</span> </span>&#123; <span class="keyword">return</span> kBlockSize; &#125;</span><br><span class="line">	</span><br><span class="line">  <span class="comment">/// blocks_ 是否用的栈上内存</span></span><br><span class="line">  <span class="function"><span class="type">bool</span> <span class="title">IsInInlineBlock</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> blocks_.<span class="built_in">empty</span>();</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="built_in">alignas</span>(<span class="type">max_align_t</span>) <span class="type">char</span> inline_block_[kInlineSize];</span><br><span class="line">  <span class="comment">// 一个block分配的内存大小</span></span><br><span class="line">  <span class="type">const</span> <span class="type">size_t</span> kBlockSize;           </span><br><span class="line">  <span class="keyword">typedef</span> std::vector&lt;<span class="type">char</span>*&gt; Blocks; </span><br><span class="line">  <span class="comment">// 使用new分配的block集合</span></span><br><span class="line">  Blocks blocks_;										</span><br><span class="line"></span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">MmapInfo</span> &#123;</span><br><span class="line">    <span class="type">void</span>* addr_;</span><br><span class="line">    <span class="type">size_t</span> length_;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">MmapInfo</span>(<span class="type">void</span>* addr, <span class="type">size_t</span> length) : <span class="built_in">addr_</span>(addr), <span class="built_in">length_</span>(length) &#123;&#125;</span><br><span class="line">  &#125;;</span><br><span class="line">  <span class="comment">// 使用 mmap 分配内存的block集合</span></span><br><span class="line">  std::vector&lt;MmapInfo&gt; huge_blocks_; </span><br><span class="line">  </span><br><span class="line">  <span class="type">size_t</span> irregular_block_num = <span class="number">0</span>;</span><br><span class="line">  <span class="type">char</span>* unaligned_alloc_ptr_ = <span class="literal">nullptr</span>;</span><br><span class="line">  <span class="type">char</span>* aligned_alloc_ptr_ = <span class="literal">nullptr</span>;</span><br><span class="line">  <span class="comment">// 当前block剩余可用内存</span></span><br><span class="line">  <span class="type">size_t</span> alloc_bytes_remaining_ = <span class="number">0</span>; </span><br><span class="line">   <span class="comment">// 目前一共分配的内存</span></span><br><span class="line">  <span class="type">size_t</span> blocks_memory_ = <span class="number">0</span>;        </span><br><span class="line">  </span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> MAP_HUGETLB</span></span><br><span class="line">  <span class="type">size_t</span> hugetlb_size_ = <span class="number">0</span>;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span>  <span class="comment">// MAP_HUGETLB</span></span></span><br><span class="line">  </span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateFromHugePage</span><span class="params">(<span class="type">size_t</span> bytes)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateFallback</span><span class="params">(<span class="type">size_t</span> bytes, <span class="type">bool</span> aligned)</span></span>;</span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateNewBlock</span><span class="params">(<span class="type">size_t</span> block_bytes)</span></span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Arena-Arena"><a href="#Arena-Arena" class="headerlink" title="Arena::Arena"></a>Arena::Arena</h3><p>先来看看构造函数 <code>Arena::Arena</code>。这里，主要初始化一些类成员变量：</p>
+<ul>
+<li><p><code>kBlockSize</code></p>
+<p>字段<code>kBlockSize</code> ，表达的是以后每次分配一个block时的内存大小。在初始化之前，使用<code>OptimizeBlockSize</code>函数对传入的参数<code>block_size</code>进行限制，使其满足后续的<code>assert</code>判断。</p>
+<p>通过 <code>OptimizeBlockSize</code> 函数限制<code>block_size</code>的值，减少后续分配需要对齐的内存浪费。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> <span class="type">size_t</span> Arena::kMinBlockSize = <span class="number">4096</span>;           <span class="comment">// 最小为 4k</span></span><br><span class="line"><span class="type">const</span> <span class="type">size_t</span> Arena::kMaxBlockSize = <span class="number">2u</span> &lt;&lt; <span class="number">30</span>;       <span class="comment">// 最大为 8k</span></span><br><span class="line"><span class="type">static</span> <span class="type">const</span> <span class="type">int</span> kAlignUnit = <span class="built_in">alignof</span>(<span class="type">max_align_t</span>); <span class="comment">// 按照 8 byte 对齐</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">size_t</span> <span class="title">OptimizeBlockSize</span><span class="params">(<span class="type">size_t</span> block_size)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// 确保满足： Arena::kMinBlockSize &lt;= block_size &lt;= Arena::kMaxBlockSize</span></span><br><span class="line">  block_size = std::<span class="built_in">max</span>(Arena::kMinBlockSize, block_size);</span><br><span class="line">  block_size = std::<span class="built_in">min</span>(Arena::kMaxBlockSize, block_size);</span><br><span class="line">	</span><br><span class="line">  <span class="comment">// 确保 block_size 是 8 的倍数</span></span><br><span class="line">  <span class="keyword">if</span> (block_size % kAlignUnit != <span class="number">0</span>) &#123;</span><br><span class="line">    block_size = (<span class="number">1</span> + block_size / kAlignUnit) * kAlignUnit;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">return</span> block_size;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>inline_block_</code></p>
+<p>字段<code>inline_block_</code> ，其中的<code>inline</code>语义是指这块内存分配在栈上，在地址上和<code>Arena</code>是连续的。这对于那些只需要分配小内存的操作具有优势，可以避免从堆上分配内存。当这块内存使用完毕，会再从堆上获取。</p>
+</li>
+<li><p><code>hugetlb_size_</code></p>
+<p>字段<code>hugetlb_size_</code>，是默认情况下使用<code>mmap</code>给block分配的内存大小。如果 <code>hugetlb_size_ == 0</code>，则表示不使用<code>mmap</code>分配内存。</p>
+<p>当然，<code>hugetlb_size_</code> 在构造函数中也是经过向上取整操作，变为 8 的倍数。</p>
+</li>
+</ul>
+<p>现在，可以很好的阅读构造函数 <code>Arena::Arena</code> 了。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">Arena::<span class="built_in">Arena</span>(<span class="type">size_t</span> block_size, </span><br><span class="line">             AllocTracker* tracker, </span><br><span class="line">             <span class="type">size_t</span> huge_page_size)</span><br><span class="line">    : <span class="built_in">kBlockSize</span>(<span class="built_in">OptimizeBlockSize</span>(block_size)) &#123;</span><br><span class="line">  <span class="built_in">assert</span>(kBlockSize &gt;= kMinBlockSize &amp;&amp; kBlockSize &lt;= kMaxBlockSize &amp;&amp;</span><br><span class="line">         kBlockSize % kAlignUnit == <span class="number">0</span>);</span><br><span class="line">  alloc_bytes_remaining_ = <span class="built_in">sizeof</span>(inline_block_);</span><br><span class="line">  blocks_memory_ += alloc_bytes_remaining_;</span><br><span class="line">  <span class="comment">// 对齐侧指向了低地址</span></span><br><span class="line">  aligned_alloc_ptr_ = inline_block_;</span><br><span class="line">  <span class="comment">// 不对齐侧指向了高地址</span></span><br><span class="line">  unaligned_alloc_ptr_ = inline_block_ + alloc_bytes_remaining_;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> MAP_HUGETLB</span></span><br><span class="line">  hugetlb_size_ = huge_page_size;</span><br><span class="line">  <span class="keyword">if</span> (hugetlb_size_ &amp;&amp; kBlockSize &gt; hugetlb_size_) &#123;</span><br><span class="line">    <span class="comment">// hugetlb_size_ 向上取整</span></span><br><span class="line">    hugetlb_size_ = ((kBlockSize - <span class="number">1U</span>) / hugetlb_size_ + <span class="number">1U</span>) * hugetlb_size_;</span><br><span class="line">  &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">  (<span class="type">void</span>)huge_page_size;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Arena-AllocateNewBlock"><a href="#Arena-AllocateNewBlock" class="headerlink" title="Arena::AllocateNewBlock"></a>Arena::AllocateNewBlock</h3><p><code>AllocateNewBlock</code> 函数比较普通，本质上就是使用 <code>new</code> 操作从操作系统获取内存。</p>
+<p>这里面稍微有个<code>trick</code>的操作，是<code>blocks_.emplace_back(nullptr);</code> 这行，作用是在<code>blocks_</code>中预留一个指针大小的空间，即 <code>sizeof(Block*)</code>，出于内存泄露的考虑，使用了<code>emplace_back</code>，而不是<code>reserve</code>函数。</p>
+<p>RocksDB 解释如下：</p>
+<ul>
+<li>如果<code>emplace_back</code> 函数抛出异常，不会发生内存泄露，因为此时还没使用<code>new</code>分配内存；</li>
+<li>如果<code>new</code> 抛出异常（即<code>std::bad_alloc</code>异常），也不会发生内存泄露，因为在<code>blocks_</code>中预留的空间将会基于RAII语义被清除。</li>
+</ul>
+<p><code>AllocateNewBlock</code> 函数，直接使用<code>new</code>操作分配内存，不负责进行内存对齐操作。如果需要按照某个<code>alignment</code>大小进行对齐，得调用 <code>AllocateAligned</code>  函数，这个后面再说。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">///@return 返回指针，指向当前分配的 block</span></span><br><span class="line"><span class="function"><span class="type">char</span>* <span class="title">Arena::AllocateNewBlock</span><span class="params">(<span class="type">size_t</span> block_bytes)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// Reserve space in `blocks_` before allocating memory via new.</span></span><br><span class="line">  <span class="comment">// Use `emplace_back()` instead of `reserve()` to let std::vector manage its</span></span><br><span class="line">  <span class="comment">// own memory and do fewer reallocations.</span></span><br><span class="line">  <span class="comment">//</span></span><br><span class="line">  <span class="comment">// - If `emplace_back` throws, no memory leaks because we haven&#x27;t called `new`</span></span><br><span class="line">  <span class="comment">//   yet.</span></span><br><span class="line">  <span class="comment">// - If `new` throws, no memory leaks because the vector will be cleaned up</span></span><br><span class="line">  <span class="comment">//   via RAII.</span></span><br><span class="line">  blocks_.<span class="built_in">emplace_back</span>(<span class="literal">nullptr</span>);</span><br><span class="line">  <span class="comment">// 分配内存</span></span><br><span class="line">  <span class="type">char</span>* block = <span class="keyword">new</span> <span class="type">char</span>[block_bytes];</span><br><span class="line">  <span class="type">size_t</span> allocated_size;</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> ROCKSDB_MALLOC_USABLE_SIZE</span></span><br><span class="line">  allocated_size = <span class="built_in">malloc_usable_size</span>(block);</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">  allocated_size = block_bytes;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">  <span class="comment">// 增加已分配内存</span></span><br><span class="line">  blocks_memory_ += allocated_size;</span><br><span class="line">  <span class="comment">// 赋值</span></span><br><span class="line">  blocks_.<span class="built_in">back</span>() = block;</span><br><span class="line">  <span class="keyword">return</span> block;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面来解释下为何使用<code>reserve</code>可能会导致内存泄露，写法如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">char</span>* <span class="title">Arena::AllocateNewBlock</span><span class="params">(<span class="type">size_t</span> block_bytes)</span> </span>&#123;</span><br><span class="line">  blocks_.<span class="built_in">reserve</span>(<span class="number">1</span>);        <span class="comment">// 预留空间</span></span><br><span class="line">  <span class="type">char</span>* block = <span class="keyword">new</span> <span class="type">char</span>[block_bytes];</span><br><span class="line">  <span class="type">size_t</span> allocated_size;</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> ROCKSDB_MALLOC_USABLE_SIZE</span></span><br><span class="line">  allocated_size = <span class="built_in">malloc_usable_size</span>(block);</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">  allocated_size = block_bytes;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">  blocks_memory_ += allocated_size;</span><br><span class="line">  blocks_.<span class="built_in">emplace_back</span>(block); <span class="comment">// 抛出异常???</span></span><br><span class="line">  <span class="keyword">return</span> block;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>理由很简单：上面这个写法，如果在<code>emplace_back</code>的过程中抛出异常，那么 <code>block</code> 指向的内存将会泄露。</p>
+<p>尽管<code>emplace_back</code>抛异常这种bad case极少出现，但也应该为RocksDB的细致点赞。</p>
+<h3 id="Arena-AllocateFromHugePage"><a href="#Arena-AllocateFromHugePage" class="headerlink" title="Arena::AllocateFromHugePage"></a>Arena::AllocateFromHugePage</h3><p><code>Arena</code> 中有两种方式从操作系统获取内存：</p>
+<ul>
+<li><code>new</code>：即如<code>Arena::AllocateNewBlock</code> 函中数的实现；</li>
+<li><code>mmap</code>：即如 <code>Arena::AllocateFromHugePage</code> 函数中的实现。</li>
+</ul>
+<p><code>mmap</code>、<code>munmap</code>函数的原型如下。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/mman.h&gt;</span></span></span><br><span class="line"><span class="comment">// 分配内存</span></span><br><span class="line"><span class="type">void</span>* <span class="title function_">mmap</span><span class="params">(<span class="type">void</span>* addr, <span class="type">size_t</span> len, <span class="type">int</span> prot, <span class="type">int</span> flags, <span class="type">int</span> fd, <span class="type">off_t</span> offset)</span>; </span><br><span class="line"><span class="comment">// 释放 mmap 分配的内存</span></span><br><span class="line"><span class="type">int</span> <span class="title function_">munmap</span><span class="params">(<span class="type">void</span> *addr, <span class="type">size_t</span> len)</span>;   </span><br></pre></td></tr></table></figure>
+
+<p>使用<code>mmap</code>分配内存，需要<code>linux</code>内核支持  <a target="_blank" rel="noopener" href="https://kernel.googlesource.com/pub/scm/linux/kernel/git/maz/arm-platforms/+/1da177e4c3f41524e886b7f1b8a0c1fc7321cac2/Documentation/vm/hugetlbpage.txt">HUGE_PAGE</a>，即当前linux内核具有 <code>MAP_HUGETLB</code> 标志位， 即可以如下操作。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">///@return 返回指针，指向当前分配的 block</span></span><br><span class="line"><span class="function"><span class="type">char</span>* <span class="title">Arena::AllocateFromHugePage</span><span class="params">(<span class="type">size_t</span> bytes)</span> </span>&#123;</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> MAP_HUGETLB</span></span><br><span class="line">  <span class="keyword">if</span> (hugetlb_size_ == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 先使用 emplace_back 理由同上</span></span><br><span class="line">  huge_blocks_.<span class="built_in">emplace_back</span>(<span class="literal">nullptr</span> <span class="comment">/* addr */</span>, <span class="number">0</span> <span class="comment">/* length */</span>);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 使用 mmap 从 hugepage 中分配 bytes 个字节</span></span><br><span class="line">  <span class="type">void</span>* addr = <span class="built_in">mmap</span>(<span class="literal">nullptr</span>, </span><br><span class="line">                    bytes, </span><br><span class="line">                    (PROT_READ | PROT_WRITE),</span><br><span class="line">                    (MAP_PRIVATE | MAP_ANONYMOUS | MAP_HUGETLB), <span class="comment">// 需要 MAP_HUGETLB 支持</span></span><br><span class="line">                    <span class="number">-1</span>, </span><br><span class="line">                    <span class="number">0</span>);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (addr == MAP_FAILED) &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  huge_blocks_.<span class="built_in">back</span>() = <span class="built_in">MmapInfo</span>(addr, bytes);</span><br><span class="line">  blocks_memory_ += bytes;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">reinterpret_cast</span>&lt;<span class="type">char</span>*&gt;(addr);</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">  (<span class="type">void</span>)bytes;</span><br><span class="line">  <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Arena-AllocateFallback"><a href="#Arena-AllocateFallback" class="headerlink" title="Arena::AllocateFallback"></a>Arena::AllocateFallback</h3><p>好嘞，介绍完上面两种分配内存的措施，现在来看看统一上述两个操作的<code>AllocateFallback</code>函数。</p>
+<p>当调用<code>AllocateFallback</code>函数时，是上层发现当前<code>block</code>中剩余的内存无法满足<code>bytes</code>个字节的需求，需要重新从操作系统获取内存。运行到<code>AllocateFallback</code>函数时，逻辑如下：</p>
+<ul>
+<li><p>如果所需的内存大小 <code>bytes</code> 超过了<code>kBlockSize / 4</code>，就直接从操作系统中获取<code>bytes</code>大小的内存，返回给<code>AllocateFallback</code>函数的调用方。那么就能避免浪费当前 block 中剩余的内存，这部分可以继续保留，供给下一次内存分配时使用。</p>
+</li>
+<li><p>否则，当前block中剩余的内存就将会被抛弃，重新从操作系统获中分配一个block的内存，供给上层使用。</p>
+<p>此时，由 <code>bytes &lt;= kBlockSize / 4</code>，因此也降低了浪费，</p>
+</li>
+</ul>
+<p>现在，顺着代码注释往下看。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">char</span>* <span class="title">Arena::AllocateFallback</span><span class="params">(<span class="type">size_t</span> bytes, <span class="type">bool</span> aligned)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">if</span> (bytes &gt; kBlockSize / <span class="number">4</span>) &#123;</span><br><span class="line">    ++irregular_block_num;</span><br><span class="line">    <span class="comment">// 如果所需的内存大小 bytes 超过了 block 的1/4，那么就直接分配内存</span></span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">AllocateNewBlock</span>(bytes);</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="type">size_t</span> size = <span class="number">0</span>;</span><br><span class="line">  <span class="type">char</span>* block_head = <span class="literal">nullptr</span>;</span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> MAP_HUGETLB</span></span><br><span class="line">  <span class="keyword">if</span> (hugetlb_size_) &#123;</span><br><span class="line">    <span class="comment">// mmap 分配的的一个block内存大小为 hugetlb_size_</span></span><br><span class="line">    size = hugetlb_size_;</span><br><span class="line">    block_head = <span class="built_in">AllocateFromHugePage</span>(size);</span><br><span class="line">  &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">  <span class="keyword">if</span> (!block_head) &#123;</span><br><span class="line">    <span class="comment">// block_head == nullptr, 即当前linux内核不支 hugetlb</span></span><br><span class="line">    <span class="comment">// 那么使用 new 来分配内存</span></span><br><span class="line">    size = kBlockSize;</span><br><span class="line">    block_head = <span class="built_in">AllocateNewBlock</span>(size);</span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">//! 之前block未使用的内存就忽略了，</span></span><br><span class="line">  <span class="comment">//! 但不会内存泄露，因为会在析构函数 ~Arena 中释放</span></span><br><span class="line">  </span><br><span class="line">  <span class="comment">// 当前block划掉 bytes 个字节后，剩余的可用内存大小</span></span><br><span class="line">  alloc_bytes_remaining_ = size - bytes;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (aligned) &#123;</span><br><span class="line">    aligned_alloc_ptr_ = block_head + bytes; <span class="comment">// 从低地址端增加 bytes 字节</span></span><br><span class="line">    unaligned_alloc_ptr_ = block_head + size;</span><br><span class="line">    <span class="comment">// 表示 [block_head, block_head + bytes) 可用</span></span><br><span class="line">    <span class="keyword">return</span> block_head;</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    aligned_alloc_ptr_ = block_head; </span><br><span class="line">    unaligned_alloc_ptr_ = block_head + size - bytes; <span class="comment">// 尾部向前推动 bytes</span></span><br><span class="line">    <span class="comment">// 表示 [unaligned_alloc_ptr_, unaligned_alloc_ptr_ + bytes) 可用</span></span><br><span class="line">    <span class="keyword">return</span> unaligned_alloc_ptr_;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Arena-AllocateAligned"><a href="#Arena-AllocateAligned" class="headerlink" title="Arena::AllocateAligned"></a>Arena::AllocateAligned</h3><p>最后，就是对外提供分配对齐内存的函数 <code>AllocateAligned</code>。</p>
+<p>其输入参数<code>huge_page_size</code>，语义是在使用mmap分配内存时的自定义 <code>alignment</code>，如果 <code>huge_page_size</code>  为 0，只是表示此时不需要自定义的<code>alignment</code>，使用默认的<code>kAlignUnit</code>即可。</p>
+<p>换句话说，当需要自定义<code>alignment</code>时，RcoskDb 是准备使用<code>mmap</code>来分配内存。</p>
+<p>当使用默认的<code>kAlignUnit</code>，如果当前block中剩余的可用内存能满足need个字节（need个字节，是bytes字节按照<code>kAlignUnit</code>对齐的后的大小），则继续从当前block中划分出去need个字节，否则就使用上述的<code>AllocateFallback</code>函数，重新从操作系统分配内存。</p>
+<p>现在，顺着代码注释向下看。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">char</span>* <span class="title">Arena::AllocateAligned</span><span class="params">(<span class="type">size_t</span> bytes, </span></span></span><br><span class="line"><span class="params"><span class="function">                             <span class="type">size_t</span> huge_page_size,</span></span></span><br><span class="line"><span class="params"><span class="function">                             Logger* logger)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// Pointer size should be a power of 2</span></span><br><span class="line">  <span class="built_in">assert</span>((kAlignUnit &amp; (kAlignUnit - <span class="number">1</span>)) == <span class="number">0</span>);  </span><br><span class="line">	</span><br><span class="line">  <span class="comment">// 自定义的内存对齐值 huge_page_size，只使用mmap来分配</span></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> MAP_HUGETLB</span></span><br><span class="line">  <span class="keyword">if</span> (huge_page_size &gt; <span class="number">0</span> &amp;&amp; bytes &gt; <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="built_in">assert</span>(logger != <span class="literal">nullptr</span>);</span><br><span class="line">    <span class="comment">// 将 bytes 向上调整到 huge_page_size 的整倍数</span></span><br><span class="line">    <span class="type">size_t</span> reserved_size = ((bytes - <span class="number">1U</span>) / huge_page_size + <span class="number">1U</span>) * huge_page_size;</span><br><span class="line">    <span class="built_in">assert</span>(reserved_size &gt;= bytes);</span><br><span class="line">    <span class="type">char</span>* addr = <span class="built_in">AllocateFromHugePage</span>(reserved_size);</span><br><span class="line">    <span class="keyword">if</span> (addr == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">      <span class="built_in">ROCKS_LOG_WARN</span>(logger,</span><br><span class="line">                     <span class="string">&quot;AllocateAligned fail to allocate huge TLB pages: %s&quot;</span>,</span><br><span class="line">                     <span class="built_in">errnoStr</span>(errno).<span class="built_in">c_str</span>());</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="keyword">return</span> addr;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">else</span></span></span><br><span class="line">  (<span class="type">void</span>)huge_page_size;</span><br><span class="line">  (<span class="type">void</span>)logger;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">  </span><br><span class="line">  <span class="comment">// 下面则使用默认的 kAlignUnit 对齐大小</span></span><br><span class="line"></span><br><span class="line">  <span class="type">size_t</span> current_mod =</span><br><span class="line">      <span class="built_in">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(aligned_alloc_ptr_) &amp; (kAlignUnit - <span class="number">1</span>);</span><br><span class="line">  <span class="comment">// 计算距离对齐还差几个字节</span></span><br><span class="line">  <span class="type">size_t</span> slop = (current_mod == <span class="number">0</span> ? <span class="number">0</span> : kAlignUnit - current_mod);</span><br><span class="line">  <span class="comment">// 对齐后需分配的字节数</span></span><br><span class="line">  <span class="type">size_t</span> needed = bytes + slop;  </span><br><span class="line">  <span class="type">char</span>* result;</span><br><span class="line">  <span class="comment">// 当前block中的剩余内存是否能满足此次 needed 个字节需求</span></span><br><span class="line">  <span class="keyword">if</span> (needed &lt;= alloc_bytes_remaining_) &#123;</span><br><span class="line">    <span class="comment">// result 调整到对齐后的位置</span></span><br><span class="line">    result = aligned_alloc_ptr_ + slop; </span><br><span class="line">    <span class="comment">// 调整到对齐后的位置</span></span><br><span class="line">    aligned_alloc_ptr_ += needed;  </span><br><span class="line">    <span class="comment">// block中剩余的字节数</span></span><br><span class="line">    alloc_bytes_remaining_ -= needed;   </span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// 如果当前 block 剩余的内存不足，则从操作系统获取</span></span><br><span class="line">    result = <span class="built_in">AllocateFallback</span>(bytes, <span class="literal">true</span> <span class="comment">/* aligned */</span>);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="built_in">assert</span>((<span class="built_in">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(result) &amp; (kAlignUnit - <span class="number">1</span>)) == <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>by the way</strong></p>
+<p>这里稍微总结下，如何向上调整、计算对齐后的地址。</p>
+<p>实际上计算的方法有很多种，但是都符合上一期 [内存对齐之 alignof、alignas 、aligned_storage、align 深度剖析] 最后提到了一点：本质上就是以「<code>alignment</code>进制」向上（下）取为<code>alignment</code>的整倍数。</p>
+<p>比如，在十进制下，12向上取整为10的倍数，即20。</p>
+<p>理解了这一层之后，再来看看下面几个计算方式：</p>
+<ul>
+<li><p>case 1：<code>size_t aligned = ((bytes - 1U) / alignment + 1U) * alignment</code></p>
+<p>单纯地将<code>bytes</code>向上调整为<code>alignment</code>的整倍数，可以实现为  <code>(bytes / alignment + 1U) * alignment</code>，那为啥要 <code>- 1</code> 呢？</p>
+<p>如果<code>bytes</code>本身就已是<code>alignment</code>的整数，按照这 native 实现，会无端将<code>bytes</code>增加了<code>alignment</code>。为了应对这种情况，需要先减少1。</p>
+<p>此外，在 <code>Arena::Arena</code> 中调整<code>hugetlb_size_</code> 时，也是如此计算。而在<code>OptimizeBlockSize</code>函数中，调整<code>block_size</code>时，可以确定<code>block_size</code> 不是 <code>kAlignUnit</code>的整数时，就可将<code>-1</code>去掉，简化如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (block_size % kAlignUnit != <span class="number">0</span>) &#123;</span><br><span class="line">  block_size = (<span class="number">1</span> + block_size / kAlignUnit) * kAlignUnit;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>case 2：<code>size_t aligned = (bytes - 1u + alignment) &amp; -alignment</code></p>
+<p>这种实现，利用位位运算将余数清除，效率较高，这也是<code>std::align</code> 函数的实现方式，这在 [内存对齐之 alignof、alignas 、aligned_storage、align 深度剖析] 分析过，这里顺带再解释下。</p>
+<p>其中 <code>alignment</code> 是无符号数，<code>-alignment</code> 的值实际上是 <code>::pow(2, n) - alignment</code>。那么<code>bytes - 1u + alignment</code> 对 <code>-alignment</code> 取 <code>&amp;</code>操作，就能保证 <code>bytes - 1u + alignment</code> 的高位不变，而小于<code>alignment</code> 的余数全部清除。</p>
+</li>
+</ul>
+<p>万变不离其宗，理解了这个逻辑，无论是向上调整、亦或是向下调整，都能很好理解了。</p>
+<h3 id="Arena-Allocate"><a href="#Arena-Allocate" class="headerlink" title="Arena::Allocate"></a>Arena::Allocate</h3><p>讲完了上面<code>AllocateAligned</code>函数之后，再看<code>Allocate</code>函数，就非常好理解了。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">char</span>* <span class="title">Arena::Allocate</span><span class="params">(<span class="type">size_t</span> bytes)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(bytes &gt; <span class="number">0</span>);</span><br><span class="line">  <span class="comment">// 如果当前block剩余足够的内存，则直接分配</span></span><br><span class="line">  <span class="keyword">if</span> (bytes &lt;= alloc_bytes_remaining_) &#123;</span><br><span class="line">    unaligned_alloc_ptr_ -= bytes;</span><br><span class="line">    alloc_bytes_remaining_ -= bytes;</span><br><span class="line">    <span class="keyword">return</span> unaligned_alloc_ptr_;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 不用对齐</span></span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">AllocateFallback</span>(bytes, <span class="literal">false</span> <span class="comment">/* unaligned */</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Arena-Arena-1"><a href="#Arena-Arena-1" class="headerlink" title="Arena::~Arena"></a>Arena::~Arena</h3><p>释放所有已分配的内存。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">Arena::~<span class="built_in">Arena</span>() &#123;</span><br><span class="line">  <span class="comment">// 释放所有使用 new 分配的内存</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; block : blocks_) &#123;</span><br><span class="line">    <span class="keyword">delete</span>[] block;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">ifdef</span> MAP_HUGETLB</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; mmap_info : huge_blocks_) &#123;</span><br><span class="line">    <span class="keyword">if</span> (mmap_info.addr_ == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">      <span class="keyword">continue</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 释放所有使用 mmap 分配的内存</span></span><br><span class="line">    <span class="keyword">auto</span> ret = <span class="built_in">munmap</span>(mmap_info.addr_, mmap_info.length_);</span><br><span class="line">    <span class="keyword">if</span> (ret != <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="comment">// TODO(sdong): Better handling</span></span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"><span class="meta">#<span class="keyword">endif</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Say-Something"><a href="#Say-Something" class="headerlink" title="Say Something"></a>Say Something</h2><p>一个优秀的开源项目，其单元测试（unitest）也是很好的学习资料。尤其对于RocksDB这类比较大的项目，无法下手的话，可以先从单元测试着手。</p>
+<p>下一期，讲解下多线程内存分配器的设计，会更加硬核，敬请期待。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#MemoryAllocator"><span class="toc-number">1.</span> <span class="toc-text">MemoryAllocator</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Allocator"><span class="toc-number"></span> <span class="toc-text">Allocator</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Arena"><span class="toc-number"></span> <span class="toc-text">Arena</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-Arena"><span class="toc-number"></span> <span class="toc-text">Arena::Arena</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateNewBlock"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateNewBlock</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateFromHugePage"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateFromHugePage</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateFallback"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateFallback</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-AllocateAligned"><span class="toc-number"></span> <span class="toc-text">Arena::AllocateAligned</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-Allocate"><span class="toc-number"></span> <span class="toc-text">Arena::Allocate</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Arena-Arena-1"><span class="toc-number"></span> <span class="toc-text">Arena::~Arena</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Say-Something"><span class="toc-number"></span> <span class="toc-text">Say Something</span></a>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&text=内存分配器之 arena"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&is_video=false&description=内存分配器之 arena"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=内存分配器之 arena&body=Check out this article: https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&title=内存分配器之 arena"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&name=内存分配器之 arena&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/06/rocksdb/MemoryAllocator/2_arena/&t=内存分配器之 arena"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

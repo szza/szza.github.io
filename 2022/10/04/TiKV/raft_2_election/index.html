@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="Election本节主要说如何触发 election，以及怎么 election。 Raft::ticktick 用于推动 raft 内部时钟。 12345678pub fn tick(&amp;mut self) -&gt; bool &amp;#123;    match self.state &amp;#123;        StateRole::Follower | StateRole::PreCand">
+<meta property="og:type" content="article">
+<meta property="og:title" content="raft: Election">
+<meta property="og:url" content="https://szza.github.io/2022/10/04/TiKV/raft_2_election/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="Election本节主要说如何触发 election，以及怎么 election。 Raft::ticktick 用于推动 raft 内部时钟。 12345678pub fn tick(&amp;mut self) -&gt; bool &amp;#123;    match self.state &amp;#123;        StateRole::Follower | StateRole::PreCand">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-10-04T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-02T07:40:50.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="tidb-v6.1">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>raft: Election</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/10/05/TiKV/tikv_/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/10/03/TiKV/raft_1_append/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/04/TiKV/raft_2_election/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&text=raft: Election"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&is_video=false&description=raft: Election"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=raft: Election&body=Check out this article: https://szza.github.io/2022/10/04/TiKV/raft_2_election/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&name=raft: Election&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&t=raft: Election"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Election"><span class="toc-number">1.</span> <span class="toc-text">Election</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Raft-tick"><span class="toc-number">1.1.</span> <span class="toc-text">Raft::tick</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Raft-tick-election"><span class="toc-number">1.1.1.</span> <span class="toc-text">Raft::tick_election</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-hup"><span class="toc-number">1.1.1.1.</span> <span class="toc-text">Raft::hup</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-campaign"><span class="toc-number">1.1.1.2.</span> <span class="toc-text">Raft::campaign</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-poll"><span class="toc-number">1.1.1.3.</span> <span class="toc-text">Raft::poll</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-step"><span class="toc-number">1.1.1.4.</span> <span class="toc-text">Raft::step</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#maybe-commit-by-vote"><span class="toc-number">1.1.1.5.</span> <span class="toc-text">maybe_commit_by_vote</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        raft: Election
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-10-04T02:00:01.000Z" itemprop="datePublished">2022-10-04</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/tidb-v6-1/" rel="tag">tidb-v6.1</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Election"><a href="#Election" class="headerlink" title="Election"></a>Election</h1><p>本节主要说如何触发 election，以及怎么 election。</p>
+<h2 id="Raft-tick"><a href="#Raft-tick" class="headerlink" title="Raft::tick"></a>Raft::tick</h2><p>tick 用于推动 raft 内部时钟。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">tick</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) <span class="punctuation">-&gt;</span> <span class="type">bool</span> &#123;</span><br><span class="line">    <span class="keyword">match</span> <span class="keyword">self</span>.state &#123;</span><br><span class="line">        StateRole::Follower | StateRole::PreCandidate | StateRole::Candidate =&gt; &#123;</span><br><span class="line">            <span class="keyword">self</span>.<span class="title function_ invoke__">tick_election</span>()</span><br><span class="line">        &#125;</span><br><span class="line">        StateRole::Leader =&gt; <span class="keyword">self</span>.<span class="title function_ invoke__">tick_heartbeat</span>(),</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Raft-tick-election"><a href="#Raft-tick-election" class="headerlink" title="Raft::tick_election"></a>Raft::tick_election</h3><p>非 leader 节点会调用 Raft::tick_election 来驱动内部数据，监控是否需要 election。</p>
+<ul>
+<li><code>pass_election_timeout()</code> 函数用来判断选举是否超时；</li>
+<li><code>promotable</code> 字段表示 follower 是否还在集群中</li>
+</ul>
+<p>如果一个 alive 的 follower，election 超时，则会让自己进入 MessageType::MsgHup 状态，触发 election。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">pass_election_timeout</span>(&amp;<span class="keyword">self</span>) <span class="punctuation">-&gt;</span> <span class="type">bool</span> &#123;</span><br><span class="line">    <span class="keyword">self</span>.election_elapsed &gt;= <span class="keyword">self</span>.randomized_election_timeout</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">tick_election</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) <span class="punctuation">-&gt;</span> <span class="type">bool</span> &#123;</span><br><span class="line">    <span class="keyword">self</span>.election_elapsed += <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">if</span> !<span class="keyword">self</span>.<span class="title function_ invoke__">pass_election_timeout</span>() || !<span class="keyword">self</span>.promotable &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">self</span>.election_elapsed = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">m</span> = <span class="title function_ invoke__">new_message</span>(INVALID_ID, MessageType::MsgHup, <span class="title function_ invoke__">Some</span>(<span class="keyword">self</span>.id));</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">_</span> = <span class="keyword">self</span>.<span class="title function_ invoke__">step</span>(m);</span><br><span class="line">    <span class="literal">true</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Raft-hup"><a href="#Raft-hup" class="headerlink" title="Raft::hup"></a>Raft::hup</h4><p>先看当前 <code>(applied, committed]</code> 区间的数据是否包含 confChange：如果包含则当前不能选举（待解释）。</p>
+<p>如果 <code>(applied, committed]</code> 没有 confChange 类型的数据，则进入 <code>Raft::campaign</code> 函数开始选举。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">hup</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, transfer_leader: <span class="type">bool</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">self</span>.state == StateRole::Leader &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">first_index</span> = <span class="keyword">match</span> <span class="keyword">self</span>.raft_log.unstable.<span class="title function_ invoke__">maybe_first_index</span>() &#123;</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(idx) =&gt; idx,</span><br><span class="line">        <span class="literal">None</span> =&gt; <span class="keyword">self</span>.raft_log.applied + <span class="number">1</span>,</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 取出已 committd 但是尚未 applied</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">ents</span> = <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">slice</span>(</span><br><span class="line">            first_index,</span><br><span class="line">            <span class="keyword">self</span>.raft_log.committed + <span class="number">1</span>,</span><br><span class="line">            <span class="literal">None</span>,</span><br><span class="line">            <span class="title function_ invoke__">GetEntriesContext</span>(GetEntriesFor::TransferLeader),</span><br><span class="line">        )</span><br><span class="line">        .<span class="title function_ invoke__">unwrap_or_else</span>(|e| &#123; fatal!(<span class="comment">/* ... */</span>); &#125;);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 不能包含 confChange</span></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">self</span>.<span class="title function_ invoke__">num_pending_conf</span>(&amp;ents) != <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Raft-campaign"><a href="#Raft-campaign" class="headerlink" title="Raft::campaign"></a>Raft::campaign</h4><p><code>Raft::campaign</code> 函数，开启新一轮的 election，竞争成为 leader。</p>
+<ul>
+<li><p>开启 pre_vote，则 follower 先变成 <strong>pre_candidate</strong> 状态</p>
+<p> pre_candiate 状态的 raft_node，先尝试收集半数以上的心跳，如果能收集到半数以上的心跳，则转变为 candidate 状态。</p>
+</li>
+<li><p>否则，follower 直接变成 <strong>candidate</strong> 状态</p>
+<p>  在 candidate 状态上的节点，需要自增 term，向其他node发送消息，让其他 ndoe 给自己投票，并且强迫其他 node 进入新一轮 election。</p>
+</li>
+</ul>
+<p>在 campaign 函数中，<code>poll</code> 函数中判断自己是否能成为 leader。如果能成为 leader </p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">campaign</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, campaign_type: &amp;<span class="symbol">&#x27;static</span> [<span class="type">u8</span>]) &#123;</span><br><span class="line">    <span class="keyword">let</span> (vote_msg, term) = <span class="keyword">if</span> campaign_type == CAMPAIGN_PRE_ELECTION &#123;</span><br><span class="line">        <span class="keyword">self</span>.<span class="title function_ invoke__">become_pre_candidate</span>();</span><br><span class="line">        <span class="comment">// 让其他 node 率先进入 candiate 阶段</span></span><br><span class="line">        (MessageType::MsgRequestPreVote, <span class="keyword">self</span>.term + <span class="number">1</span>)</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">self</span>.<span class="title function_ invoke__">become_candidate</span>();</span><br><span class="line">        (MessageType::MsgRequestVote, <span class="keyword">self</span>.term)</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 如果给自己投票后能变成 leader，说明集群只有一个 node</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">self_id</span> = <span class="keyword">self</span>.id;</span><br><span class="line">    <span class="keyword">if</span> VoteResult::Won == <span class="keyword">self</span>.<span class="title function_ invoke__">poll</span>(self_id, vote_msg, <span class="literal">true</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> (commit, commit_term) = <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">commit_info</span>(); <span class="comment">// 当前自己的 commit 信息</span></span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">voters</span> = [<span class="number">0</span>; <span class="number">7</span>];</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 向所有其他 node 发送投票请求</span></span><br><span class="line">    <span class="keyword">for</span> <span class="variable">id</span> <span class="keyword">in</span> <span class="keyword">self</span>.prs.<span class="title function_ invoke__">conf</span>().<span class="title function_ invoke__">voters</span>().<span class="title function_ invoke__">ids</span>().<span class="title function_ invoke__">iter</span>() &#123;</span><br><span class="line">        <span class="keyword">if</span> id == self_id &#123;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        voters[voter_cnt] = id;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">m</span> = <span class="title function_ invoke__">new_message</span>(id, vote_msg, <span class="literal">None</span>); </span><br><span class="line">        m.term = term;</span><br><span class="line">        m.index = <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">last_index</span>();</span><br><span class="line">        m.log_term = <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">last_term</span>();</span><br><span class="line">        m.commit = commit;</span><br><span class="line">        m.commit_term = commit_term;</span><br><span class="line">        <span class="keyword">if</span> campaign_type == CAMPAIGN_TRANSFER &#123;</span><br><span class="line">            m.context = campaign_type.<span class="title function_ invoke__">into</span>();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">self</span>.r.<span class="title function_ invoke__">send</span>(m, &amp;<span class="keyword">mut</span> <span class="keyword">self</span>.msgs);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Raft-poll"><a href="#Raft-poll" class="headerlink" title="Raft::poll"></a>Raft::poll</h4><p><code>Raft::poll</code> 函数的参数 <code>&#123;from, vote&#125;</code> ：<code>vote</code> 为 true，则表示接受到了 <code>from</code> 的投票；反之，<code>from</code> 拒绝给自己选票。</p>
+<ul>
+<li>先将这个投票结果 <code>&#123;from, vote&#125;</code> 记录在 <strong>ProgressTracker::votes</strong> 字段中；</li>
+<li>再基于 ProgressTracker::votes 中的结果，统计自己是否赢得本轮 election。</li>
+</ul>
+<p>根据 <code>ProgressTracker::tally_votes</code> 的结果：</p>
+<ul>
+<li>VoteResult::Won：获得多数票数的，即主动变成 leader （如果开启了 <strong>pre_vote</strong>，当前状态是 StateRole::PreCandidate, 则变成 Candidate）；</li>
+<li>VoteResult::Lost：失败的节点（即半数以上的节点拒绝给该节点投票）则主动变成 follower（但是此时不知道谁是 leader）；</li>
+<li>VoteResult::Pending：即没成功也没失败的节点，如果有其他节点成为 leader后，会广播心跳信息，让自己变成 follower。或者，等待 election_timeout，进入下一轮选举。</li>
+</ul>
+<p>代码如下。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">fn</span> <span class="title function_">poll</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, from: <span class="type">u64</span>, t: MessageType, vote: <span class="type">bool</span>) <span class="punctuation">-&gt;</span> VoteResult &#123;</span><br><span class="line">    <span class="keyword">self</span>.prs.<span class="title function_ invoke__">record_vote</span>(from, vote);</span><br><span class="line">    <span class="keyword">let</span> (gr, rj, res) = <span class="keyword">self</span>.prs.<span class="title function_ invoke__">tally_votes</span>();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">match</span> res &#123;</span><br><span class="line">        VoteResult::Won =&gt; &#123;</span><br><span class="line">            <span class="keyword">if</span> <span class="keyword">self</span>.state == StateRole::PreCandidate &#123;</span><br><span class="line">                <span class="keyword">self</span>.<span class="title function_ invoke__">campaign</span>(CAMPAIGN_ELECTION);</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="keyword">self</span>.<span class="title function_ invoke__">become_leader</span>(); <span class="comment">// 先变成 leader</span></span><br><span class="line">                <span class="keyword">self</span>.<span class="title function_ invoke__">bcast_append</span>();  <span class="comment">// 再给其他节点广播空消息</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        VoteResult::Lost =&gt; &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="variable">term</span> = <span class="keyword">self</span>.term;</span><br><span class="line">            <span class="keyword">self</span>.<span class="title function_ invoke__">become_follower</span>(term, INVALID_ID);</span><br><span class="line">        &#125;</span><br><span class="line">        VoteResult::Pending =&gt; (),</span><br><span class="line">    &#125;</span><br><span class="line">    res</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Raft-step"><a href="#Raft-step" class="headerlink" title="Raft::step"></a>Raft::step</h4><p>每次接受到消息时， 会先进入 <code>Raft::step</code> 函数中进行处理，再根据具体的消息类型进行特殊处理。</p>
+<ul>
+<li>本节点消息：对于来自本节点的消息<code>m</code>，他的 <code>m.term</code> 是 0，直接根据其消息类型 <code>m.get_message_type()</code> 进行处理。 比如 leader 节点处理 proposal 时。</li>
+<li>其他节点消息：对于来自己其他节点的消息<code>m</code>，从 raft 论文可知，要区分 <code>m.term &lt; self.term</code> 和 <code>m.term &gt; self.term</code> 和 <code>m.term == self.term</code> 三种case进行处理</li>
+</ul>
+<p><strong>m.term &gt; self.term</strong></p>
+<p>这种情况下，如果消息类型还是：</p>
+<ul>
+<li><code>MessageType::MsgAppend</code></li>
+<li><code>MessageType::MsgHeartbeat</code></li>
+<li><code>MessageType::MsgSnapshot</code></li>
+</ul>
+<p>那么说明当前集群已经产生了一个新 leader，此时接收到的消息是用来广播，告知其他节点成为 <code>m.from</code> 的 follower。</p>
+<p>如果接受到的消息类型是：</p>
+<ul>
+<li><code>MessageType::MsgRequestPreVote</code> </li>
+<li><code>MessageType::MsgRequestVote</code></li>
+</ul>
+<p>说明集群有一个节点 <code>m.from</code> 率先发起了新一轮 election。但是接受到这个请求的一端 <code>m.to</code> 需要判断是否扰动，不能盲目的给 <code>m.from</code> 投票：如果当前 leader 仍存在并且在 lease 之中，那么接受到此请求的节点就忽略本次的投票请求。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">step</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, m: Message) <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;()&gt; &#123;</span><br><span class="line">    <span class="keyword">if</span> m.term == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="comment">// local message</span></span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> m.term &gt; <span class="keyword">self</span>.term &#123;</span><br><span class="line">        <span class="keyword">if</span> m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgRequestVote</span><br><span class="line">            || m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgRequestPreVote</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="variable">force</span> = m.context == CAMPAIGN_TRANSFER; <span class="comment">// 不是集群强制切换 leader</span></span><br><span class="line">            <span class="keyword">let</span> <span class="variable">in_lease</span> = <span class="keyword">self</span>.check_quorum</span><br><span class="line">                &amp;&amp; <span class="keyword">self</span>.leader_id != INVALID_ID</span><br><span class="line">                &amp;&amp; <span class="keyword">self</span>.election_elapsed &lt; <span class="keyword">self</span>.election_timeout;</span><br><span class="line">            <span class="comment">// 如果是扰动，则忽略本次投票请求</span></span><br><span class="line">            <span class="keyword">if</span> !force &amp;&amp; in_lease &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="title function_ invoke__">Ok</span>(());</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgRequestPreVote</span><br><span class="line">            || (m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgRequestPreVoteResponse &amp;&amp; !m.reject)</span><br><span class="line">        &#123; </span><br><span class="line">            <span class="comment">// 这种情况无需操作</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgAppend</span><br><span class="line">                || m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgHeartbeat</span><br><span class="line">                || m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgSnapshot</span><br><span class="line">            &#123;</span><br><span class="line">                <span class="comment">// 成为 m.from 的 follower</span></span><br><span class="line">                <span class="keyword">self</span>.<span class="title function_ invoke__">become_follower</span>(m.term, m.from);</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">// 不知道成为谁的 follower</span></span><br><span class="line">                <span class="keyword">self</span>.<span class="title function_ invoke__">become_follower</span>(m.term, INVALID_ID);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125; </span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>m.term &lt; self.term</strong></p>
+<p>如果消息类型是 <code>MessageType::MsgHeartbeat</code> or <code>MessageType::MsgAppend</code></p>
+<p>todo</p>
+<p>如果消息类型是 <code>MessageType::MsgRequestPreVote</code>，则直接向缓存区添加一个拒接的提示。</p>
+<p>其他的消息类型都直接忽略。</p>
+<p>return</p>
+<p>上述三种case，只有 <code>m.term &lt; self.term</code> 会直接return。其他的两种不会，仍然会根据具体消息类型继续处理。<code>MessageType::MsgAppend</code> 类型的已经讲解，本次主要是讲解投票。</p>
+<p>接受到 MsgVote 请求后， 需要先判断自己还是否有投票权：</p>
+<ul>
+<li>上次已经投递给这个节点，或者</li>
+<li>当前没有投票，且没有所属的 leader，比如调用的 <code>self.become_follower(m.term, INVALID_ID)</code> 就会这样，或者</li>
+<li>请求是 MessageType::MsgRequestPreVote 并且 m.term &gt; self.term</li>
+</ul>
+<p>那么说明当前节点具有投票的能力，如果在此基础上，仍然同时满足以下两个条件：</p>
+<ul>
+<li>当前节点的 raft_log 和 m 的一样新，或者对方选举时的优先级更高，那么就会把票投给 m，</li>
+<li>否则就会拒绝</li>
+</ul>
+<p>代码如下。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">match</span> m.<span class="title function_ invoke__">get_msg_type</span>() &#123;</span><br><span class="line">    MessageType::MsgRequestVote | MessageType::MsgRequestPreVote =&gt; &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">can_vote</span> = (<span class="keyword">self</span>.vote == m.from) ||</span><br><span class="line">            (<span class="keyword">self</span>.vote == INVALID_ID &amp;&amp; <span class="keyword">self</span>.leader_id == INVALID_ID) ||</span><br><span class="line">            (m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgRequestPreVote &amp;&amp; m.term &gt; <span class="keyword">self</span>.term);</span><br><span class="line">       </span><br><span class="line">        <span class="keyword">if</span> can_vote</span><br><span class="line">            &amp;&amp; <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">is_up_to_date</span>(m.index, m.log_term)</span><br><span class="line">            &amp;&amp; (m.index &gt; <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">last_index</span>() || m.priority &gt;= <span class="keyword">self</span>.priority)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">to_send</span> =</span><br><span class="line">                <span class="title function_ invoke__">new_message</span>(m.from, <span class="title function_ invoke__">vote_resp_msg_type</span>(m.<span class="title function_ invoke__">get_msg_type</span>()), <span class="literal">None</span>);</span><br><span class="line">            to_send.reject = <span class="literal">false</span>;</span><br><span class="line">            to_send.term = m.term;</span><br><span class="line">            <span class="keyword">self</span>.r.<span class="title function_ invoke__">send</span>(to_send, &amp;<span class="keyword">mut</span> <span class="keyword">self</span>.msgs);</span><br><span class="line">            <span class="keyword">if</span> m.<span class="title function_ invoke__">get_msg_type</span>() == MessageType::MsgRequestVote &#123;</span><br><span class="line">                <span class="comment">// Only record real votes.</span></span><br><span class="line">                <span class="keyword">self</span>.election_elapsed = <span class="number">0</span>;</span><br><span class="line">                <span class="keyword">self</span>.vote = m.from; <span class="comment">// 记录投票</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">to_send</span> =</span><br><span class="line">                <span class="title function_ invoke__">new_message</span>(m.from, <span class="title function_ invoke__">vote_resp_msg_type</span>(m.<span class="title function_ invoke__">get_msg_type</span>()), <span class="literal">None</span>);</span><br><span class="line">            to_send.reject = <span class="literal">true</span>;</span><br><span class="line">            to_send.term = <span class="keyword">self</span>.term;</span><br><span class="line">            <span class="keyword">let</span> (commit, commit_term) = <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">commit_info</span>();</span><br><span class="line">            to_send.commit = commit;</span><br><span class="line">            to_send.commit_term = commit_term;</span><br><span class="line">            <span class="keyword">self</span>.r.<span class="title function_ invoke__">send</span>(to_send, &amp;<span class="keyword">mut</span> <span class="keyword">self</span>.msgs);</span><br><span class="line">            <span class="keyword">self</span>.<span class="title function_ invoke__">maybe_commit_by_vote</span>(&amp;m);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>发送端接受到回应</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">MessageType::MsgRequestPreVoteResponse | MessageType::MsgRequestVoteResponse =&gt; &#123;</span><br><span class="line">    <span class="comment">// 类型不匹配，则忽略</span></span><br><span class="line">    <span class="title function_ invoke__">if</span> (<span class="keyword">self</span>.state == StateRole::PreCandidate</span><br><span class="line">        &amp;&amp; m.<span class="title function_ invoke__">get_msg_type</span>() != MessageType::MsgRequestPreVoteResponse)</span><br><span class="line">        || (<span class="keyword">self</span>.state == StateRole::Candidate</span><br><span class="line">            &amp;&amp; m.<span class="title function_ invoke__">get_msg_type</span>() != MessageType::MsgRequestVoteResponse)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="title function_ invoke__">Ok</span>(());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 接送到对端的投票，来看自己能成为什么角色</span></span><br><span class="line">    <span class="keyword">self</span>.<span class="title function_ invoke__">poll</span>(m.from, m.<span class="title function_ invoke__">get_msg_type</span>(), !m.reject);</span><br><span class="line">    <span class="keyword">self</span>.<span class="title function_ invoke__">maybe_commit_by_vote</span>(&amp;m);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="maybe-commit-by-vote"><a href="#maybe-commit-by-vote" class="headerlink" title="maybe_commit_by_vote"></a>maybe_commit_by_vote</h4><p>节点接受到对方的 MsgVote 信息之后，会尝试提取出里面的 commit 信息来提交自己的 raft_log。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Commits the logs using commit info in vote message.</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">maybe_commit_by_vote</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, m: &amp;Message) &#123;</span><br><span class="line">    <span class="keyword">if</span> m.commit == <span class="number">0</span> || m.commit_term == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">last_commit</span> = <span class="keyword">self</span>.raft_log.committed;</span><br><span class="line">    <span class="keyword">if</span> m.commit &lt;= last_commit || <span class="keyword">self</span>.state == StateRole::Leader &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// commit</span></span><br><span class="line">    <span class="keyword">if</span> !<span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">maybe_commit</span>(m.commit, m.commit_term) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">self</span>.state != StateRole::Candidate &amp;&amp; <span class="keyword">self</span>.state != StateRole::PreCandidate &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 取出刚才 committed 的数据</span></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">ents</span> = <span class="keyword">self</span>.raft_log.<span class="title function_ invoke__">slice</span>(</span><br><span class="line">            last_commit + <span class="number">1</span>,</span><br><span class="line">            <span class="keyword">self</span>.raft_log.committed + <span class="number">1</span>,</span><br><span class="line">            <span class="literal">None</span>,</span><br><span class="line">            <span class="title function_ invoke__">GetEntriesContext</span>(GetEntriesFor::CommitByVote),</span><br><span class="line">        ).<span class="title function_ invoke__">unwrap_or_else</span>(|e| &#123; fatal!(); &#125;);</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 转变为 follower</span></span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">self</span>.<span class="title function_ invoke__">num_pending_conf</span>(&amp;ents) != <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">term</span> = <span class="keyword">self</span>.term;</span><br><span class="line">        <span class="keyword">self</span>.<span class="title function_ invoke__">become_follower</span>(term, INVALID_ID);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Election"><span class="toc-number">1.</span> <span class="toc-text">Election</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Raft-tick"><span class="toc-number">1.1.</span> <span class="toc-text">Raft::tick</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Raft-tick-election"><span class="toc-number">1.1.1.</span> <span class="toc-text">Raft::tick_election</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-hup"><span class="toc-number">1.1.1.1.</span> <span class="toc-text">Raft::hup</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-campaign"><span class="toc-number">1.1.1.2.</span> <span class="toc-text">Raft::campaign</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-poll"><span class="toc-number">1.1.1.3.</span> <span class="toc-text">Raft::poll</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Raft-step"><span class="toc-number">1.1.1.4.</span> <span class="toc-text">Raft::step</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#maybe-commit-by-vote"><span class="toc-number">1.1.1.5.</span> <span class="toc-text">maybe_commit_by_vote</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/04/TiKV/raft_2_election/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&text=raft: Election"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&is_video=false&description=raft: Election"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=raft: Election&body=Check out this article: https://szza.github.io/2022/10/04/TiKV/raft_2_election/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&title=raft: Election"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&name=raft: Election&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/04/TiKV/raft_2_election/&t=raft: Election"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

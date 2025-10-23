@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="OptimizerTask 的继承关系如下图（还有个 RewriteTreeTask，由于和其他 Task 不一起使用，因此没画出来）。每个子 Task 都需要去实现 execute 函数来完成真正的操作。  OptimizerTask 函数执行时采用后续遍历的顺序来执行任务，如下图。当前优化一个 Group 时，从 OptimizeGroupTask 函数开始，只有创建 OptimizeGrou">
+<meta property="og:type" content="article">
+<meta property="og:title" content="CBO: Optimizer Overview">
+<meta property="og:url" content="https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="OptimizerTask 的继承关系如下图（还有个 RewriteTreeTask，由于和其他 Task 不一起使用，因此没画出来）。每个子 Task 都需要去实现 execute 函数来完成真正的操作。  OptimizerTask 函数执行时采用后续遍历的顺序来执行任务，如下图。当前优化一个 Group 时，从 OptimizeGroupTask 函数开始，只有创建 OptimizeGrou">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/OptimizerTask-2.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/OptimizerTask.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Memo.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Rule.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Rule-Pattern.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Rule-Pattern-2.svg?raw=true">
+<meta property="article:published_time" content="2023-10-12T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-10-20T13:11:55.763Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/OptimizerTask-2.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>CBO: Optimizer Overview</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" href="/2023/10/07/Pipeline/CBO/EnforceAndCostTask/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&text=CBO: Optimizer Overview"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&is_video=false&description=CBO: Optimizer Overview"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=CBO: Optimizer Overview&body=Check out this article: https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&name=CBO: Optimizer Overview&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&t=CBO: Optimizer Overview"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#SeriallyTaskScheduler"><span class="toc-number">1.</span> <span class="toc-text">SeriallyTaskScheduler</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memo"><span class="toc-number">2.</span> <span class="toc-text">Memo</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#init"><span class="toc-number">2.1.</span> <span class="toc-text">init</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Optimizer-memoOptimize"><span class="toc-number">3.</span> <span class="toc-text">Optimizer.memoOptimize</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OptimizeGroupTask"><span class="toc-number">4.</span> <span class="toc-text">OptimizeGroupTask</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OptimizeExpressionTask"><span class="toc-number">5.</span> <span class="toc-text">OptimizeExpressionTask</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-ExploreGroupTask"><span class="toc-number">5.1.</span> <span class="toc-text">1.ExploreGroupTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-DeriveStatsTask"><span class="toc-number">5.2.</span> <span class="toc-text">2.DeriveStatsTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-ApplyRuleTask"><span class="toc-number">5.3.</span> <span class="toc-text">3.ApplyRuleTask</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#OptimizeExpressionTask-getValidRules"><span class="toc-number">5.3.1.</span> <span class="toc-text">OptimizeExpressionTask.getValidRules</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#OptimizerTask-filterInValidRules"><span class="toc-number">5.3.2.</span> <span class="toc-text">OptimizerTask.filterInValidRules</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Pattern-matchWithoutChild"><span class="toc-number">5.3.3.</span> <span class="toc-text">Pattern.matchWithoutChild</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ApplyRuleTask-execute"><span class="toc-number">5.3.4.</span> <span class="toc-text">ApplyRuleTask.execute</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Binder"><span class="toc-number">6.</span> <span class="toc-text">Binder</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#next"><span class="toc-number">6.1.</span> <span class="toc-text">next</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#match"><span class="toc-number">6.2.</span> <span class="toc-text">match</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#trace"><span class="toc-number">6.2.1.</span> <span class="toc-text">trace</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#extractGroupExpression"><span class="toc-number">6.2.2.</span> <span class="toc-text">extractGroupExpression</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">7.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        CBO: Optimizer Overview
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-10-12T02:00:01.000Z" itemprop="datePublished">2023-10-12</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/CBO/">CBO</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>OptimizerTask 的继承关系如下图（还有个 RewriteTreeTask，由于和其他 Task 不一起使用，因此没画出来）。每个子 Task 都需要去实现 <strong>execute</strong> 函数来完成真正的操作。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/OptimizerTask-2.svg?raw=true" alt="OptimizerTask-2"></p>
+<p>OptimizerTask 函数执行时采用后续遍历的顺序来执行任务，如下图。当前优化一个 Group 时，从 OptimizeGroupTask 函数开始，只有创建 OptimizeGroupTask 对象时才会创建一个新的 TaskContext，用 TaskContext 来记录当前 Group 的优化过程中产生最低成本的上界 upperBoundCost。</p>
+<p>在执行过程中，每个 Task 会尽可能裁剪遍历分支，缩小搜索空间，降低优化器执行时间。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/OptimizerTask.svg?raw=true" alt="OptimizerTask"></p>
+<p>这里主要讲解下 OptimizerTask 的搜索过程，每个 Task 的具体实现有空再说。</p>
+<h2 id="SeriallyTaskScheduler"><a href="#SeriallyTaskScheduler" class="headerlink" title="SeriallyTaskScheduler"></a>SeriallyTaskScheduler</h2><p>SeriallyTaskScheduler 按照 <em>first in last out</em> 顺序执行 OptimizerTask：通过 SeriallyTaskScheduler.PushTask 和 OptimizerTask.PushTask 函数将待执行的 Task 入栈，在 SeriallyTaskScheduler.executeTasks 函数中将栈中元素 pop 出来执行。</p>
+<p>executeTasks 函数限制了一次完整遍历的时间不能超过阈值 new_planner_optimize_timeout（默认值 3000ms），完整代码如下。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">SeriallyTaskScheduler</span> <span class="keyword">implements</span> <span class="title class_">TaskScheduler</span> &#123;</span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> Stack&lt;OptimizerTask&gt; tasks;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="title function_">SeriallyTaskScheduler</span><span class="params">()</span> &#123;</span><br><span class="line">        tasks = <span class="keyword">new</span> <span class="title class_">Stack</span>&lt;&gt;();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">pushTask</span><span class="params">(OptimizerTask task)</span> &#123;</span><br><span class="line">        tasks.push(task);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Override</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">executeTasks</span><span class="params">(TaskContext context)</span> &#123;</span><br><span class="line">        <span class="type">OptimizerContext</span> <span class="variable">optimizerContext</span> <span class="operator">=</span> context.getOptimizerContext();</span><br><span class="line">        <span class="type">long</span> <span class="variable">timeout</span> <span class="operator">=</span> </span><br><span class="line">            optimizerContext.getSessionVariable().getOptimizerExecuteTimeout();</span><br><span class="line">        <span class="type">Stopwatch</span> <span class="variable">watch</span> <span class="operator">=</span> optimizerContext.getTraceInfo().getStopwatch();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 将 stack 中的所有元素提取出来，全部执行完毕</span></span><br><span class="line">        <span class="keyword">while</span> (!tasks.empty()) &#123;</span><br><span class="line">            <span class="keyword">if</span> (watch.elapsed(TimeUnit.MILLISECONDS) &gt; timeout) &#123;</span><br><span class="line">                <span class="comment">//...</span></span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="type">OptimizerTask</span> <span class="variable">task</span> <span class="operator">=</span> tasks.pop();</span><br><span class="line">            optimizerContext.setTaskContext(context);</span><br><span class="line">            task.execute();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Memo"><a href="#Memo" class="headerlink" title="Memo"></a>Memo</h2><p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Memo.svg?raw=true" alt="Memo"></p>
+<h3 id="init"><a href="#init" class="headerlink" title="init"></a>init</h3><p>基于得到的逻辑表达式构建 Group Tree，初始化完成一个 OptExpression 对应一个 Group。核心是 Memo.copyIn 函数，后续 AppleRuleTask 中也会调用 Memo.copyIn 函数将应用规则得到的新 OptExpression 添加到 Group 的逻辑等价表达式集合中。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> GroupExpression <span class="title function_">init</span><span class="params">(OptExpression originExpression)</span> &#123;</span><br><span class="line">    <span class="comment">// 将 originExpressionTree --&gt; GroupTree</span></span><br><span class="line">    <span class="type">GroupExpression</span> <span class="variable">rootGroupExpression</span> </span><br><span class="line">        <span class="operator">=</span> copyIn(<span class="literal">null</span>, originExpression).second;</span><br><span class="line">    rootGroup = rootGroupExpression.getGroup();</span><br><span class="line">    <span class="keyword">return</span> rootGroupExpression;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Optimizer-memoOptimize"><a href="#Optimizer-memoOptimize" class="headerlink" title="Optimizer.memoOptimize"></a>Optimizer.memoOptimize</h2><p>Optimizer.memoOptimize 函数可大致分为两个部分：</p>
+<ol>
+<li>添加一些规则，这些规则最终会被应用在 ApplyRuleTask 中</li>
+<li>执行 OptimizeGroupTask</li>
+</ol>
+<p>memoOptimize 函数结束，优化器的主体工作就结束了。</p>
+<p>代码如下。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> <span class="title function_">memoOptimize</span><span class="params">(ConnectContext connectContext, Memo memo, TaskContext rootTaskContext)</span> &#123;</span><br><span class="line">    <span class="type">OptExpression</span> <span class="variable">tree</span> <span class="operator">=</span> memo.getRootGroup().extractLogicalTree();</span><br><span class="line">    <span class="comment">// Join reorder</span></span><br><span class="line">    <span class="type">SessionVariable</span> <span class="variable">sessionVariable</span> <span class="operator">=</span> connectContext.getSessionVariable();</span><br><span class="line">    <span class="type">int</span> <span class="variable">innerCrossJoinNode</span> <span class="operator">=</span> Utils.countJoinNodeSize(tree, JoinOperator.innerCrossJoinSet());</span><br><span class="line">    <span class="keyword">if</span> (!sessionVariable.isDisableJoinReorder() </span><br><span class="line">        &amp;&amp; innerCrossJoinNode &lt; sessionVariable.getCboMaxReorderNode()) &#123;</span><br><span class="line">        <span class="keyword">if</span> (innerCrossJoinNode &gt; sessionVariable.getCboMaxReorderNodeUseExhaustive()) &#123;</span><br><span class="line"></span><br><span class="line">            CTEUtils.collectForceCteStatistics(memo, context);</span><br><span class="line">            <span class="keyword">new</span> <span class="title class_">ReorderJoinRule</span>().transform(tree, context);</span><br><span class="line">            context.getRuleSet().addJoinCommutativityWithOutInnerRule();</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> (Utils.countJoinNodeSize(tree, JoinOperator.semiAntiJoinSet())</span><br><span class="line">                 &lt; sessionVariable.getCboMaxReorderNodeUseExhaustive()) &#123;</span><br><span class="line">                context.getRuleSet().getTransformRules().add(</span><br><span class="line">                    <span class="keyword">new</span> <span class="title class_">SemiReorderRule</span>());</span><br><span class="line">            &#125;</span><br><span class="line">            context.getRuleSet().addJoinTransformationRules();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//add join implementRule</span></span><br><span class="line">    context.getRuleSet().addAutoJoinImplementationRule();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (isEnableMultiTableRewrite(connectContext, tree)) &#123;</span><br><span class="line">        <span class="keyword">if</span> (sessionVariable.isEnableMaterializedViewViewDeltaRewrite()</span><br><span class="line">             &amp;&amp; rootTaskContext.getOptimizerContext().getCandidateMvs()</span><br><span class="line">                   .stream().anyMatch(context -&gt; context.hasMultiTables())) &#123;</span><br><span class="line">            context.getRuleSet().addSingleTableMvRewriteRule();</span><br><span class="line">        &#125;</span><br><span class="line">        context.getRuleSet().addMultiTableMvRewriteRule();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 函数探索入口</span></span><br><span class="line">    context.getTaskScheduler().pushTask(</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">OptimizeGroupTask</span>(rootTaskContext, memo.getRootGroup()));</span><br><span class="line">    context.getTaskScheduler().executeTasks(rootTaskContext);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="OptimizeGroupTask"><a href="#OptimizeGroupTask" class="headerlink" title="OptimizeGroupTask"></a>OptimizeGroupTask</h2><p>OptimizeGroupTask 是 Task 的执行入口：当开始优化一个 Group 时总是从 OptimizeGroupTask 开始。OptimizeGroupTask.execute 函数在执行前会先通过 Group.hasBestExpression 函数过滤已经优化过的 Group，防止重复搜索 or 死循环？</p>
+<ul>
+<li>OptimizeExpressionTask: 用于优化所有逻辑等价的 Operator Tree</li>
+<li><a href="https://szza.github.io/2023/10/07/Pipeline/EnforceAndCostTask">EnforceAndCostTask</a> 用于寻找每个 Group 的 cost 最低的 PhysicalGroupExpression。</li>
+</ul>
+<p>逻辑如下:</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">execute</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="comment">// Group has optimized given the context</span></span><br><span class="line">    <span class="keyword">if</span> (group.hasBestExpression(context.getRequiredProperty())) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 逆序遍历，顺序执行</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> group.getLogicalExpressions().size() - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--) &#123;</span><br><span class="line">        pushTask(<span class="keyword">new</span> <span class="title class_">OptimizeExpressionTask</span>(</span><br><span class="line">            context, group.getLogicalExpressions().get(i)));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 逆序遍历，顺序执行</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> group.getPhysicalExpressions().size() - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--) &#123;</span><br><span class="line">        pushTask((<span class="keyword">new</span> <span class="title class_">EnforceAndCostTask</span>(</span><br><span class="line">            context, group.getPhysicalExpressions().get(i))));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="OptimizeExpressionTask"><a href="#OptimizeExpressionTask" class="headerlink" title="OptimizeExpressionTask"></a>OptimizeExpressionTask</h2><p>整体代码如下：</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">execute</span><span class="params">()</span> &#123;</span><br><span class="line">    List&lt;Rule&gt; rules = getValidRules();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (Rule rule : rules) &#123;</span><br><span class="line">        pushTask(<span class="keyword">new</span> <span class="title class_">ApplyRuleTask</span>(</span><br><span class="line">            context, groupExpression, rule, isExplore));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    pushTask(<span class="keyword">new</span> <span class="title class_">DeriveStatsTask</span>(context, groupExpression));</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> groupExpression.arity() - <span class="number">1</span>; i &gt;= <span class="number">0</span>; i--) &#123;</span><br><span class="line">        pushTask(<span class="keyword">new</span> <span class="title class_">ExploreGroupTask</span>(</span><br><span class="line">            context, groupExpression.getInputs().get(i)));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>任务执行的顺序是先入后出，因此执行 OptimizeExpressionTask 时，说明已经生成了一个初始化状态的最短路径。执行流程如下：</p>
+<h3 id="1-ExploreGroupTask"><a href="#1-ExploreGroupTask" class="headerlink" title="1.ExploreGroupTask"></a>1.ExploreGroupTask</h3><p>OptimizeExpressionTask.execute 函数中依次用 groupExpression 的所有的输入 (sub-groups) 来构造 ExploreGroupTask 对象</p>
+<p>而 ExploreGroupTask.execute 基于 childGroup 中所有逻辑等价的 Group.logicalExpression 又构造 OptimizeExpressionTask 对象。如此不断递归直到递归基（叶结点），即就是没有输入的 GroupExpression 对象，进入 DeriveStatsTask 开始为 GroupExpression 获取统计信息。<br> <figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> ExploreGroupTask.execute() &#123;</span><br><span class="line">    <span class="keyword">if</span> (group.isExplored()) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (GroupExpression logical : group.getLogicalExpressions()) &#123;</span><br><span class="line">        pushTask(<span class="keyword">new</span> <span class="title class_">OptimizeExpressionTask</span>(context, logical, <span class="literal">true</span>));</span><br><span class="line">    &#125;</span><br><span class="line">    group.setExplored();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<h3 id="2-DeriveStatsTask"><a href="#2-DeriveStatsTask" class="headerlink" title="2.DeriveStatsTask"></a>2.DeriveStatsTask</h3><p>顾名思义，DeriverStatsTask 是为 groupExpression.group.statistics 获取统计信息的，如果是物化视图则为 groupExpression.group.mvStatistics 获取统计信息。</p>
+<p>核心功能由 StatisticsCalculator 实现。 关于 StatisticsCalculator，可以参考官方博客 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/582214743">StarRocks 统计信息和 Cost 估算
+</a>。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">execute</span><span class="params">()</span> &#123;</span><br><span class="line">  <span class="comment">// 裁剪</span></span><br><span class="line">  <span class="keyword">if</span> (groupExpression.isStatsDerived() || groupExpression.isUnused()) &#123;</span><br><span class="line">      <span class="keyword">return</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="type">ExpressionContext</span> <span class="variable">expressionContext</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">ExpressionContext</span>(groupExpression);</span><br><span class="line">  <span class="type">StatisticsCalculator</span> <span class="variable">statisticsCalculator</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">StatisticsCalculator</span>(</span><br><span class="line">      expressionContext,</span><br><span class="line">      context.getOptimizerContext().getColumnRefFactory(),</span><br><span class="line">      context.getOptimizerContext());</span><br><span class="line">  statisticsCalculator.estimatorStats(); <span class="comment">// 获取统计信息</span></span><br><span class="line"></span><br><span class="line">  <span class="type">Statistics</span> <span class="variable">currentStatistics</span> </span><br><span class="line">      <span class="operator">=</span> groupExpression.getGroup().getStatistics();</span><br><span class="line">  <span class="type">Statistics</span> <span class="variable">statistics</span> <span class="operator">=</span> expressionContext.getStatistics();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 更新统计</span></span><br><span class="line">  <span class="keyword">if</span> (currentStatistics == <span class="literal">null</span> ||</span><br><span class="line">      (statistics.getOutputRowCount() &lt; currentStatistics.getOutputRowCount() </span><br><span class="line">      <span class="comment">// currentStatistics != null 可能是 merge 的</span></span><br><span class="line">       &amp;&amp; !isMaterializedView())) &#123;</span><br><span class="line">      groupExpression.getGroup().setStatistics(statistics);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (currentStatistics != <span class="literal">null</span> &amp;&amp; !currentStatistics.equals(statistics)) &#123;</span><br><span class="line">      <span class="keyword">if</span> (isMaterializedView()) &#123;</span><br><span class="line">          <span class="type">LogicalOlapScanOperator</span> <span class="variable">scan</span> <span class="operator">=</span> groupExpression.getOp().cast();</span><br><span class="line">          <span class="type">MaterializedView</span> <span class="variable">mv</span> <span class="operator">=</span> (MaterializedView) scan.getTable();</span><br><span class="line">          groupExpression.getGroup().setMvStatistics(mv.getId(), statistics);</span><br><span class="line">      &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 标记，防止重复统计</span></span><br><span class="line">  groupExpression.setStatsDerived();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="3-ApplyRuleTask"><a href="#3-ApplyRuleTask" class="headerlink" title="3.ApplyRuleTask"></a>3.ApplyRuleTask</h3><p>按照规则生成新的逻辑表达式、物理表达式</p>
+<h4 id="OptimizeExpressionTask-getValidRules"><a href="#OptimizeExpressionTask-getValidRules" class="headerlink" title="OptimizeExpressionTask.getValidRules"></a>OptimizeExpressionTask.getValidRules</h4><p>首先要获取有有效的规则：logicalRules、physicalRules 是 Optimizer.memoOptimize 函数中在执行 OptimizeGroupTask 之前添加的。filterInValidRules 函数再将 groupExpression 和 logicalRules、physicalRules 进行匹配。 能匹配得上的即 validRules，最终将 validRules 基于 <code>Rule::promise</code> 值进行排序。</p>
+<p>这里有个概念需要注意下:</p>
+<ul>
+<li><strong>Transform Rule</strong>: 基于规则，生成等价的逻辑计划，扩充搜索空间</li>
+<li><strong>Implement Rule</strong>: 将逻辑节点 LogicalOperator 转换为物理节点 PhysicalOperator</li>
+</ul>
+<p>因此，难点是 <em>Transform Rule</em>，其中 Rule 细节后续有机会再深入分析咯。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Rule.svg?raw=true" alt="Rule"></p>
+<p>代码如下。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> List&lt;Rule&gt; <span class="title function_">getValidRules</span><span class="params">()</span> &#123;</span><br><span class="line">    List&lt;Rule&gt; validRules = </span><br><span class="line">        Lists.newArrayListWithCapacity(RuleType.NUM_RULES.id());</span><br><span class="line">    List&lt;Rule&gt; logicalRules = </span><br><span class="line">        context.getOptimizerContext().getRuleSet().getTransformRules();</span><br><span class="line">    <span class="comment">// 根据匹配规则，获取能应用到 groupExpression 的有效规则 </span></span><br><span class="line">    filterInValidRules(groupExpression, logicalRules, validRules);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!isExplore) &#123;</span><br><span class="line">        List&lt;Rule&gt; physicalRules = </span><br><span class="line">            context.getOptimizerContext().getRuleSet().getImplementRules();</span><br><span class="line">        filterInValidRules(groupExpression, physicalRules, validRules);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 排序: logical rule 前, physical rule 在后</span></span><br><span class="line">    validRules.sort(Comparator.comparingInt(Rule::promise));</span><br><span class="line">    <span class="keyword">return</span> validRules;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="OptimizerTask-filterInValidRules"><a href="#OptimizerTask-filterInValidRules" class="headerlink" title="OptimizerTask.filterInValidRules"></a>OptimizerTask.filterInValidRules</h4><p>每个 Rule 都有一个 Pattern，只有 Rule 和 Pattern 匹配时才算一个有效规则。<br>解释如代码。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">void</span> <span class="title function_">filterInValidRules</span><span class="params">(GroupExpression groupExpression,</span></span><br><span class="line"><span class="params">                        List&lt;Rule&gt; candidateRules,</span></span><br><span class="line"><span class="params">                        List&lt;Rule&gt; validRules)</span> &#123;</span><br><span class="line">    <span class="type">OptimizerConfig</span> <span class="variable">optimizerConfig</span> <span class="operator">=</span> </span><br><span class="line">        context.getOptimizerContext().getOptimizerConfig();</span><br><span class="line">    <span class="keyword">for</span> (Rule rule : candidateRules) &#123;</span><br><span class="line">        <span class="comment">//CHECK-1: groupExpression 已经应用过这个规则</span></span><br><span class="line">        <span class="keyword">if</span> (groupExpression.hasRuleExplored(rule)) &#123;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// CHECK-2: operator + child 是否能匹配上</span></span><br><span class="line">        <span class="keyword">if</span> (!rule.getPattern().matchWithoutChild(groupExpression)) &#123;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// CHECK-3: 这个规则没有 disable</span></span><br><span class="line">        <span class="keyword">if</span> (optimizerConfig.isRuleDisable(rule.type())) &#123;</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 有效</span></span><br><span class="line">        validRules.add(rule);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="Pattern-matchWithoutChild"><a href="#Pattern-matchWithoutChild" class="headerlink" title="Pattern.matchWithoutChild"></a>Pattern.matchWithoutChild</h4><p>Pattern 主要用于描述 Rule 的匹配规则，用户可以按照想要匹配的 Operator 类型创建 Pattern。除了常规的 Operator 类型以外，StarRocks 还提供两种特殊的 Operator：</p>
+<ul>
+<li><strong>PATTERN_LEAF</strong>：用于匹配任意单个节点，几乎每个 Rule 里都会以 PATTERN_LEFF 作为叶子节点；</li>
+<li><strong>PATTERN_MULTI_LEAF</strong>：用于匹配 N个（&gt;&#x3D;0）任意节点，在 UNION、INTERSECT、EXCEPT 这类多输入节点相关的Rule中比较常见。</li>
+</ul>
+<p>matchWithoutChild 解释如代码。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> <span class="type">boolean</span> <span class="title function_">matchWithoutChild</span><span class="params">(GroupExpression expression, <span class="type">int</span> level)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (expression == <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// CHECK-1: 子节点个数是否能匹配上</span></span><br><span class="line">    <span class="keyword">if</span> (expression.getInputs().size() &lt; <span class="built_in">this</span>.children().size()</span><br><span class="line">         &amp;&amp; children.stream().noneMatch(</span><br><span class="line">            p -&gt; OperatorType.PATTERN_MULTI_LEAF.equals(p.getOpType()))) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// CHECK-2: Pattern 是否能匹配任意 Operator</span></span><br><span class="line">    <span class="keyword">if</span> (OperatorType.PATTERN_LEAF.equals(getOpType()) </span><br><span class="line">        || OperatorType.PATTERN_MULTI_LEAF.equals(getOpType())) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">OperatorType</span> <span class="variable">givenOpType</span> <span class="operator">=</span>  expression.getOp().getOpType();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// CHECK-3: Pattern 只能匹配 SCAN Operator</span></span><br><span class="line">    <span class="keyword">if</span> (isPatternScan() &amp;&amp; scanTypes.contains(givenOpType)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// CHECK-4: Pattern 只能匹配 JOIN Operator</span></span><br><span class="line">    <span class="keyword">if</span> (isPatternMultiJoin() &amp;&amp; isMultiJoin(givenOpType, level)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// CHECK-5: 直接判断</span></span><br><span class="line">    <span class="keyword">return</span> getOpType().equals(givenOpType);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="ApplyRuleTask-execute"><a href="#ApplyRuleTask-execute" class="headerlink" title="ApplyRuleTask.execute"></a>ApplyRuleTask.execute</h4><p>匹配的核心是 Binder，能找到 GroupExpression 中符合 rule 的部分。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@Override</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">execute</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="comment">//裁剪: 这个规则已经匹配过 or 这个group 不需要优化</span></span><br><span class="line">    <span class="keyword">if</span> (groupExpression.hasRuleExplored(rule) ||</span><br><span class="line">        groupExpression.isUnused()) &#123;</span><br><span class="line">        <span class="keyword">return</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">OptimizerContext</span> <span class="variable">optimizerContext</span> <span class="operator">=</span> context.getOptimizerContext();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 1. 对 groupExpression 应用规则，生成新的表达式</span></span><br><span class="line">    <span class="type">Pattern</span> <span class="variable">pattern</span> <span class="operator">=</span> rule.getPattern();</span><br><span class="line">    <span class="type">Binder</span> <span class="variable">binder</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Binder</span>(pattern, groupExpression);</span><br><span class="line">    <span class="type">OptExpression</span> <span class="variable">extractExpr</span> <span class="operator">=</span> binder.next();</span><br><span class="line">    List&lt;OptExpression&gt; newExpressions = Lists.newArrayList();</span><br><span class="line">    <span class="keyword">while</span> (extractExpr != <span class="literal">null</span>) &#123;</span><br><span class="line">        <span class="comment">// 每个具体的规则会重载 Rule.check 函数</span></span><br><span class="line">        <span class="comment">// 更加细致的判断是否符合 extractExpr 与 rule 能否匹配</span></span><br><span class="line">        <span class="keyword">if</span> (!rule.check(extractExpr, optimizerContext)) &#123;</span><br><span class="line">            extractExpr = binder.next();</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 生成新的 expression</span></span><br><span class="line">        newExpressions.addAll(</span><br><span class="line">            rule.transform(extractExpr, optimizerContext));</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 迭代</span></span><br><span class="line">        extractExpr = binder.next();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2. 针对新生成的表达式进行递归优化</span></span><br><span class="line">    <span class="keyword">for</span> (OptExpression expression : newExpressions) &#123;</span><br><span class="line">        <span class="comment">// Insert new OptExpression to memo</span></span><br><span class="line">        Pair&lt;Boolean, GroupExpression&gt; result </span><br><span class="line">            = optimizerContext.getMemo().</span><br><span class="line">                copyIn(groupExpression.getGroup(), expression);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// The group has been merged</span></span><br><span class="line">        <span class="keyword">if</span> (groupExpression.hasEmptyRootGroup()) &#123;</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="type">GroupExpression</span> <span class="variable">newGroupExpression</span> <span class="operator">=</span> result.second;</span><br><span class="line">        <span class="keyword">if</span> (newGroupExpression.getOp().isLogical()) &#123;</span><br><span class="line">            <span class="comment">// For logic newGroupExpression, optimize it</span></span><br><span class="line">            pushTask(<span class="keyword">new</span> <span class="title class_">OptimizeExpressionTask</span>(</span><br><span class="line">                context, newGroupExpression, isExplore));</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// For physical newGroupExpression, enforce and cost it,</span></span><br><span class="line">            <span class="comment">// Optimize its inputs if needed</span></span><br><span class="line">            pushTask(<span class="keyword">new</span> <span class="title class_">EnforceAndCostTask</span>(</span><br><span class="line">                context, newGroupExpression));</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    groupExpression.setRuleExplored(rule);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Binder"><a href="#Binder" class="headerlink" title="Binder"></a>Binder</h2><p>Binder 的作用是从 GroupExpression 搜索出符合 Pattern 的所有等价表达式，并通过 Binder.next 函数返回所有符合 Pattern 的表达式子树。</p>
+<p>如图，左侧的 Pattern 在右侧的匹配结果就是虚线框中的部分。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Rule-Pattern.svg?raw=true" alt="Rule-Pattern"></p>
+<p>如图，左侧的 Pattern 匹配的结果，Binder.next 返回的结果顺序：</p>
+<ul>
+<li>JOIN-OLAP_SCAN_1-OLAP_SCAN_2</li>
+<li>JOIN-OLAP_SCAN_1-OLAP_SCAN_4 </li>
+<li>JOIN-OLAP_SCAN_3-OLAP_SCAN_3 </li>
+<li>JOIN-OLAP_SCAN_3-OLAP_SCAN_4</li>
+</ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/CBO/Rule-Pattern-2.svg?raw=true" alt="Rule-Pattern-2"></p>
+<p>因此，为了能 Binder.next 函数能返回不重复的所有匹配结果，Binder 需要具有存储状态。</p>
+<ul>
+<li><p>groupTraceKey: 表示当前正在访问哪个 Group</p>
+</li>
+<li><p>groupExpressionIndex[groupTraceKey]: 表示访问 Group 的第几个等价表达式，在每次遍历时 groupExpressionIndex 最终的长度都是和 和 Group 的个数一致。</p>
+<p>  groupExpressionIndex[0] 是当前 GroupExpression 所属的 Group，groupExpressionIndex[1:-1] 是 ChildernGroup</p>
+</li>
+</ul>
+<p>Binder.next 本质是个多叉树搜索算法，下面顺着代码顺序来看。</p>
+<h3 id="next"><a href="#next" class="headerlink" title="next"></a>next</h3><p>next 函数用于从 groupExpression 中找到匹配 Pattern 的 OptExpression。 </p>
+<ol>
+<li><p>每次进入 next 函数都需要把 groupTraceKey 赋值为0，表示重头从第一个 group 进行遍历，</p>
+</li>
+<li><p>将上次 next 函数访问的最后一个 group 中的等价表达式的下标 + 1</p>
+<p> 每个 Group 中的逻辑等价的表达式的数量是 Group.getLogicalExpressions().size()，会依次访问</p>
+</li>
+</ol>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">public</span> OptExpression <span class="title function_">next</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="comment">// For logic scan to physical scan, we only need to match once</span></span><br><span class="line">    <span class="keyword">if</span> (pattern.children().size() == <span class="number">0</span> &amp;&amp; groupExpressionIndex.get(<span class="number">0</span>) &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    OptExpression expression;</span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">        <span class="built_in">this</span>.groupTraceKey = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Match with the next groupExpression of the last group node</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">lastNode</span> <span class="operator">=</span> <span class="built_in">this</span>.groupExpressionIndex.size() - <span class="number">1</span>;</span><br><span class="line">        <span class="type">int</span> <span class="variable">lastNodeIndex</span> <span class="operator">=</span> <span class="built_in">this</span>.groupExpressionIndex.get(lastNode);</span><br><span class="line">        <span class="comment">// 增加上次访问到 Group 的逻辑等价表达式的下标，实现依次访问</span></span><br><span class="line">        <span class="built_in">this</span>.groupExpressionIndex.set(lastNode, lastNodeIndex + <span class="number">1</span>); </span><br><span class="line"></span><br><span class="line">        expression = match(pattern, groupExpression, <span class="number">0</span>);</span><br><span class="line">    <span class="comment">// while 中的判断条件是为了回溯</span></span><br><span class="line">    &#125; <span class="keyword">while</span> (expression == <span class="literal">null</span> &amp;&amp; <span class="built_in">this</span>.groupExpressionIndex.size() != <span class="number">1</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> expression;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="match"><a href="#match" class="headerlink" title="match"></a>match</h3><p>Binder.match 函数目的是找出 groupExpression 中匹配 Pattern 的 OptExpression 子树。实际上就是 Pattern-Tree 能否在 GroupExpression-Tree 中能否找到结构和自己一样的子树，因此需要同时遍历 Pattern、GroupExpression 两棵树。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> OptExpression <span class="title function_">match</span><span class="params">(Pattern pattern, GroupExpression groupExpression,</span></span><br><span class="line"><span class="params">                            <span class="type">int</span> level)</span> &#123;</span><br><span class="line">    <span class="comment">// CHECK-1: 先匹配 groupExpression 自己是否符合 Pattern 结构</span></span><br><span class="line">    <span class="keyword">if</span> (!pattern.matchWithoutChild(groupExpression, level)) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// recursion match children</span></span><br><span class="line">    List&lt;OptExpression&gt; resultInputs = Lists.newArrayList();</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 记录两棵树遍历的位置</span></span><br><span class="line">    <span class="type">int</span> <span class="variable">patternIndex</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">    <span class="type">int</span> <span class="variable">gEI</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    List&lt;Pattern&gt; childernPatternSize = pattern.children().size();</span><br><span class="line">    List&lt;Group&gt; childernGroup = groupExpression.getInputs();</span><br><span class="line">    <span class="comment">// 遍历所有的 childernGroup</span></span><br><span class="line">    <span class="keyword">while</span> ((patternIndex &lt; childernPatternSize) &amp;&amp; gEI &lt; childernGroup.size()) &#123;</span><br><span class="line">        trace();</span><br><span class="line">        <span class="type">Group</span> <span class="variable">childGroup</span> <span class="operator">=</span> childernGroup.get(gEI);</span><br><span class="line">        <span class="type">Pattern</span> <span class="variable">childPattern</span> <span class="operator">=</span> pattern.childAt(patternIndex);</span><br><span class="line">        <span class="comment">// 先递归子 group</span></span><br><span class="line">        <span class="type">OptExpression</span> <span class="variable">opt</span> <span class="operator">=</span> </span><br><span class="line">            match(childPattern,</span><br><span class="line">                  extractGroupExpression(childPattern, childGroup),</span><br><span class="line">                  level);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (opt == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        resultInputs.add(opt);</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 同时为 true 才不更新 patternIndex</span></span><br><span class="line">        <span class="keyword">if</span> (!(childPattern.isPatternMultiLeaf() &amp;&amp; </span><br><span class="line">             (childernGroup.size() - gEI) &gt; (childernPatternSize - patternIndex))) &#123;</span><br><span class="line">            patternIndex++;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        gEI++;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">OptExpression</span> <span class="variable">result</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">OptExpression</span>(groupExpression);</span><br><span class="line">    result.getInputs().addAll(resultInputs);</span><br><span class="line">    <span class="keyword">return</span> result;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="trace"><a href="#trace" class="headerlink" title="trace"></a>trace</h4><p>准备下一个要访问的 Group。groupExpressionIndex.add(0) 表示第一次访问下一个Group。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> <span class="keyword">void</span> <span class="title function_">trace</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="built_in">this</span>.groupTraceKey++;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="built_in">this</span>.groupExpressionIndex.size(); i &lt; <span class="built_in">this</span>.groupTraceKey + <span class="number">1</span>; i++) &#123;</span><br><span class="line">        <span class="built_in">this</span>.groupExpressionIndex.add(<span class="number">0</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="extractGroupExpression"><a href="#extractGroupExpression" class="headerlink" title="extractGroupExpression"></a>extractGroupExpression</h4><p>groupExpressionIndex 用于存储状态，在 extractGroupExpression 函数中提取 Group 的 groupExpressionIndex[groupTraceKey] 个逻辑等价的表达式。当 ChildernGroup[i] 的所有等价表达式访问完毕，则将 groupTraceKey 从 groupExpressionIndex 中删除，回溯到到前一个 ChildernGroup[i-1]。</p>
+<p>本质上就是个<strong>后序遍历多叉树</strong>。</p>
+<figure class="highlight java"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">private</span> GroupExpression <span class="title function_">extractGroupExpression</span><span class="params">(Pattern pattern, Group group)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (pattern.isPatternLeaf() || pattern.isPatternMultiLeaf()) &#123;</span><br><span class="line">        <span class="comment">// 这种只有一个表达式</span></span><br><span class="line">        <span class="keyword">if</span> (groupExpressionIndex.get(groupTraceKey) &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            groupExpressionIndex.remove(groupTraceKey);</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> group.getFirstLogicalExpression();</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// 多个逻辑等价的表达式，依次遍历</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">valueIndex</span> <span class="operator">=</span> groupExpressionIndex.get(groupTraceKey);</span><br><span class="line">        <span class="keyword">if</span> (valueIndex &gt;= group.getLogicalExpressions().size()) &#123;</span><br><span class="line">            <span class="comment">// 本group遍历结束，删除节点进行回溯</span></span><br><span class="line">            groupExpressionIndex.remove(groupTraceKey);</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> group.getLogicalExpressions().get(valueIndex);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/577956480">StarRocks 优化器代码导读</a></li>
+<li><a href="https://szza.github.io/2023/06/15/Paper/Columbia-Query-Optimizer-1">COLUMBIA 查询优化器如何提升性能(上)</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#SeriallyTaskScheduler"><span class="toc-number">1.</span> <span class="toc-text">SeriallyTaskScheduler</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Memo"><span class="toc-number">2.</span> <span class="toc-text">Memo</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#init"><span class="toc-number">2.1.</span> <span class="toc-text">init</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Optimizer-memoOptimize"><span class="toc-number">3.</span> <span class="toc-text">Optimizer.memoOptimize</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OptimizeGroupTask"><span class="toc-number">4.</span> <span class="toc-text">OptimizeGroupTask</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#OptimizeExpressionTask"><span class="toc-number">5.</span> <span class="toc-text">OptimizeExpressionTask</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-ExploreGroupTask"><span class="toc-number">5.1.</span> <span class="toc-text">1.ExploreGroupTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-DeriveStatsTask"><span class="toc-number">5.2.</span> <span class="toc-text">2.DeriveStatsTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-ApplyRuleTask"><span class="toc-number">5.3.</span> <span class="toc-text">3.ApplyRuleTask</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#OptimizeExpressionTask-getValidRules"><span class="toc-number">5.3.1.</span> <span class="toc-text">OptimizeExpressionTask.getValidRules</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#OptimizerTask-filterInValidRules"><span class="toc-number">5.3.2.</span> <span class="toc-text">OptimizerTask.filterInValidRules</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Pattern-matchWithoutChild"><span class="toc-number">5.3.3.</span> <span class="toc-text">Pattern.matchWithoutChild</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ApplyRuleTask-execute"><span class="toc-number">5.3.4.</span> <span class="toc-text">ApplyRuleTask.execute</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Binder"><span class="toc-number">6.</span> <span class="toc-text">Binder</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#next"><span class="toc-number">6.1.</span> <span class="toc-text">next</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#match"><span class="toc-number">6.2.</span> <span class="toc-text">match</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#trace"><span class="toc-number">6.2.1.</span> <span class="toc-text">trace</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#extractGroupExpression"><span class="toc-number">6.2.2.</span> <span class="toc-text">extractGroupExpression</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">7.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&text=CBO: Optimizer Overview"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&is_video=false&description=CBO: Optimizer Overview"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=CBO: Optimizer Overview&body=Check out this article: https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&title=CBO: Optimizer Overview"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&name=CBO: Optimizer Overview&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/10/12/Pipeline/OptimizerOverview/&t=CBO: Optimizer Overview"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

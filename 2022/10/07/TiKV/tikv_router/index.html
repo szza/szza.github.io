@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="FsmSchedulertrait FsmScheduler 有两个具体的类：  NormalScheduler：针对 FsmTypes::Normal 类型的 Fsm，传入的实际上即 Box ControlScheduler：针对 FsmType::Control 类型的 Fsm，传入的即 Box  这两个结构内部完全一致，只是针对不同的FSm类型： 123456789pub enum FsmT">
+<meta property="og:type" content="article">
+<meta property="og:title" content="tikv: Router 设计详解">
+<meta property="og:url" content="https://szza.github.io/2022/10/07/TiKV/tikv_router/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="FsmSchedulertrait FsmScheduler 有两个具体的类：  NormalScheduler：针对 FsmTypes::Normal 类型的 Fsm，传入的实际上即 Box ControlScheduler：针对 FsmType::Control 类型的 Fsm，传入的即 Box  这两个结构内部完全一致，只是针对不同的FSm类型： 123456789pub enum FsmT">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-router-1.svg?raw=true">
+<meta property="article:published_time" content="2022-10-07T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-02T04:58:30.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="tidb-v6.1">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-router-1.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>tikv: Router 设计详解</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/10/13/TiKV/tikv_batch_system/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/10/05/TiKV/tikv_/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/07/TiKV/tikv_router/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&text=tikv: Router 设计详解"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&is_video=false&description=tikv: Router 设计详解"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tikv: Router 设计详解&body=Check out this article: https://szza.github.io/2022/10/07/TiKV/tikv_router/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&name=tikv: Router 设计详解&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/07/TiKV/tikv_router/&t=tikv: Router 设计详解"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#FsmScheduler"><span class="toc-number">1.</span> <span class="toc-text">FsmScheduler</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#impl-sched"><span class="toc-number">1.1.</span> <span class="toc-text">impl_sched</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#FsmState"><span class="toc-number">2.</span> <span class="toc-text">FsmState</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#task-fsm"><span class="toc-number">2.1.</span> <span class="toc-text">task_fsm</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#notify"><span class="toc-number">2.2.</span> <span class="toc-text">notify</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Clear"><span class="toc-number">2.3.</span> <span class="toc-text">Clear</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BasicMailbox"><span class="toc-number">3.</span> <span class="toc-text">BasicMailbox</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#send"><span class="toc-number">3.1.</span> <span class="toc-text">send</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#close"><span class="toc-number">3.2.</span> <span class="toc-text">close</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Router"><span class="toc-number">4.</span> <span class="toc-text">Router</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#register"><span class="toc-number">4.1.</span> <span class="toc-text">register</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#check-do"><span class="toc-number">4.2.</span> <span class="toc-text">check_do</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#send-1"><span class="toc-number">4.3.</span> <span class="toc-text">send</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#send-control"><span class="toc-number">4.4.</span> <span class="toc-text">send_control</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#broadcast-normal"><span class="toc-number">4.5.</span> <span class="toc-text">broadcast_normal</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        tikv: Router 设计详解
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-10-07T02:00:01.000Z" itemprop="datePublished">2022-10-07</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/tidb-v6-1/" rel="tag">tidb-v6.1</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="FsmScheduler"><a href="#FsmScheduler" class="headerlink" title="FsmScheduler"></a>FsmScheduler</h2><p>trait FsmScheduler 有两个具体的类：</p>
+<ul>
+<li>NormalScheduler：针对 FsmTypes::Normal 类型的 Fsm，传入的实际上即 <em>Box<PeerFsm></PeerFsm></em></li>
+<li>ControlScheduler：针对 FsmType::Control 类型的 Fsm，传入的即 <em>Box<StoreFsm></StoreFsm></em></li>
+</ul>
+<p>这两个结构内部完全一致，只是针对不同的FSm类型：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">enum</span> <span class="title class_">FsmTypes</span>&lt;N, C&gt; &#123;</span><br><span class="line">    <span class="title function_ invoke__">Normal</span>(<span class="type">Box</span>&lt;N&gt;),</span><br><span class="line">    <span class="title function_ invoke__">Control</span>(<span class="type">Box</span>&lt;C&gt;),</span><br><span class="line">    <span class="comment">// Used as a signal that scheduler should be shutdown.</span></span><br><span class="line">    Empty,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">impl_sched!(NormalScheduler, FsmTypes::Normal, Fsm = N);</span><br><span class="line">impl_sched!(ControlScheduler, FsmTypes::Control, Fsm = C);</span><br></pre></td></tr></table></figure>
+<p>结构如下。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiKV/tikv-router-1.svg?raw=true" alt="tikv-router-1"></p>
+<h3 id="impl-sched"><a href="#impl-sched" class="headerlink" title="impl_sched"></a>impl_sched</h3><p>每个 FsmScheduler 内部有两个发送端:</p>
+<ul>
+<li>sender：负责 Priority::Normal 的 Fsm</li>
+<li>low_sender：负责 Priority::Low 类型的 Fsm<br>下面不加区分，统一称呼 sender。<br>函数 FsmScheduler::schedule(fsm) 用于将 fsm 通过 sender 发送到到 channel 中，对应的接收端 fsm_receiver 在 Poller::fetch_fsm中接收后，在 Poller::poll 函数中处理。<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// A macro to introduce common definition of scheduler.</span></span><br><span class="line"><span class="built_in">macro_rules!</span> impl_sched &#123;</span><br><span class="line">    ($name:ident, $ty:path, Fsm = $fsm:tt) =&gt; &#123;</span><br><span class="line">        <span class="keyword">pub</span> <span class="keyword">struct</span> $name&lt;N, C&gt; &#123;</span><br><span class="line">            sender: channel::Sender&lt;FsmTypes&lt;N, C&gt;&gt;,</span><br><span class="line">            low_sender: channel::Sender&lt;FsmTypes&lt;N, C&gt;&gt;,</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">impl</span>&lt;N, C&gt; <span class="built_in">Clone</span> <span class="keyword">for</span> $name&lt;N, C&gt; &#123;</span><br><span class="line">            <span class="meta">#[inline]</span></span><br><span class="line">            <span class="keyword">fn</span> <span class="title function_">clone</span>(&amp;<span class="keyword">self</span>) <span class="punctuation">-&gt;</span> $name&lt;N, C&gt; &#123;</span><br><span class="line">                $name &#123;</span><br><span class="line">                    sender: <span class="keyword">self</span>.sender.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">                    low_sender: <span class="keyword">self</span>.low_sender.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">impl</span>&lt;N, C&gt; FsmScheduler <span class="keyword">for</span> $name&lt;N, C&gt;</span><br><span class="line">        <span class="keyword">where</span></span><br><span class="line">            $fsm: Fsm,</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">type</span> <span class="title class_">Fsm</span> = $fsm;</span><br><span class="line"></span><br><span class="line">            <span class="meta">#[inline]</span></span><br><span class="line">            <span class="keyword">fn</span> <span class="title function_">schedule</span>(&amp;<span class="keyword">self</span>, fsm: <span class="type">Box</span>&lt;<span class="keyword">Self</span>::Fsm&gt;) &#123;</span><br><span class="line">                <span class="keyword">let</span> <span class="variable">sender</span> = <span class="keyword">match</span> fsm.<span class="title function_ invoke__">get_priority</span>() &#123;</span><br><span class="line">                    Priority::Normal =&gt; &amp;<span class="keyword">self</span>.sender,</span><br><span class="line">                    Priority::Low =&gt; &amp;<span class="keyword">self</span>.low_sender,</span><br><span class="line">                &#125;;</span><br><span class="line">                <span class="keyword">match</span> sender.<span class="title function_ invoke__">send</span>($<span class="title function_ invoke__">ty</span>(fsm)) &#123;</span><br><span class="line">                    <span class="title function_ invoke__">Ok</span>(()) =&gt; &#123;&#125;</span><br><span class="line">                    <span class="comment">// <span class="doctag">TODO:</span> use debug instead.</span></span><br><span class="line">                    <span class="title function_ invoke__">Err</span>(<span class="title function_ invoke__">SendError</span>($<span class="title function_ invoke__">ty</span>(fsm))) =&gt; warn!(<span class="string">&quot;failed to schedule fsm &#123;:p&#125;&quot;</span>, fsm),</span><br><span class="line">                    _ =&gt; <span class="built_in">unreachable!</span>(),</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="keyword">fn</span> <span class="title function_">shutdown</span>(&amp;<span class="keyword">self</span>) &#123;</span><br><span class="line">                <span class="comment">// <span class="doctag">TODO:</span> close it explicitly once it&#x27;s supported.</span></span><br><span class="line">                <span class="comment">// Magic number, actually any number greater than poll pool size works.</span></span><br><span class="line">                <span class="keyword">for</span> <span class="variable">_</span> <span class="keyword">in</span> <span class="number">0</span>..<span class="number">256</span> &#123;</span><br><span class="line">                    <span class="keyword">let</span> <span class="variable">_</span> = <span class="keyword">self</span>.sender.<span class="title function_ invoke__">send</span>(FsmTypes::Empty);</span><br><span class="line">                    <span class="keyword">let</span> <span class="variable">_</span> = <span class="keyword">self</span>.low_sender.<span class="title function_ invoke__">send</span>(FsmTypes::Empty);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<h2 id="FsmState"><a href="#FsmState" class="headerlink" title="FsmState"></a>FsmState</h2><p>FsmState<N>记录的是 Fsm 的状态、内部数据</N></p>
+<ul>
+<li>status 内部有三种状态值：<ul>
+<li>NOTIFYSTATE_NOTIFIED：已通知 Fsm 去处理消息</li>
+<li>NOTIFYSTATE_IDLE：当前 Fsm 是空闲的</li>
+<li>NOTIFYSTATE_DROP：需要删除这个 Fsm</li>
+</ul>
+</li>
+<li>data：存储 Fsm 对象</li>
+</ul>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">FsmState</span>&lt;N&gt; &#123;</span><br><span class="line">    status: AtomicUsize,</span><br><span class="line">    data: AtomicPtr&lt;N&gt;,</span><br><span class="line">    state_cnt: Arc&lt;AtomicUsize&gt;,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">impl</span>&lt;N: Fsm&gt; FsmState&lt;N&gt; &#123;</span><br><span class="line">    <span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">new</span>(data: <span class="type">Box</span>&lt;N&gt;, state_cnt: Arc&lt;AtomicUsize&gt;) <span class="punctuation">-&gt;</span> FsmState&lt;N&gt; &#123;</span><br><span class="line">        state_cnt.<span class="title function_ invoke__">fetch_add</span>(<span class="number">1</span>, Ordering::Relaxed);</span><br><span class="line">        FsmState &#123;</span><br><span class="line">            status: AtomicUsize::<span class="title function_ invoke__">new</span>(NOTIFYSTATE_IDLE),</span><br><span class="line">            data: AtomicPtr::<span class="title function_ invoke__">new</span>(<span class="type">Box</span>::<span class="title function_ invoke__">into_raw</span>(data)),</span><br><span class="line">            state_cnt,</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="task-fsm"><a href="#task-fsm" class="headerlink" title="task_fsm"></a>task_fsm</h3><p>FsmState::task_fsm 函数用于从 FsmState::data 中提取出 Fsm。如果已经被提取了则返回None。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">take_fsm</span>(&amp;<span class="keyword">self</span>) <span class="punctuation">-&gt;</span> <span class="type">Option</span>&lt;<span class="type">Box</span>&lt;N&gt;&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">res</span> = <span class="keyword">self</span>.status.<span class="title function_ invoke__">compare_exchange</span>(</span><br><span class="line">        NOTIFYSTATE_IDLE,</span><br><span class="line">        NOTIFYSTATE_NOTIFIED,</span><br><span class="line">        Ordering::AcqRel,</span><br><span class="line">        Ordering::Acquire,</span><br><span class="line">    );</span><br><span class="line">    <span class="keyword">if</span> res.<span class="title function_ invoke__">is_err</span>() &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">None</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">p</span> = <span class="keyword">self</span>.data.<span class="title function_ invoke__">swap</span>(ptr::<span class="title function_ invoke__">null_mut</span>(), Ordering::AcqRel);</span><br><span class="line">    <span class="keyword">if</span> !p.<span class="title function_ invoke__">is_null</span>() &#123;</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(<span class="keyword">unsafe</span> &#123; <span class="type">Box</span>::<span class="title function_ invoke__">from_raw</span>(p) &#125;)</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="built_in">panic!</span>(<span class="string">&quot;inconsistent status and data, something should be wrong.&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="notify"><a href="#notify" class="headerlink" title="notify"></a>notify</h3><p>通知FsmState::data 中的 Fsm 去处理消息：</p>
+<ul>
+<li>从 FsmState::data 中提取出 Fsm</li>
+<li>基于传入的 FsmScheduler 对象进行调度，即使用 scheduler 中的 sender 发送到 Poller 中，让后台Poller::poll 去执行 Fsm。</li>
+</ul>
+<p>代码如下。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">notify</span>&lt;S: FsmScheduler&lt;Fsm = N&gt;&gt;(</span><br><span class="line">     &amp;<span class="keyword">self</span>,</span><br><span class="line">     scheduler: &amp;S,</span><br><span class="line">     mailbox: Cow&lt;<span class="symbol">&#x27;_</span>, BasicMailbox&lt;N&gt;&gt;,</span><br><span class="line"> ) &#123;</span><br><span class="line">     <span class="keyword">match</span> <span class="keyword">self</span>.<span class="title function_ invoke__">take_fsm</span>() &#123;</span><br><span class="line">         <span class="literal">None</span> =&gt; &#123;&#125;</span><br><span class="line">         <span class="title function_ invoke__">Some</span>(<span class="keyword">mut</span> n) =&gt; &#123;</span><br><span class="line">             n.<span class="title function_ invoke__">set_mailbox</span>(mailbox);</span><br><span class="line">             scheduler.<span class="title function_ invoke__">schedule</span>(n);</span><br><span class="line">         &#125;</span><br><span class="line">     &#125;</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="Clear"><a href="#Clear" class="headerlink" title="Clear"></a>Clear</h3><p>清理状态和数据。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">clear</span>(&amp;<span class="keyword">self</span>) &#123;</span><br><span class="line">    <span class="keyword">match</span> <span class="keyword">self</span>.status.<span class="title function_ invoke__">swap</span>(NOTIFYSTATE_DROP, Ordering::AcqRel) &#123;</span><br><span class="line">        NOTIFYSTATE_NOTIFIED | NOTIFYSTATE_DROP =&gt; <span class="keyword">return</span>,</span><br><span class="line">        _ =&gt; &#123;&#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">ptr</span> = <span class="keyword">self</span>.data.<span class="title function_ invoke__">swap</span>(ptr::<span class="title function_ invoke__">null_mut</span>(), Ordering::SeqCst);</span><br><span class="line">    <span class="keyword">if</span> !ptr.<span class="title function_ invoke__">is_null</span>() &#123;</span><br><span class="line">        <span class="keyword">unsafe</span> &#123;</span><br><span class="line">            <span class="type">Box</span>::<span class="title function_ invoke__">from_raw</span>(ptr); <span class="comment">// 基于 RAIII 释放资源</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="BasicMailbox"><a href="#BasicMailbox" class="headerlink" title="BasicMailbox"></a>BasicMailbox</h2><ul>
+<li>sender：这里面的 sender 传递的是 Fsm::Message。</li>
+<li>state：用来保存 Fsm</li>
+</ul>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// A basic mailbox.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// Every mailbox should have one and only one owner, who will receive all</span></span><br><span class="line"><span class="comment">/// messages sent to this mailbox.</span></span><br><span class="line"><span class="comment">///</span></span><br><span class="line"><span class="comment">/// When a message is sent to a mailbox, its owner will be checked whether it&#x27;s</span></span><br><span class="line"><span class="comment">/// idle. An idle owner will be scheduled via `FsmScheduler` immediately, which</span></span><br><span class="line"><span class="comment">/// will drive the fsm to poll for messages.</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">BasicMailbox</span>&lt;Owner: Fsm&gt; &#123;</span><br><span class="line">    sender: mpsc::LooseBoundedSender&lt;Owner::Message&gt;,</span><br><span class="line">    state: Arc&lt;FsmState&lt;Owner&gt;&gt;,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">impl</span>&lt;Owner: Fsm&gt; BasicMailbox&lt;Owner&gt; &#123;</span><br><span class="line">    <span class="meta">#[inline]</span></span><br><span class="line">    <span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">new</span>(</span><br><span class="line">        sender: mpsc::LooseBoundedSender&lt;Owner::Message&gt;,</span><br><span class="line">        fsm: <span class="type">Box</span>&lt;Owner&gt;,</span><br><span class="line">        state_cnt: Arc&lt;AtomicUsize&gt;,</span><br><span class="line">    ) <span class="punctuation">-&gt;</span> BasicMailbox&lt;Owner&gt; &#123;</span><br><span class="line">        BasicMailbox &#123;</span><br><span class="line">            sender,</span><br><span class="line">            state: Arc::<span class="title function_ invoke__">new</span>(FsmState::<span class="title function_ invoke__">new</span>(fsm, state_cnt)),</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="send"><a href="#send" class="headerlink" title="send"></a>send</h3><p>send 函数的逻辑：</p>
+<ul>
+<li>self.sender.try_send(msg) 发送消息给对应的 Fsm，因为 self.sender 对应的接收端在 Fsm 中；</li>
+<li>self.state.notify(scheduler, Cow::Borrowed(self)) 则是唤醒对应的 Fsm（由 Scheduler 类型决定） ，让其 FsmDelegate 去处理该msg。<br>即在 Poller线程中，先提取出唤醒的 Fsm，再在 Fsm::handle_msg 中提取出msg，处理该Msg。代码如下。</li>
+</ul>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">try_send</span>&lt;S: FsmScheduler&lt;Fsm = Owner&gt;&gt;(</span><br><span class="line">    &amp;<span class="keyword">self</span>,</span><br><span class="line">    msg: Owner::Message,</span><br><span class="line">    scheduler: &amp;S,</span><br><span class="line">) <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;(), TrySendError&lt;Owner::Message&gt;&gt; &#123;</span><br><span class="line">    <span class="keyword">self</span>.sender.<span class="title function_ invoke__">try_send</span>(msg)?;</span><br><span class="line">    <span class="keyword">self</span>.state.<span class="title function_ invoke__">notify</span>(scheduler, Cow::<span class="title function_ invoke__">Borrowed</span>(<span class="keyword">self</span>));</span><br><span class="line">    <span class="title function_ invoke__">Ok</span>(())</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="close"><a href="#close" class="headerlink" title="close"></a>close</h3><p>关闭channl的发送端并清理 state 中数据。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="title function_ invoke__">pub</span>(<span class="keyword">crate</span>) <span class="keyword">fn</span> <span class="title function_">close</span>(&amp;<span class="keyword">self</span>) &#123;</span><br><span class="line">    <span class="keyword">self</span>.sender.<span class="title function_ invoke__">close_sender</span>();</span><br><span class="line">    <span class="keyword">self</span>.state.<span class="title function_ invoke__">clear</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Router"><a href="#Router" class="headerlink" title="Router"></a>Router</h2><p>Router 统一管理这些 <em>BasicMailbox<N></N></em> 的发送端，由 { region_id, mailbox } 之间进行映射。因此，基于 Router 就可以实现将从 RPC Serveice::batch_raft or Serveice::raft接收到的消息发送给指定 raftstore 中指定的 region。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Router</span>&lt;N: Fsm, C: Fsm, Ns, Cs&gt; &#123;</span><br><span class="line">    normals: Arc&lt;Mutex&lt;NormalMailMap&lt;N&gt;&gt;&gt;,</span><br><span class="line">    caches: Cell&lt;LruCache&lt;<span class="type">u64</span>, BasicMailbox&lt;N&gt;&gt;&gt;,</span><br><span class="line">    <span class="title function_ invoke__">pub</span>(<span class="keyword">super</span>) control_box: BasicMailbox&lt;C&gt;,</span><br><span class="line">    <span class="title function_ invoke__">pub</span>(<span class="keyword">crate</span>) normal_scheduler: Ns,</span><br><span class="line">    <span class="title function_ invoke__">pub</span>(<span class="keyword">crate</span>) control_scheduler: Cs,</span><br><span class="line"></span><br><span class="line">    state_cnt: Arc&lt;AtomicUsize&gt;,</span><br><span class="line">    shutdown: Arc&lt;AtomicBool&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="register"><a href="#register" class="headerlink" title="register"></a>register</h3><p>register 、register_all 函数用于添加 {region_id, mail_box} ，其中addr实际上就是region_id。<br>因此，每当新生成region时，就需要调用 router.register 来建立映射关系。自然，当 RegionMerge 时，也需要 router.release 即将不存在的映射关系。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">register</span>(&amp;<span class="keyword">self</span>, addr: <span class="type">u64</span>, mailbox: BasicMailbox&lt;N&gt;) &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">normals</span> = <span class="keyword">self</span>.normals.<span class="title function_ invoke__">lock</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(mailbox) = normals.map.<span class="title function_ invoke__">insert</span>(addr, mailbox) &#123;</span><br><span class="line">        mailbox.<span class="title function_ invoke__">close</span>(); <span class="comment">// 清理已经存在的，即旧的</span></span><br><span class="line">    &#125;</span><br><span class="line">    normals</span><br><span class="line">        .alive_cnt</span><br><span class="line">        .<span class="title function_ invoke__">store</span>(normals.map.<span class="title function_ invoke__">len</span>(), Ordering::Relaxed);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">register_all</span>(&amp;<span class="keyword">self</span>, mailboxes: <span class="type">Vec</span>&lt;(<span class="type">u64</span>, BasicMailbox&lt;N&gt;)&gt;) &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">normals</span> = <span class="keyword">self</span>.normals.<span class="title function_ invoke__">lock</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">    normals.map.<span class="title function_ invoke__">reserve</span>(mailboxes.<span class="title function_ invoke__">len</span>());</span><br><span class="line">    <span class="title function_ invoke__">for</span> (addr, mailbox) <span class="keyword">in</span> mailboxes &#123;</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(m) = normals.map.<span class="title function_ invoke__">insert</span>(addr, mailbox) &#123;</span><br><span class="line">            m.<span class="title function_ invoke__">close</span>();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    normals</span><br><span class="line">        .alive_cnt</span><br><span class="line">        .<span class="title function_ invoke__">store</span>(normals.map.<span class="title function_ invoke__">len</span>(), Ordering::Relaxed);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>比如，在启动系统时，RaftBatchSystem::start_system 函数中就调用了 Router::register_all 函数来中注册启动时已存在的 {region, mailbox}  的映射关系。 </p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">self</span>.router.<span class="title function_ invoke__">register_all</span>(mailboxes);</span><br></pre></td></tr></table></figure>
+<p>在产生新的region时，也会调用 Router::register 函数来注册这个关系，比如在 on_ready_split_region 函数中：</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">let</span> <span class="variable">mailbox</span> = BasicMailbox::<span class="title function_ invoke__">new</span>(sender, new_peer, <span class="keyword">self</span>.ctx.router.<span class="title function_ invoke__">state_cnt</span>().<span class="title function_ invoke__">clone</span>());</span><br><span class="line"><span class="keyword">self</span>.ctx.router.<span class="title function_ invoke__">register</span>(new_region_id, mailbox);</span><br></pre></td></tr></table></figure>
+<h3 id="check-do"><a href="#check-do" class="headerlink" title="check_do"></a>check_do</h3><figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">fn</span> <span class="title function_">check_do</span>&lt;F, R&gt;(&amp;<span class="keyword">self</span>, addr: <span class="type">u64</span>, <span class="keyword">mut</span> f: F) <span class="punctuation">-&gt;</span> CheckDoResult&lt;R&gt;</span><br><span class="line"><span class="keyword">where</span></span><br><span class="line">    F: <span class="title function_ invoke__">FnMut</span>(&amp;BasicMailbox&lt;N&gt;) <span class="punctuation">-&gt;</span> <span class="type">Option</span>&lt;R&gt;,</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">caches</span> = <span class="keyword">unsafe</span> &#123; &amp;<span class="keyword">mut</span> *<span class="keyword">self</span>.caches.<span class="title function_ invoke__">as_ptr</span>() &#125;;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">connected</span> = <span class="literal">true</span>;</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">let</span> <span class="variable">Some</span>(mailbox) = caches.<span class="title function_ invoke__">get</span>(&amp;addr) &#123;</span><br><span class="line">        <span class="keyword">match</span> <span class="title function_ invoke__">f</span>(mailbox) &#123;</span><br><span class="line">            <span class="title function_ invoke__">Some</span>(r) =&gt; <span class="keyword">return</span> CheckDoResult::<span class="title function_ invoke__">Valid</span>(r),</span><br><span class="line">            <span class="literal">None</span> =&gt; &#123;</span><br><span class="line">                connected = <span class="literal">false</span>;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> (cnt, mailbox) = &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">boxes</span> = <span class="keyword">self</span>.normals.<span class="title function_ invoke__">lock</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">cnt</span> = boxes.map.<span class="title function_ invoke__">len</span>();</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">b</span> = <span class="keyword">match</span> boxes.map.<span class="title function_ invoke__">get_mut</span>(&amp;addr) &#123;</span><br><span class="line">            <span class="title function_ invoke__">Some</span>(mailbox) =&gt; mailbox.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">            <span class="literal">None</span> =&gt; &#123;</span><br><span class="line">                <span class="title function_ invoke__">drop</span>(boxes);</span><br><span class="line">                <span class="keyword">if</span> !connected &#123;</span><br><span class="line">                    caches.<span class="title function_ invoke__">remove</span>(&amp;addr);</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">return</span> CheckDoResult::NotExist;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;;</span><br><span class="line">        (cnt, b)</span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="keyword">if</span> cnt &gt; caches.<span class="title function_ invoke__">capacity</span>() || cnt &lt; caches.<span class="title function_ invoke__">capacity</span>() / <span class="number">2</span> &#123;</span><br><span class="line">        caches.<span class="title function_ invoke__">resize</span>(cnt);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">let</span> <span class="variable">res</span> = <span class="title function_ invoke__">f</span>(&amp;mailbox);</span><br><span class="line">    <span class="keyword">match</span> res &#123;</span><br><span class="line">        <span class="title function_ invoke__">Some</span>(r) =&gt; &#123;</span><br><span class="line">            caches.<span class="title function_ invoke__">insert</span>(addr, mailbox);</span><br><span class="line">            CheckDoResult::<span class="title function_ invoke__">Valid</span>(r)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="literal">None</span> =&gt; &#123;</span><br><span class="line">            <span class="keyword">if</span> !connected &#123;</span><br><span class="line">                caches.<span class="title function_ invoke__">remove</span>(&amp;addr);</span><br><span class="line">            &#125;</span><br><span class="line">            CheckDoResult::Invalid</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="send-1"><a href="#send-1" class="headerlink" title="send"></a>send</h3><p>send 方法中 MailBox::try_send 传递的是 NormalScheduler，即触发 PeerFsmDelegate 去处理此处send函数中的 msg。<br>而 Router::check_do函数作用： </p>
+<ul>
+<li>先基于 addr 找到对应的 mailbox；</li>
+<li>然后调用对应的 MailBox::try_send 方法</li>
+</ul>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">try_send</span>(</span><br><span class="line">    &amp;<span class="keyword">self</span>,</span><br><span class="line">    addr: <span class="type">u64</span>,</span><br><span class="line">    msg: N::Message,</span><br><span class="line">) <span class="punctuation">-&gt;</span> Either&lt;<span class="type">Result</span>&lt;(), TrySendError&lt;N::Message&gt;&gt;, N::Message&gt; &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">msg</span> = <span class="title function_ invoke__">Some</span>(msg);</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">res</span> = <span class="keyword">self</span>.<span class="title function_ invoke__">check_do</span>(addr, |mailbox| &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">m</span> = msg.<span class="title function_ invoke__">take</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">        <span class="keyword">match</span> mailbox.<span class="title function_ invoke__">try_send</span>(m, &amp;<span class="keyword">self</span>.normal_scheduler) &#123;</span><br><span class="line">            <span class="title function_ invoke__">Ok</span>(()) =&gt; <span class="title function_ invoke__">Some</span>(<span class="title function_ invoke__">Ok</span>(())),</span><br><span class="line">            r @ <span class="title function_ invoke__">Err</span>(TrySendError::<span class="title function_ invoke__">Full</span>(_)) =&gt; &#123;</span><br><span class="line">                CHANNEL_FULL_COUNTER_VEC</span><br><span class="line">                    .<span class="title function_ invoke__">with_label_values</span>(&amp;[<span class="string">&quot;normal&quot;</span>])</span><br><span class="line">                    .<span class="title function_ invoke__">inc</span>();</span><br><span class="line">                <span class="title function_ invoke__">Some</span>(r)</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="title function_ invoke__">Err</span>(TrySendError::<span class="title function_ invoke__">Disconnected</span>(m)) =&gt; &#123;</span><br><span class="line">                msg = <span class="title function_ invoke__">Some</span>(m);</span><br><span class="line">                <span class="literal">None</span></span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="keyword">match</span> res &#123;</span><br><span class="line">        CheckDoResult::<span class="title function_ invoke__">Valid</span>(r) =&gt; Either::<span class="title function_ invoke__">Left</span>(r),</span><br><span class="line">        CheckDoResult::Invalid =&gt; Either::<span class="title function_ invoke__">Left</span>(<span class="title function_ invoke__">Err</span>(TrySendError::<span class="title function_ invoke__">Disconnected</span>(msg.<span class="title function_ invoke__">unwrap</span>()))),</span><br><span class="line">        CheckDoResult::NotExist =&gt; Either::<span class="title function_ invoke__">Right</span>(msg.<span class="title function_ invoke__">unwrap</span>()),</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="send-control"><a href="#send-control" class="headerlink" title="send_control"></a>send_control</h3><p>send_control 函数发送的 msg，最终会触发 StoreFsmDelegate 来处理。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#[inline]</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">send_control</span>(&amp;<span class="keyword">self</span>, msg: C::Message) <span class="punctuation">-&gt;</span> <span class="type">Result</span>&lt;(), TrySendError&lt;C::Message&gt;&gt; &#123;</span><br><span class="line">    <span class="keyword">match</span> <span class="keyword">self</span>.control_box.<span class="title function_ invoke__">try_send</span>(msg, &amp;<span class="keyword">self</span>.control_scheduler) &#123;</span><br><span class="line">        <span class="title function_ invoke__">Ok</span>(()) =&gt; <span class="title function_ invoke__">Ok</span>(()),</span><br><span class="line">        r @ <span class="title function_ invoke__">Err</span>(TrySendError::<span class="title function_ invoke__">Full</span>(_)) =&gt; &#123;</span><br><span class="line">            CHANNEL_FULL_COUNTER_VEC</span><br><span class="line">                .<span class="title function_ invoke__">with_label_values</span>(&amp;[<span class="string">&quot;control&quot;</span>])</span><br><span class="line">                .<span class="title function_ invoke__">inc</span>();</span><br><span class="line">            r</span><br><span class="line">        &#125;</span><br><span class="line">        r =&gt; r,</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="broadcast-normal"><a href="#broadcast-normal" class="headerlink" title="broadcast_normal"></a>broadcast_normal</h3><p>广播，即通知所有的 PeerFsm，这里的消息是由 msg_gen() 函数生成的。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// Try to notify all normal fsm a message.</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">fn</span> <span class="title function_">broadcast_normal</span>(&amp;<span class="keyword">self</span>, <span class="keyword">mut</span> msg_gen: <span class="keyword">impl</span> <span class="title class_">FnMut</span>() <span class="punctuation">-&gt;</span> N::Message) &#123;</span><br><span class="line">    <span class="keyword">let</span> <span class="variable">mailboxes</span> = <span class="keyword">self</span>.normals.<span class="title function_ invoke__">lock</span>().<span class="title function_ invoke__">unwrap</span>();</span><br><span class="line">    <span class="keyword">for</span> <span class="variable">mailbox</span> <span class="keyword">in</span> mailboxes.map.<span class="title function_ invoke__">values</span>() &#123;</span><br><span class="line">        <span class="keyword">let</span> <span class="variable">_</span> = mailbox.<span class="title function_ invoke__">force_send</span>(<span class="title function_ invoke__">msg_gen</span>(), &amp;<span class="keyword">self</span>.normal_scheduler);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#FsmScheduler"><span class="toc-number">1.</span> <span class="toc-text">FsmScheduler</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#impl-sched"><span class="toc-number">1.1.</span> <span class="toc-text">impl_sched</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#FsmState"><span class="toc-number">2.</span> <span class="toc-text">FsmState</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#task-fsm"><span class="toc-number">2.1.</span> <span class="toc-text">task_fsm</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#notify"><span class="toc-number">2.2.</span> <span class="toc-text">notify</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Clear"><span class="toc-number">2.3.</span> <span class="toc-text">Clear</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BasicMailbox"><span class="toc-number">3.</span> <span class="toc-text">BasicMailbox</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#send"><span class="toc-number">3.1.</span> <span class="toc-text">send</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#close"><span class="toc-number">3.2.</span> <span class="toc-text">close</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Router"><span class="toc-number">4.</span> <span class="toc-text">Router</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#register"><span class="toc-number">4.1.</span> <span class="toc-text">register</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#check-do"><span class="toc-number">4.2.</span> <span class="toc-text">check_do</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#send-1"><span class="toc-number">4.3.</span> <span class="toc-text">send</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#send-control"><span class="toc-number">4.4.</span> <span class="toc-text">send_control</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#broadcast-normal"><span class="toc-number">4.5.</span> <span class="toc-text">broadcast_normal</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/07/TiKV/tikv_router/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&text=tikv: Router 设计详解"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&is_video=false&description=tikv: Router 设计详解"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tikv: Router 设计详解&body=Check out this article: https://szza.github.io/2022/10/07/TiKV/tikv_router/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&title=tikv: Router 设计详解"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/07/TiKV/tikv_router/&name=tikv: Router 设计详解&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/07/TiKV/tikv_router/&t=tikv: Router 设计详解"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

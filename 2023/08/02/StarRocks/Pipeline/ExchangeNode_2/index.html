@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="ExchangeSourceOperatorDataStreamMgr::create_recvr12345678910111213141516171819202122232425262728293031323334PassThroughChunkBuffer* DataStreamMgr::get_pass_through_chunk_buffer(    const TUniqueId&amp;amp">
+<meta property="og:type" content="article">
+<meta property="og:title" content="MPP: ExchangeSourceOperator 设计详解">
+<meta property="og:url" content="https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="ExchangeSourceOperatorDataStreamMgr::create_recvr12345678910111213141516171819202122232425262728293031323334PassThroughChunkBuffer* DataStreamMgr::get_pass_through_chunk_buffer(    const TUniqueId&amp;amp">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-08-02T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-26T02:32:13.294Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>MPP: ExchangeSourceOperator 设计详解</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/08/05/StarRocks/Pipeline/StarRocks-QueryCache/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/08/01/StarRocks/Pipeline/ExchangeNode_1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&text=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&is_video=false&description=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MPP: ExchangeSourceOperator 设计详解&body=Check out this article: https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&name=MPP: ExchangeSourceOperator 设计详解&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&t=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ExchangeSourceOperator"><span class="toc-number">1.</span> <span class="toc-text">ExchangeSourceOperator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DataStreamMgr-create-recvr"><span class="toc-number">1.1.</span> <span class="toc-text">DataStreamMgr::create_recvr</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ExchangeNode-set-num-senders"><span class="toc-number">1.2.</span> <span class="toc-text">ExchangeNode::set_num_senders</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DataStreamRecvr"><span class="toc-number">1.3.</span> <span class="toc-text">DataStreamRecvr</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#transmit-chunk"><span class="toc-number">1.4.</span> <span class="toc-text">transmit_chunk</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#DataStreamRecvr-add-chunks"><span class="toc-number">1.4.1.</span> <span class="toc-text">DataStreamRecvr::add_chunks</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#PipelineSenderQueue-add-chunks"><span class="toc-number">1.4.2.</span> <span class="toc-text">PipelineSenderQueue::add_chunks</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pull-chunk"><span class="toc-number">1.5.</span> <span class="toc-text">pull_chunk</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#DataStreamRecvr-get-chunk-for-pipeline"><span class="toc-number">1.5.1.</span> <span class="toc-text">DataStreamRecvr::get_chunk_for_pipeline</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#PipelineSenderQueue-get-chunk"><span class="toc-number">1.5.2.</span> <span class="toc-text">PipelineSenderQueue::get_chunk</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">2.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        MPP: ExchangeSourceOperator 设计详解
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-08-02T02:00:01.000Z" itemprop="datePublished">2023-08-02</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="ExchangeSourceOperator"><a href="#ExchangeSourceOperator" class="headerlink" title="ExchangeSourceOperator"></a>ExchangeSourceOperator</h2><h3 id="DataStreamMgr-create-recvr"><a href="#DataStreamMgr-create-recvr" class="headerlink" title="DataStreamMgr::create_recvr"></a>DataStreamMgr::create_recvr</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">PassThroughChunkBuffer* <span class="title">DataStreamMgr::get_pass_through_chunk_buffer</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> TUniqueId&amp; query_id)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _pass_through_chunk_buffer_manager.<span class="built_in">get</span>(query_id);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">std::shared_ptr&lt;DataStreamRecvr&gt; <span class="title">DataStreamMgr::create_recvr</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">        RuntimeState* state, <span class="type">const</span> RowDescriptor&amp; row_desc,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> TUniqueId&amp; fragment_instance_id, PlanNodeId dest_node_id,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">int</span> num_senders, <span class="type">int</span> buffer_size, </span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> std::shared_ptr&lt;RuntimeProfile&gt;&amp; profile, <span class="type">bool</span> is_merging,</span></span></span><br><span class="line"><span class="params"><span class="function">        std::shared_ptr&lt;QueryStatisticsRecvr&gt; sub_plan_query_statistics_recvr,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">bool</span> is_pipeline, <span class="type">int32_t</span> degree_of_parallelism, <span class="type">bool</span> keep_order)</span> </span>&#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> recvr = std::<span class="built_in">make_shared</span>&lt;DataStreamRecvr&gt;(</span><br><span class="line">                <span class="keyword">this</span>, state, row_desc, </span><br><span class="line">                fragment_instance_id, dest_node_id, num_senders, is_merging,</span><br><span class="line">                buffer_size, profile, std::<span class="built_in">move</span>(sub_plan_query_statistics_recvr),</span><br><span class="line">                is_pipeline, degree_of_parallelism,</span><br><span class="line">                keep_order,</span><br><span class="line">                <span class="built_in">get_pass_through_chunk_buffer</span>(state-&gt;<span class="built_in">query_id</span>())));</span><br><span class="line"></span><br><span class="line">    <span class="type">uint32_t</span> bucket = <span class="built_in">get_bucket</span>(fragment_instance_id);</span><br><span class="line">    <span class="keyword">auto</span>&amp; receiver_map = _receiver_map[bucket];</span><br><span class="line">    <span class="function">std::lock_guard&lt;Mutex&gt; <span class="title">l</span><span class="params">(_lock[bucket])</span></span>;</span><br><span class="line">    <span class="keyword">auto</span> iter = receiver_map.<span class="built_in">find</span>(fragment_instance_id);</span><br><span class="line">    <span class="keyword">if</span> (iter == receiver_map.<span class="built_in">end</span>()) &#123;</span><br><span class="line">        receiver_map.<span class="built_in">emplace</span>(fragment_instance_id, std::<span class="built_in">make_shared</span>&lt;RecvrMap&gt;());</span><br><span class="line">        iter = receiver_map.<span class="built_in">find</span>(fragment_instance_id);</span><br><span class="line">        _fragment_count += <span class="number">1</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    iter-&gt;second-&gt;<span class="built_in">emplace</span>(dest_node_id, recvr);</span><br><span class="line">    _receiver_count += <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">return</span> recvr;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="ExchangeNode-set-num-senders"><a href="#ExchangeNode-set-num-senders" class="headerlink" title="ExchangeNode::set_num_senders"></a>ExchangeNode::set_num_senders</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Set senders of exchange nodes before pipeline build</span></span><br><span class="line">std::vector&lt;ExecNode*&gt; exch_nodes;</span><br><span class="line">plan-&gt;<span class="built_in">collect_nodes</span>(TPlanNodeType::EXCHANGE_NODE, &amp;exch_nodes);</span><br><span class="line"><span class="keyword">for</span> (<span class="keyword">auto</span>* exch_node : exch_nodes) &#123;</span><br><span class="line">    <span class="type">int</span> num_senders = <span class="built_in">FindWithDefault</span>(params.per_exch_num_senders, exch_node-&gt;<span class="built_in">id</span>(), <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">down_cast</span>&lt;ExchangeNode*&gt;(exch_node)-&gt;<span class="built_in">set_num_senders</span>(num_senders);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="DataStreamRecvr"><a href="#DataStreamRecvr" class="headerlink" title="DataStreamRecvr"></a>DataStreamRecvr</h3><ul>
+<li><p>is_merging 为 true 时，num_queues 为 num_senders，而 num_sender_per_queue 就是 1</p>
+<p>  此时，_sender_queues 中有 num_queues 个 PipelineSenderQueue，每个 1 中只有一个 ChunkQueue。</p>
+</li>
+<li><p>is_merging 为 false 时，num_queue 为 1，而 num_sender_per_queue 为 num_senders</p>
+<p>  此时，_sender_queues 中只有 1 个 PipelineSenderQueue，每个 PipelineSenderQueue 中有 dop 个 ChunkQueue。</p>
+</li>
+</ul>
+<p>is_merging 只有在 Sort 时才会为 true，下面先视为 false。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line">DataStreamRecvr::<span class="built_in">DataStreamRecvr</span>(DataStreamMgr* stream_mgr, RuntimeState* runtime_state,</span><br><span class="line">                                 <span class="type">const</span> RowDescriptor&amp; row_desc,</span><br><span class="line">                                 <span class="type">const</span> TUniqueId&amp; fragment_instance_id,</span><br><span class="line">                                 PlanNodeId dest_node_id, <span class="type">int</span> num_senders,</span><br><span class="line">                                 <span class="type">bool</span> is_merging, <span class="type">int</span> total_buffer_limit,</span><br><span class="line">                                 std::shared_ptr&lt;RuntimeProfile&gt; profile,</span><br><span class="line">                                 std::shared_ptr&lt;QueryStatisticsRecvr&gt; sub_plan_query_statistics_recvr,</span><br><span class="line">                                 <span class="type">bool</span> is_pipeline, <span class="type">int32_t</span> dop, <span class="type">bool</span> keep_order,</span><br><span class="line">                                 PassThroughChunkBuffer* pass_through_chunk_buffer)</span><br><span class="line">        : _mgr(stream_mgr),</span><br><span class="line">          _fragment_instance_id(fragment_instance_id),</span><br><span class="line">          _dest_node_id(dest_node_id),</span><br><span class="line">          _total_buffer_limit(total_buffer_limit),</span><br><span class="line">          _row_desc(row_desc),</span><br><span class="line">          _is_merging(is_merging),</span><br><span class="line">          _num_buffered_bytes(<span class="number">0</span>),</span><br><span class="line">          _profile(std::<span class="built_in">move</span>(profile)),</span><br><span class="line">          _instance_profile(runtime_state-&gt;<span class="built_in">runtime_profile_ptr</span>()),</span><br><span class="line">          _query_mem_tracker(runtime_state-&gt;<span class="built_in">query_mem_tracker_ptr</span>()),</span><br><span class="line">          _instance_mem_tracker(runtime_state-&gt;<span class="built_in">instance_mem_tracker_ptr</span>()),</span><br><span class="line">          _sub_plan_query_statistics_recvr(std::<span class="built_in">move</span>(sub_plan_query_statistics_recvr)),</span><br><span class="line">          _is_pipeline(is_pipeline),</span><br><span class="line">          _degree_of_parallelism(dop),</span><br><span class="line">          _keep_order(keep_order),</span><br><span class="line">          _pass_through_context(pass_through_chunk_buffer, fragment_instance_id, dest_node_id) &#123;</span><br><span class="line">    <span class="comment">// Create one queue per sender if is_merging is true.</span></span><br><span class="line">    <span class="type">int</span> num_queues = is_merging ? num_senders : <span class="number">1</span>;</span><br><span class="line">    <span class="type">int</span> num_sender_per_queue = is_merging ? <span class="number">1</span> : num_senders;</span><br><span class="line">    _sender_queues.<span class="built_in">reserve</span>(num_queues);</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; num_queues; ++i) &#123;</span><br><span class="line">        SenderQueue* queue = <span class="literal">nullptr</span>;</span><br><span class="line">        <span class="keyword">if</span> (_is_pipeline) &#123;</span><br><span class="line">            queue = _sender_queue_pool.<span class="built_in">add</span>(<span class="keyword">new</span> <span class="built_in">PipelineSenderQueue</span>(</span><br><span class="line">                                                <span class="keyword">this</span>,</span><br><span class="line">                                                num_sender_per_queue,</span><br><span class="line">                                                is_merging ? <span class="number">1</span> : dop));</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">//..</span></span><br><span class="line">        &#125;</span><br><span class="line">        _sender_queues.<span class="built_in">push_back</span>(queue);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Initialize the counters</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line"></span><br><span class="line">    _pass_through_context.<span class="built_in">init</span>();</span><br><span class="line">    <span class="keyword">if</span> (runtime_state-&gt;<span class="built_in">query_options</span>().__isset.transmission_encode_level) &#123;</span><br><span class="line">        _encode_level = runtime_state-&gt;<span class="built_in">query_options</span>().transmission_encode_level;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">DataStreamRecvr::PipelineSenderQueue::<span class="built_in">PipelineSenderQueue</span>(</span><br><span class="line">    DataStreamRecvr* parent_recvr, <span class="type">int32_t</span> num_senders, <span class="type">int32_t</span> degree_of_parallism)</span><br><span class="line">        : <span class="built_in">SenderQueue</span>(parent_recvr),</span><br><span class="line">          _num_remaining_senders(num_senders),</span><br><span class="line">          _chunk_queues(degree_of_parallism),</span><br><span class="line">          _chunk_queue_states(degree_of_parallism) &#123;</span><br><span class="line">    <span class="keyword">if</span> (parent_recvr-&gt;_is_merging) &#123;</span><br><span class="line">        _producer_token = std::<span class="built_in">make_unique</span>&lt;ChunkQueue::<span class="type">producer_token_t</span>&gt;(_chunk_queues[<span class="number">0</span>]);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="transmit-chunk"><a href="#transmit-chunk" class="headerlink" title="transmit_chunk"></a>transmit_chunk</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">DataStreamMgr::transmit_chunk</span><span class="params">(<span class="type">const</span> PTransmitChunkParams&amp; request, ::google::protobuf::Closure** done)</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> PUniqueId&amp; finst_id = request.<span class="built_in">finst_id</span>();</span><br><span class="line">    TUniqueId t_finst_id;</span><br><span class="line">    t_finst_id.hi = finst_id.<span class="built_in">hi</span>();</span><br><span class="line">    t_finst_id.lo = finst_id.<span class="built_in">lo</span>();</span><br><span class="line">    std::shared_ptr&lt;DataStreamRecvr&gt; recvr = <span class="built_in">find_recvr</span>(t_finst_id, request.<span class="built_in">node_id</span>());</span><br><span class="line">    <span class="built_in">RETURN_IF</span>(recvr == <span class="literal">nullptr</span>, Status::<span class="built_in">OK</span>());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (request.<span class="built_in">has_query_statistics</span>()) &#123;</span><br><span class="line">        recvr-&gt;<span class="built_in">add_sub_plan_statistics</span>(request.<span class="built_in">query_statistics</span>(), request.<span class="built_in">sender_id</span>());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function">DeferOp <span class="title">op</span><span class="params">([&amp;eos, &amp;recvr, &amp;request]() &#123;</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="keyword">if</span> (request.eos()) &#123;</span></span></span><br><span class="line"><span class="params"><span class="function">            recvr-&gt;remove_sender(request.sender_id(), request.be_number());</span></span></span><br><span class="line"><span class="params"><span class="function">        &#125;</span></span></span><br><span class="line"><span class="params"><span class="function">    &#125;)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (request.<span class="built_in">chunks_size</span>() &gt; <span class="number">0</span> || request.<span class="built_in">use_pass_through</span>()) &#123;</span><br><span class="line">        <span class="built_in">RETURN_IF_ERROR</span>(recvr-&gt;<span class="built_in">add_chunks</span>(request, request.<span class="built_in">eos</span>() ? <span class="literal">nullptr</span> : done));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="DataStreamRecvr-add-chunks"><a href="#DataStreamRecvr-add-chunks" class="headerlink" title="DataStreamRecvr::add_chunks"></a>DataStreamRecvr::add_chunks</h4><p>BE 在接受到 <em>transmit_chunk</em> RPC 后，就会调用 DataStreamRecvr::add_chunks 函数来处理请求。先基于 sender_id 将定位到具体的 SenderQueue，即 _sender_queues[sender_id]</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">DataStreamRecvr::add_chunks</span><span class="params">(<span class="type">const</span> PTransmitChunkParams&amp; request, ::google::protobuf::Closure** done)</span> </span>&#123;</span><br><span class="line">    MemTracker* prev_tracker = tls_thread_status.<span class="built_in">set_mem_tracker</span>(_instance_mem_tracker.<span class="built_in">get</span>());</span><br><span class="line">    <span class="function">DeferOp <span class="title">op</span><span class="params">([&amp;] &#123; tls_thread_status.set_mem_tracker(prev_tracker); &#125;)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">SCOPED_TIMER</span>(_process_total_timer);</span><br><span class="line">    <span class="built_in">SCOPED_TIMER</span>(_sender_total_timer);</span><br><span class="line">    <span class="built_in">COUNTER_UPDATE</span>(_request_received_counter, <span class="number">1</span>);</span><br><span class="line">    <span class="type">int</span> sender_id = _is_merging ? request.<span class="built_in">sender_id</span>() : <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// Add all batches to the same queue if _is_merging is false.</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (_keep_order) &#123;</span><br><span class="line">        <span class="built_in">DCHECK</span>(_is_pipeline);</span><br><span class="line">        <span class="keyword">return</span> _sender_queues[sender_id]-&gt;<span class="built_in">add_chunks_and_keep_order</span>(request, done);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> _sender_queues[sender_id]-&gt;<span class="built_in">add_chunks</span>(request, done);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="PipelineSenderQueue-add-chunks"><a href="#PipelineSenderQueue-add-chunks" class="headerlink" title="PipelineSenderQueue::add_chunks"></a>PipelineSenderQueue::add_chunks</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="type">bool</span> keep_order&gt;</span><br><span class="line">Status DataStreamRecvr::PipelineSenderQueue::<span class="built_in">add_chunks</span>(<span class="type">const</span> PTransmitChunkParams&amp; request,</span><br><span class="line">                                                        ::google::protobuf::Closure** done) &#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">bool</span> use_pass_through = request.<span class="built_in">use_pass_through</span>();</span><br><span class="line">    <span class="built_in">RETURN_IF</span>(_is_cancelled || _num_remaining_senders &lt;= <span class="number">0</span>, Status::<span class="built_in">OK</span>());</span><br><span class="line">    <span class="built_in">RETURN_IF_ERROR</span>(<span class="built_in">try_to_build_chunk_meta</span>(request));</span><br><span class="line"></span><br><span class="line">    <span class="type">size_t</span> total_chunk_bytes = <span class="number">0</span>;</span><br><span class="line">    _is_pipeline_level_shuffle = </span><br><span class="line">        request.<span class="built_in">has_is_pipeline_level_shuffle</span>() &amp;&amp; request.<span class="built_in">is_pipeline_level_shuffle</span>();</span><br><span class="line"></span><br><span class="line">    ChunkList chunks = use_pass_through</span><br><span class="line">        ? <span class="built_in">get_chunks_from_pass_through</span>(request.<span class="built_in">sender_id</span>(), total_chunk_bytes)</span><br><span class="line">        : <span class="built_in">get_chunks_from_request</span>&lt;<span class="literal">false</span>&gt;(request, total_chunk_bytes)));</span><br><span class="line"></span><br><span class="line">    <span class="built_in">RETURN_IF</span>(_is_cancelled, Status::<span class="built_in">OK</span>());</span><br><span class="line"></span><br><span class="line">    <span class="comment">// remove the short-circuited chunks</span></span><br><span class="line">    <span class="keyword">if</span> (_is_pipeline_level_shuffle) &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span> iter = chunks.<span class="built_in">begin</span>(); iter != chunks.<span class="built_in">end</span>();) &#123;</span><br><span class="line">            <span class="keyword">if</span> (_chunk_queue_states[iter-&gt;driver_sequence].is_short_circuited) &#123;</span><br><span class="line">                total_chunk_bytes -= iter-&gt;chunk_bytes;</span><br><span class="line">                chunks.<span class="built_in">erase</span>(iter++);</span><br><span class="line">                <span class="keyword">continue</span>;</span><br><span class="line">            &#125;</span><br><span class="line">            iter++;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (!chunks.<span class="built_in">empty</span>() &amp;&amp; done != <span class="literal">nullptr</span> &amp;&amp; _recvr-&gt;<span class="built_in">exceeds_limit</span>(total_chunk_bytes)) &#123;</span><br><span class="line">        chunks.<span class="built_in">back</span>().closure = *done;</span><br><span class="line">        chunks.<span class="built_in">back</span>().queue_enter_time = <span class="built_in">MonotonicNanos</span>();</span><br><span class="line">        *done = <span class="literal">nullptr</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span>&amp;&amp; chunk : chunks) &#123;</span><br><span class="line">        <span class="type">int</span> driver_seq = _is_pipeline_level_shuffle ? chunk.driver_sequence : <span class="number">0</span>;</span><br><span class="line">        <span class="type">size_t</span> chunk_bytes = chunk.chunk_bytes;</span><br><span class="line">        <span class="keyword">auto</span>* closure = chunk.closure;</span><br><span class="line">        _chunk_queues[driver_seq].<span class="built_in">enqueue</span>(std::<span class="built_in">move</span>(chunk));</span><br><span class="line">        _chunk_queue_states[driver_seq].blocked_closure_num += closure != <span class="literal">nullptr</span>;</span><br><span class="line">        _total_chunks++;</span><br><span class="line">        <span class="keyword">if</span> (_chunk_queue_states[driver_seq].is_short_circuited) &#123;</span><br><span class="line">            <span class="built_in">short_circuit</span>(driver_seq);</span><br><span class="line">        &#125;</span><br><span class="line">        _recvr-&gt;_num_buffered_bytes += chunk_bytes;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="pull-chunk"><a href="#pull-chunk" class="headerlink" title="pull_chunk"></a>pull_chunk</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">StatusOr&lt;vectorized::ChunkPtr&gt; <span class="title">ExchangeSourceOperator::pull_chunk</span><span class="params">(RuntimeState* state)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> chunk = std::<span class="built_in">make_unique</span>&lt;vectorized::Chunk&gt;();</span><br><span class="line">    <span class="built_in">RETURN_IF_ERROR</span>(_stream_recvr-&gt;<span class="built_in">get_chunk_for_pipeline</span>(&amp;chunk, _driver_sequence));</span><br><span class="line"></span><br><span class="line">    <span class="built_in">eval_runtime_bloom_filters</span>(chunk.<span class="built_in">get</span>());</span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">move</span>(chunk);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="DataStreamRecvr-get-chunk-for-pipeline"><a href="#DataStreamRecvr-get-chunk-for-pipeline" class="headerlink" title="DataStreamRecvr::get_chunk_for_pipeline"></a>DataStreamRecvr::get_chunk_for_pipeline</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">DataStreamRecvr::get_chunk_for_pipeline</span><span class="params">(std::unique_ptr&lt;vectorized::Chunk&gt;* chunk,</span></span></span><br><span class="line"><span class="params"><span class="function">                                               <span class="type">const</span> <span class="type">int32_t</span> driver_sequence)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">DCHECK</span>(!_is_merging);</span><br><span class="line">    <span class="built_in">DCHECK_EQ</span>(_sender_queues.<span class="built_in">size</span>(), <span class="number">1</span>);</span><br><span class="line">    vectorized::Chunk* tmp_chunk = <span class="literal">nullptr</span>;</span><br><span class="line">    Status status = _sender_queues[<span class="number">0</span>]-&gt;<span class="built_in">get_chunk</span>(&amp;tmp_chunk, driver_sequence);</span><br><span class="line">    chunk-&gt;<span class="built_in">reset</span>(tmp_chunk);</span><br><span class="line">    <span class="keyword">return</span> status;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="PipelineSenderQueue-get-chunk"><a href="#PipelineSenderQueue-get-chunk" class="headerlink" title="PipelineSenderQueue::get_chunk"></a>PipelineSenderQueue::get_chunk</h4><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line">Status DataStreamRecvr::PipelineSenderQueue::<span class="built_in">get_chunk</span>(vectorized::Chunk** chunk, <span class="type">const</span> <span class="type">int32_t</span> driver_sequence) &#123;</span><br><span class="line">    <span class="built_in">RETURN_IF</span>(_is_cancelled, Status::<span class="built_in">Cancelled</span>(<span class="string">&quot;Cancelled&quot;</span>));</span><br><span class="line">   </span><br><span class="line">    <span class="type">size_t</span> index = _is_pipeline_level_shuffle ? driver_sequence : <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">auto</span>&amp; chunk_queue = _chunk_queues[index];</span><br><span class="line">    <span class="keyword">auto</span>&amp; chunk_queue_state = _chunk_queue_states[index];</span><br><span class="line"></span><br><span class="line">    ChunkItem item;</span><br><span class="line">    <span class="keyword">if</span> (!chunk_queue.<span class="built_in">try_dequeue</span>(item)) &#123;</span><br><span class="line">        chunk_queue_state.unpluging = <span class="literal">false</span>;</span><br><span class="line">        <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function">DeferOp <span class="title">defer_op</span><span class="params">([&amp;]() &#123;</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="keyword">auto</span>* closure = item.closure;</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="keyword">if</span> (closure != <span class="literal">nullptr</span>) &#123;</span></span></span><br><span class="line"><span class="params"><span class="function">            MemTracker* prev_tracker = tls_thread_status.set_mem_tracker(</span></span></span><br><span class="line"><span class="params"><span class="function">                ExecEnv::GetInstance()-&gt;process_mem_tracker());</span></span></span><br><span class="line"><span class="params"><span class="function">            DeferOp op([&amp;] &#123; tls_thread_status.set_mem_tracker(prev_tracker); &#125;);</span></span></span><br><span class="line"><span class="params"><span class="function">            closure-&gt;Run();</span></span></span><br><span class="line"><span class="params"><span class="function">            chunk_queue_state.blocked_closure_num--;</span></span></span><br><span class="line"><span class="params"><span class="function">        &#125;</span></span></span><br><span class="line"><span class="params"><span class="function">    &#125;)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (item.chunk_ptr == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">        ChunkUniquePtr chunk_ptr = std::<span class="built_in">make_unique</span>&lt;vectorized::Chunk&gt;();</span><br><span class="line">        faststring uncompressed_buffer;</span><br><span class="line">        <span class="built_in">RETURN_IF_ERROR</span>(_deserialize_chunk(item.pchunk, chunk_ptr.<span class="built_in">get</span>(), &amp;uncompressed_buffer));</span><br><span class="line">        *chunk = chunk_ptr.<span class="built_in">release</span>();</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        *chunk = item.chunk_ptr.<span class="built_in">release</span>();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    _total_chunks--;</span><br><span class="line">    _recvr-&gt;_num_buffered_bytes -= item.chunk_bytes;</span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li><a target="_blank" rel="noopener" href="https://www.zhihu.com/collection/853861081">StarRocks Exchange 算子源码解析</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#ExchangeSourceOperator"><span class="toc-number">1.</span> <span class="toc-text">ExchangeSourceOperator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DataStreamMgr-create-recvr"><span class="toc-number">1.1.</span> <span class="toc-text">DataStreamMgr::create_recvr</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ExchangeNode-set-num-senders"><span class="toc-number">1.2.</span> <span class="toc-text">ExchangeNode::set_num_senders</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DataStreamRecvr"><span class="toc-number">1.3.</span> <span class="toc-text">DataStreamRecvr</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#transmit-chunk"><span class="toc-number">1.4.</span> <span class="toc-text">transmit_chunk</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#DataStreamRecvr-add-chunks"><span class="toc-number">1.4.1.</span> <span class="toc-text">DataStreamRecvr::add_chunks</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#PipelineSenderQueue-add-chunks"><span class="toc-number">1.4.2.</span> <span class="toc-text">PipelineSenderQueue::add_chunks</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pull-chunk"><span class="toc-number">1.5.</span> <span class="toc-text">pull_chunk</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#DataStreamRecvr-get-chunk-for-pipeline"><span class="toc-number">1.5.1.</span> <span class="toc-text">DataStreamRecvr::get_chunk_for_pipeline</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#PipelineSenderQueue-get-chunk"><span class="toc-number">1.5.2.</span> <span class="toc-text">PipelineSenderQueue::get_chunk</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">2.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&text=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&is_video=false&description=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=MPP: ExchangeSourceOperator 设计详解&body=Check out this article: https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&title=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&name=MPP: ExchangeSourceOperator 设计详解&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/08/02/StarRocks/Pipeline/ExchangeNode_2/&t=MPP: ExchangeSourceOperator 设计详解"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

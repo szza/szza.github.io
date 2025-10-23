@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="现在很多 JOIN 算法在进行 JOIN 操作之前，会先将输入划分成多个 clusters&#x2F;partitions，再在每个 cluster 内部进行 JOIN，以便使用多线程等来加速 JOIN。现在主流的分区算法大都是基于 radix-cluster algorithm[1] 及其衍生对输入进行分区。  现在的 join 算法为提高性能，基本都是想着如何充分发挥硬件的特性，比如线程，NU">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Radix-Join Cluster Algorithm">
+<meta property="og:url" content="https://szza.github.io/2023/04/22/Paper/Radix-Join/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="现在很多 JOIN 算法在进行 JOIN 操作之前，会先将输入划分成多个 clusters&#x2F;partitions，再在每个 cluster 内部进行 JOIN，以便使用多线程等来加速 JOIN。现在主流的分区算法大都是基于 radix-cluster algorithm[1] 及其衍生对输入进行分区。  现在的 join 算法为提高性能，基本都是想着如何充分发挥硬件的特性，比如线程，NU">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-1.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-2.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-3.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-4.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-4-1.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-5.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-6.jpg?raw=true">
+<meta property="article:published_time" content="2023-04-22T02:12:01.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Papers">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-1.jpg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Radix-Join Cluster Algorithm</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/04/02/Paper/Morsel-Driven-Parallelism/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/04/22/Paper/Radix-Join/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&text=Radix-Join Cluster Algorithm"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&is_video=false&description=Radix-Join Cluster Algorithm"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Radix-Join Cluster Algorithm&body=Check out this article: https://szza.github.io/2023/04/22/Paper/Radix-Join/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&name=Radix-Join Cluster Algorithm&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/04/22/Paper/Radix-Join/&t=Radix-Join Cluster Algorithm"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#PARTITIONED-HASH-JOIN"><span class="toc-number">1.</span> <span class="toc-text">PARTITIONED HASH-JOIN</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Radix-Cluster-Algorithm"><span class="toc-number">2.</span> <span class="toc-text">Radix-Cluster Algorithm</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Experimental"><span class="toc-number">3.</span> <span class="toc-text">Experimental</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#radix-bits"><span class="toc-number">3.1.</span> <span class="toc-text">radix-bits</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#multi-pass"><span class="toc-number">3.2.</span> <span class="toc-text">multi-pass</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Radix-Join Cluster Algorithm
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-04-22T02:12:01.000Z" itemprop="datePublished">2023-04-22</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Papers/" rel="tag">Papers</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>现在很多 JOIN 算法在进行 JOIN 操作之前，会先将输入划分成多个 clusters&#x2F;partitions，再在每个 cluster 内部进行 JOIN，以便使用多线程等来加速 JOIN。现在主流的分区算法大都是基于 radix-cluster algorithm[1] 及其衍生对输入进行分区。</p>
+<blockquote>
+<p>现在的 join 算法为提高性能，基本都是想着如何充分发挥硬件的特性，比如线程，NUMA 内存分配特性，SIMD，TLB entries、cache lines等。</p>
+</blockquote>
+<p>本文只是作为后续 JOIN 算法的一个铺垫，因此主要介绍 radix-cluster algorithm 本身，其他部分可参考原文[1]。</p>
+<h2 id="PARTITIONED-HASH-JOIN"><a href="#PARTITIONED-HASH-JOIN" class="headerlink" title="PARTITIONED HASH-JOIN"></a>PARTITIONED HASH-JOIN</h2><p>Shatdal et al.[2] 提出了一种在 main-memory 下 Grace Join 算法的变体。</p>
+<p>该算法先基于一个 hash-number 将两个输入划分都分别为 H 个不同的 clusters，使得每个分区都能纳入 memory cache，这种方式比常规基于 bucket-chained hash join 性能更好。该算法简单明了，直接使用了一个分簇算法(clustering-algorithm)： <strong>只扫描输入一次，并将每个被扫描的 tuple 插入到输出中一个 cluster</strong></p>
+<p>如图-8所示，将左侧的输入随机的划分到 H 个单独的 cluster 中。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-1.jpg?raw=true" alt="radix-join-1"></p>
+<p>这个算法，问题就出在随机上，因为会破坏内存访问的局部性，这点从图-8可以看出，输出的H个 clusters 和输入分布基本没啥关系。而且由于需要把每个 cluster 都尽可能纳入 memory-cache 中，就需要 H 尽可能大，使得产生的每个 cluster 就会尽可能小才能一次性纳入cpu cache。那么当 H 非常大时，又有两个因素会导致性能退化：</p>
+<ul>
+<li>如果 H 超过 TLB entries 的数量，那么每次访问内存（memory reference）都会产生一次 TLB miss；</li>
+<li>如果 H 超过了 L1 or L2 可用的 cache lines 数量，cache thrashing 现象就会出现，进而导致 cache miss 次数激增。</li>
+</ul>
+<p>为解决这两个问题，提出了 Radix-Cluster Algorithm ，使得即便H非常大，也具有非常低的随机访问，进而提高性能。</p>
+<h2 id="Radix-Cluster-Algorithm"><a href="#Radix-Cluster-Algorithm" class="headerlink" title="Radix-Cluster Algorithm"></a>Radix-Cluster Algorithm</h2><p>如图 9 所示，radix-cluster algorithm 使用多个阶段（论文中叫 pass）将输入划分为 H 个 clusters，</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-2.jpg?raw=true" alt="radix-join-2"></p>
+<p>下面会先阐述下算法，然后以图-9为例进行说明算法。</p>
+<p>radix-clustering 算法是基于某列生成的整数 hash value 的低 $B$ bits 上实现的：<br>该算法有连续的 P 个 pass ，每个 pass 都基于输入 tuple 的 $B_p$ 个 bits 对输入进行分区，且该 $B_p$ 个 bits 的位置是从最左侧开始计算的 $\sum_1^pB_p$ bits。</p>
+<p>比如图-9中 $B &#x3D; 3$，其中 $P&#x3D;2$，$B_1 &#x3D; 2$，$B_2&#x3D;1$：</p>
+<ul>
+<li>第一个 pass 先使用 $B_1$ bits，目前总共使用的是从最左侧开始计算的 $2&#x3D;\sum^{p&#x3D;1}_1B_p$ 个 bits 进行对一个 pass 输入进行分区；</li>
+<li>第二个 pass 再使用 $B_2$ bits，目前总共使用的是从最左侧开始计算的 $3&#x3D;\sum^{p&#x3D;2}_1B_p$ 个 bits 对第二个 pass 输入进行分区</li>
+</ul>
+<blockquote>
+<p>第二个 pass 是在第一个 pass 的基础上再进行分区，因此看似只使用了一个 bit，实际上包含了第一个 pass 中两个bits的影响，因此说第二个 pass 使用从最左侧开始的 3 个 bits也没问题。</p>
+</blockquote>
+<p>radix-cluster 算法创建的 clusters 数量 $H &#x3D; \prod^p_1 H_p$，其中后一个 pass 会基于上一个 pass 输出的每个 cluster 继续子划分为 $H_p &#x3D; 2^{B_p}$ 个新的 cluster。</p>
+<p>因此当算法开始时，整个输入就被视为一个完整的 cluster，第一个 pass 就被划分为 $H_1 &#x3D; 2^{B_1}$ 个新的 clusters，然后在下一个 pass 继续基于 $H_1$ 个 clusters 再次划分，每个 cluster 又产生 $H_2 &#x3D; 2^{B_2}$ 个新的 clusters，因此两个 pass 就一共产生了 $H_1 * H_2$ 个 clusters。</p>
+<p>特别地，当 $P &#x3D; 1$ 时，radix-cluster 算法即类似上述简单明了的划分算法。</p>
+<blockquote>
+<ul>
+<li>为什么说 radix-cluster 算法在 H 很大时局部性更好？这个观察图-9两个pass的输出应该能得出结论。</li>
+<li>此外，为便于演示，在图-9所示的整数值表中没有使用哈希函数。然而，在实际中，即便是整数值，最好也使用一个hash函数，来确保值的所有位数都能发挥作用。</li>
+</ul>
+</blockquote>
+<p>radix-cluster 算法有诸多好处：</p>
+<ol>
+<li>通过多个 pass 可以实现在具有非常大 H 的情况下，还可以将随机访问的 $H_x$ 数量保持在很低的水平。更具体地说，就是如果我们能保证 $H_x &#x3D; 2^{B_x}$ 同时小于 cache lines 的数量和 TLB entries 的数量，那么我们就可以在每个pass的分区中完全避免 TLB  miss 和 cache miss。</li>
+<li>在基于某列（一般是 join-key cloumn）的 $B$ bits 进行 radix-clustering 之后，该列的hash值中具有相同 $B$ bits 的所有 tuples 表现出连续性，通常会形成每 $C&#x2F;2^B$ tuples 为一组的 chunks，其中 C 是输入的基数（cardinality）。因此，就没有必要使用额外的数据结构来记录这些 cluster 的边界：<strong>只需查看这些 clusters 的低 $B$ bits，就可以确定每个 cluster 的边界</strong>，这样就引入任何额外的开销。</li>
+<li>此外，这种 radix-cluster 算法得到的输出还是基于 radix-bits 排序的。</li>
+</ol>
+<p>图-9 中：</p>
+<ul>
+<li>在第一个 pass 中，取最左侧 2 bits 来划分，能得到 $4 &#x3D; 2^2$ 个 clusters；</li>
+<li>在第二个 pass 中，此时取从最左侧开始的 $3^{th}$ bit，对第一个 pass 输出的每个 cluster 再进子行划分，此时总共得到 $8 &#x3D; 2^1 * 4$ 个 clusters</li>
+</ul>
+<p>对输出的 clusters 进行观察可得：</p>
+<ul>
+<li>有界性：即不需要额外的数据结构就可以确定每个 cluster 的边界。比如，我们可以观察最终输出数组中的hash值的低 $B&#x3D;3$ bits 就能确定 <code>&#123;57, 17, 81, 75&#125;</code> 属于一个 cluster，而 96 和他们不是一个 cluster，并且这四个数字仍然保持原始输入中的顺序；</li>
+<li>有序性：最终输出的8个cluster是基于 3bits 进行排序的，即按照 <code>000 --&gt; 001 --&gt;... --&gt; 111</code> 顺序递增</li>
+</ul>
+<h2 id="Experimental"><a href="#Experimental" class="headerlink" title="Experimental"></a>Experimental</h2><p>radix-cluster 算法有三个参数会对性能造成影响，${B, P, B_p}$，论文进行试验，保持其中一个参数不变，变化另外两个参数对算法进行量化分析。</p>
+<h3 id="radix-bits"><a href="#radix-bits" class="headerlink" title="radix-bits"></a>radix-bits</h3><p>图-10展示了不同 CPU 架构下 1-pass 时不同 radix-bits 时执行时间分布细节。结论：</p>
+<ul>
+<li>纯CPU消耗的时间基本是恒定的，具体的数值在不同CPU架构上略有不同；</li>
+<li>radix-bits 越小， memory 和 TLB 耗时越低，两者成正相关，即 radix-bits 增加，相应的耗时也会增加，比如当 radix-bits 超过 6 时，生成的 clusters 则超过了 TLB entries 的数量（$64 &#x3D; 2^6）$，此时造成的 TLB miss 次数增加了，对应的耗时也会激增。cache miss 也类似。</li>
+</ul>
+<blockquote>
+<p>不同 CPU 的 TLB entries 和 cache lines 数量都不一样，所以图 10 显示的 radix-bits 影响不同；</p>
+</blockquote>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-3.jpg?raw=true" alt="radix-join-3"></p>
+<h3 id="multi-pass"><a href="#multi-pass" class="headerlink" title="multi-pass"></a>multi-pass</h3><p>图-11 展示了不同 passs 数量的影响。multipass radix-cluster 的核心思想是以增加 CPU 耗时来保证每个pass生成的 clusters 数量比较低，并降低内存耗。从图-11可得：</p>
+<ul>
+<li>在 radix-bits &gt; 6 时，即便通过 2-pass 设计，CPU 的耗时成本过高以至于无法避免 TLB 的耗时；</li>
+<li>只有当 radix-bits &gt; 15 时，即 内存耗时超过 CPU 耗时，2-passes 才超过 1-pass<blockquote>
+<p>by the way，关于这两点的原文不知道是我理解错了，还是原文写错了，似乎结论和图-11不匹配，且这两点就互相矛盾。原文如下：</p>
+<ul>
+<li>Obviously, the CPU costs are too high to avoid the TLB costs by using two passes with more than 6 radix-bits. </li>
+<li>Only with more than 15 radix-bits (i.e., when the memory costs exceed the CPU costs) will two passes win over one pass</li>
+</ul>
+</blockquote>
+</li>
+</ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-4.jpg?raw=true" alt="radix-join-4"></p>
+<p>注意：图-11 展示的仅是分区这一个操作的耗时，当分区数据增多这个耗时不可避免的增加，但是分区 + join 操作的总体耗时不一定会增加，甚至可能会锐减。这里引用论文[3]中的一个分区和join操作总体耗时的图，更能说明问题。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-4-1.jpg?raw=true" alt="radix-join-4-1"></p>
+<p>论文认为唯一改善图-11中问题的方法是降低 CPU 开销，图12是论文 1-pass 的 radix-cluster 算法源码，multi-pass 也是类似，所做的一个优化（图-12中的右侧两行代码）就是去掉了两个函数调用：</p>
+<ul>
+<li>将 hashFcn 变成宏；</li>
+<li>将 memcpy 替换为复制操作</li>
+</ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-5.jpg?raw=true" alt="radix-join-5"></p>
+<p>如图-13所示，优化之后，CPU 开销几乎降低了接近4倍，论文给出的两个理由是：</p>
+<ul>
+<li>some CPU cycles are saved;</li>
+<li>the CPUs can benefit more from the internal parallel capabilities using speculative execution as the code has become simpler and parallelization options more predictable</li>
+</ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/radix-join-6.jpg?raw=true" alt="radix-join-6"></p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ol>
+<li><a target="_blank" rel="noopener" href="https://ir.cwi.nl/pub/11143/11143B.pdf">Optimizing Main-Memory Join on Modern Hardware</a></li>
+<li><a href>Cache Conscious Algorithms for Relational Query Processing</a></li>
+<li><a target="_blank" rel="noopener" href="https://15721.courses.cs.cmu.edu/spring2016/papers/kim-vldb2009.pdf">Sort vs. Hash Revisited: Fast Join Implementation on Modern Multi-Core CPUs</a></li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#PARTITIONED-HASH-JOIN"><span class="toc-number">1.</span> <span class="toc-text">PARTITIONED HASH-JOIN</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Radix-Cluster-Algorithm"><span class="toc-number">2.</span> <span class="toc-text">Radix-Cluster Algorithm</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Experimental"><span class="toc-number">3.</span> <span class="toc-text">Experimental</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#radix-bits"><span class="toc-number">3.1.</span> <span class="toc-text">radix-bits</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#multi-pass"><span class="toc-number">3.2.</span> <span class="toc-text">multi-pass</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">4.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/04/22/Paper/Radix-Join/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&text=Radix-Join Cluster Algorithm"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&is_video=false&description=Radix-Join Cluster Algorithm"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Radix-Join Cluster Algorithm&body=Check out this article: https://szza.github.io/2023/04/22/Paper/Radix-Join/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&title=Radix-Join Cluster Algorithm"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/04/22/Paper/Radix-Join/&name=Radix-Join Cluster Algorithm&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/04/22/Paper/Radix-Join/&t=Radix-Join Cluster Algorithm"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

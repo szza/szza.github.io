@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="RaftStoreRouter &lt;&#x3D;&#x3D; 负责将 received 的 Raft 消息转发给 raftstore 中对应的 Region，  RaftStoreRouter 的实例化对象是 ServerRaftStoreRouter   Transport  &#x3D;&#x3D;&gt; 负责将 Raft 消息 send 到指定的 store   Service代码位">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TiKV RaftStoreRouter">
+<meta property="og:url" content="https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="RaftStoreRouter &lt;&#x3D;&#x3D; 负责将 received 的 Raft 消息转发给 raftstore 中对应的 Region，  RaftStoreRouter 的实例化对象是 ServerRaftStoreRouter   Transport  &#x3D;&#x3D;&gt; 负责将 Raft 消息 send 到指定的 store   Service代码位">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-10-02T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-08-28T03:35:09.673Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="TiKV6.1">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>TiKV RaftStoreRouter</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+         
+          <li><a href="/about/">About</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/10/02/TiKV/ReadIndex/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/10/02/TiKV/raft_rs_2_election/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&text=TiKV RaftStoreRouter"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&is_video=false&description=TiKV RaftStoreRouter"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=TiKV RaftStoreRouter&body=Check out this article: https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&name=TiKV RaftStoreRouter&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&t=TiKV RaftStoreRouter"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Service"><span class="toc-number">1.</span> <span class="toc-text">Service</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ServerRaftStoreRouter"><span class="toc-number">2.</span> <span class="toc-text">ServerRaftStoreRouter</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Server"><span class="toc-number"></span> <span class="toc-text">Server</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ServerTransport"><span class="toc-number">1.</span> <span class="toc-text">ServerTransport</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Node"><span class="toc-number">2.</span> <span class="toc-text">Node</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        TiKV RaftStoreRouter
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-10-02T02:00:01.000Z" itemprop="datePublished">2022-10-02</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/TiKV6-1/" rel="tag">TiKV6.1</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <ul>
+<li><p>RaftStoreRouter &lt;&#x3D;&#x3D; 负责将 received 的 Raft 消息转发给 raftstore 中对应的 Region，</p>
+<p> RaftStoreRouter 的实例化对象是 ServerRaftStoreRouter </p>
+</li>
+<li><p>Transport  &#x3D;&#x3D;&gt; 负责将 Raft 消息 send 到指定的 store</p>
+</li>
+</ul>
+<h3 id="Service"><a href="#Service" class="headerlink" title="Service"></a>Service</h3><p>代码位于 <code>src/server/service/kv.rs</code>， 表征 TikvService，实现 <code>tikvpb.proto</code> 中的 TiKV RPC Service。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Service</span>&lt;T: RaftStoreRouter&lt;E::Local&gt; + <span class="symbol">&#x27;static</span>, E: Engine, L: LockManager, F: KvFormat&gt; &#123;</span><br><span class="line">    store_id: <span class="type">u64</span>,</span><br><span class="line">    <span class="comment">/// Used to handle requests related to GC.</span></span><br><span class="line">    gc_worker: GcWorker&lt;E, T&gt;,</span><br><span class="line">    <span class="comment">// For handling KV requests.</span></span><br><span class="line">    storage: Storage&lt;E, L, F&gt;,</span><br><span class="line">    <span class="comment">// For handling coprocessor requests.</span></span><br><span class="line">    copr: Endpoint&lt;E&gt;,</span><br><span class="line">    <span class="comment">// For handling corprocessor v2 requests.</span></span><br><span class="line">    copr_v2: coprocessor_v2::Endpoint,</span><br><span class="line">    <span class="comment">// For handling raft messages.</span></span><br><span class="line">    ch: T,</span><br><span class="line">    <span class="comment">// For handling snapshot.</span></span><br><span class="line">    snap_scheduler: Scheduler&lt;SnapTask&gt;,</span><br><span class="line">    <span class="comment">// For handling `CheckLeader` request.</span></span><br><span class="line">    check_leader_scheduler: Scheduler&lt;CheckLeaderTask&gt;,</span><br><span class="line"></span><br><span class="line">    enable_req_batch: <span class="type">bool</span>,</span><br><span class="line"></span><br><span class="line">    grpc_thread_load: Arc&lt;ThreadLoadPool&gt;,</span><br><span class="line"></span><br><span class="line">    proxy: Proxy,</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Go `server::Config` to get more details.</span></span><br><span class="line">    reject_messages_on_memory_ratio: <span class="type">f64</span>,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在这个字段中 <code>storage</code> 字段比较重要，其实例化后是 ServerRaftStoreRouter,</p>
+<h3 id="ServerRaftStoreRouter"><a href="#ServerRaftStoreRouter" class="headerlink" title="ServerRaftStoreRouter"></a>ServerRaftStoreRouter</h3><p>RaftStoreRouter: 负责将 received 的 Raft 消息转发给 raftstore 中对应的 Region，ServerRaftStoreRouter 则是 trait RaftStoreRouter 的实例化。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// A router that routes messages to the raftstore</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">ServerRaftStoreRouter</span>&lt;EK: KvEngine, ER: RaftEngine&gt; &#123;</span><br><span class="line">    router: RaftRouter&lt;EK, ER&gt;,</span><br><span class="line">    local_reader: RefCell&lt;LocalReader&lt;RaftRouter&lt;EK, ER&gt;, EK&gt;&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>收到的请求如果是一个只读的请求，则会由 local_reader 处理；其它情况则是交给内层的 router 来处理。</p>
+<ul>
+<li>router: 由 EK, ER </li>
+<li>local_reader:</li>
+</ul>
+<h2 id="Server"><a href="#Server" class="headerlink" title="Server"></a>Server</h2><p>Server 表征的是一个服务器，Service 表征的是提供的服务。<br>位于 <code>src/server/server.rs</code> 文件中的  Server 是我们本次介绍的 Service 层的主体。它封装了 TiKV 在网络上提供的服务和 Raft group 成员之间相互通信的逻辑。Server本身的代码比较简短，大部分代码都被分离到 RaftClient，Transport，SnapRunner 和几个 gRPC service 中。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Server</span>&lt;T: RaftStoreRouter&lt;E::Local&gt; + <span class="symbol">&#x27;static</span>, S: StoreAddrResolver + <span class="symbol">&#x27;static</span>, E: Engine&gt;</span><br><span class="line">&#123;</span><br><span class="line">    env: Arc&lt;Environment&gt;,</span><br><span class="line">    <span class="comment">/// A GrpcServer builder or a GrpcServer.</span></span><br><span class="line">    <span class="comment">///</span></span><br><span class="line">    <span class="comment">/// If the listening port is configured, the server will be started lazily.</span></span><br><span class="line">    builder_or_server: <span class="type">Option</span>&lt;Either&lt;ServerBuilder, GrpcServer&gt;&gt;,</span><br><span class="line">    grpc_mem_quota: ResourceQuota,</span><br><span class="line">    local_addr: SocketAddr,</span><br><span class="line">    <span class="comment">// Transport.</span></span><br><span class="line">    trans: ServerTransport&lt;T, S, E::Local&gt;,</span><br><span class="line">    raft_router: T,</span><br><span class="line">    <span class="comment">// For sending/receiving snapshots.</span></span><br><span class="line">    snap_mgr: SnapManager,</span><br><span class="line">    snap_worker: LazyWorker&lt;SnapTask&gt;,</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Currently load statistics is done in the thread.</span></span><br><span class="line">    stats_pool: <span class="type">Option</span>&lt;Runtime&gt;,</span><br><span class="line">    grpc_thread_load: Arc&lt;ThreadLoadPool&gt;,</span><br><span class="line">    yatp_read_pool: <span class="type">Option</span>&lt;ReadPool&gt;,</span><br><span class="line">    debug_thread_pool: Arc&lt;Runtime&gt;,</span><br><span class="line">    health_service: HealthService,</span><br><span class="line">    timer: Handle,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ServerTransport"><a href="#ServerTransport" class="headerlink" title="ServerTransport"></a>ServerTransport</h3><p>ServerTransport 则是 TiKV 实际运行时使用的 Transport 实现（Transporttrait 的定义在 raftstore 中），其内部包含一个 RaftClient 用于进行 RPC 通信。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">ServerTransport</span>&lt;T, S, E&gt;</span><br><span class="line"><span class="keyword">where</span></span><br><span class="line">    T: RaftStoreRouter&lt;E&gt; + <span class="symbol">&#x27;static</span>,</span><br><span class="line">    S: StoreAddrResolver + <span class="symbol">&#x27;static</span>,</span><br><span class="line">    E: KvEngine,</span><br><span class="line">&#123;</span><br><span class="line">    raft_client: RaftClient&lt;S, T, E&gt;,</span><br><span class="line">    engine: PhantomData&lt;E&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>发送消息时:</p>
+<ol>
+<li>ServerTransport 通过上面说到的 Resolver 将消息中的 store_id 解析为地址，并将解析的结果存入 raft_client.addrs 中；下次向同一个 store 发送消息时便不再需要再次解析。</li>
+<li>再通过 RaftClient 进行 RPC 请求，将消息发送出去。<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">impl</span>&lt;T, S, E&gt; Transport <span class="keyword">for</span> <span class="title class_">ServerTransport</span>&lt;T, S, E&gt;</span><br><span class="line"><span class="keyword">where</span></span><br><span class="line">    T: RaftStoreRouter&lt;E&gt; + Unpin + <span class="symbol">&#x27;static</span>,</span><br><span class="line">    S: StoreAddrResolver + Unpin + <span class="symbol">&#x27;static</span>,</span><br><span class="line">    E: KvEngine,</span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">fn</span> <span class="title function_">send</span>(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>, msg: RaftMessage) <span class="punctuation">-&gt;</span> RaftStoreResult&lt;()&gt; &#123;</span><br><span class="line">        <span class="keyword">match</span> <span class="keyword">self</span>.raft_client.<span class="title function_ invoke__">send</span>(msg) &#123;</span><br><span class="line">            <span class="title function_ invoke__">Ok</span>(()) =&gt; <span class="title function_ invoke__">Ok</span>(()),</span><br><span class="line">            <span class="title function_ invoke__">Err</span>(reason) =&gt; <span class="title function_ invoke__">Err</span>(raftstore::Error::<span class="title function_ invoke__">Transport</span>(reason)),</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// TODO RaftClient::send 方法</span></span><br></pre></td></tr></table></figure></li>
+</ol>
+<h3 id="Node"><a href="#Node" class="headerlink" title="Node"></a>Node</h3><p>Node 位于 <code>src/server/node.rs</code>， 可以认为是将 raftstore 的复杂的创建、启动和停止逻辑进行封装的一层，其内部的 RaftBatchSystem 便是 raftstore 的核心。在启动 函数 Node:: start中，如果该节点是一个新建的节点，那么会进行 bootstrap 的过程，包括分配 store_id、分配第一个 Region 等操作。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// A wrapper for the raftstore which runs Multi-Raft.</span></span><br><span class="line"><span class="comment">// <span class="doctag">TODO:</span> we will rename another better name like RaftStore later.</span></span><br><span class="line"><span class="keyword">pub</span> <span class="keyword">struct</span> <span class="title class_">Node</span>&lt;C: PdClient + <span class="symbol">&#x27;static</span>, EK: KvEngine, ER: RaftEngine&gt; &#123;</span><br><span class="line">    cluster_id: <span class="type">u64</span>,</span><br><span class="line">    store: metapb::Store,</span><br><span class="line">    store_cfg: Arc&lt;VersionTrack&lt;StoreConfig&gt;&gt;,</span><br><span class="line">    api_version: ApiVersion,</span><br><span class="line">    system: RaftBatchSystem&lt;EK, ER&gt;,</span><br><span class="line">    has_started: <span class="type">bool</span>,</span><br><span class="line"></span><br><span class="line">    pd_client: Arc&lt;C&gt;,</span><br><span class="line">    state: Arc&lt;Mutex&lt;GlobalReplicationState&gt;&gt;,</span><br><span class="line">    bg_worker: Worker,</span><br><span class="line">    health_service: <span class="type">Option</span>&lt;HealthService&gt;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>Node 并没有直接包含在 Server 之内，但是运行 raftstore 需要 Transport 向其它 TiKV 发送消息，而 Transport 包含在 Server 内。</p>
+<p>所以我们可以看到，在 <code>components/server/src/server.rs</code> 文件的 init_servers 中（被 tikv-server 的 main 函数调用），启动过程中需要先创建 Server，然后创建并启动 Node 并把 Server 所创建的 Transport 传给 Node，最后再启动 Node。</p>
+<figure class="highlight rust"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line">  <span class="keyword">fn</span> <span class="title function_">TiKVServer</span>::init_servers&lt;F: KvFormat&gt;(&amp;<span class="keyword">mut</span> <span class="keyword">self</span>) <span class="punctuation">-&gt;</span> Arc&lt;VersionTrack&lt;ServerConfig&gt;&gt; &#123;</span><br><span class="line">      <span class="comment">//...</span></span><br><span class="line">     <span class="keyword">let</span> <span class="keyword">mut </span><span class="variable">node</span> = Node::<span class="title function_ invoke__">new</span>(</span><br><span class="line">          <span class="keyword">self</span>.system.<span class="title function_ invoke__">take</span>().<span class="title function_ invoke__">unwrap</span>(),</span><br><span class="line">          &amp;server_config.<span class="title function_ invoke__">value</span>().<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          raft_store.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.config.storage.<span class="title function_ invoke__">api_version</span>(),</span><br><span class="line">          <span class="keyword">self</span>.pd_client.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.state.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.background_worker.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="title function_ invoke__">Some</span>(health_service.<span class="title function_ invoke__">clone</span>()),</span><br><span class="line">      );</span><br><span class="line">      node.<span class="title function_ invoke__">try_bootstrap_store</span>(engines.engines.<span class="title function_ invoke__">clone</span>())</span><br><span class="line">          .<span class="title function_ invoke__">unwrap_or_else</span>(|e| fatal!(<span class="string">&quot;failed to bootstrap node id: &#123;&#125;&quot;</span>, e));</span><br><span class="line"></span><br><span class="line">     <span class="keyword">let</span> <span class="variable">server</span> = Server::<span class="title function_ invoke__">new</span>(</span><br><span class="line">          node.<span class="title function_ invoke__">id</span>(),</span><br><span class="line">          &amp;server_config,</span><br><span class="line">          &amp;<span class="keyword">self</span>.security_mgr,</span><br><span class="line">          storage,</span><br><span class="line">          coprocessor::Endpoint::<span class="title function_ invoke__">new</span>(</span><br><span class="line">              &amp;server_config.<span class="title function_ invoke__">value</span>(),</span><br><span class="line">              cop_read_pool_handle,</span><br><span class="line">              <span class="keyword">self</span>.concurrency_manager.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">              resource_tag_factory,</span><br><span class="line">              Arc::<span class="title function_ invoke__">clone</span>(&amp;<span class="keyword">self</span>.quota_limiter),</span><br><span class="line">          ),</span><br><span class="line">          coprocessor_v2::Endpoint::<span class="title function_ invoke__">new</span>(&amp;<span class="keyword">self</span>.config.coprocessor_v2),</span><br><span class="line">          <span class="keyword">self</span>.router.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.resolver.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          snap_mgr.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          gc_worker.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          check_leader_scheduler,</span><br><span class="line">          <span class="keyword">self</span>.env.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          unified_read_pool,</span><br><span class="line">          debug_thread_pool,</span><br><span class="line">          health_service,</span><br><span class="line">      )</span><br><span class="line">      .<span class="title function_ invoke__">unwrap_or_else</span>(|e| fatal!(<span class="string">&quot;failed to create server: &#123;&#125;&quot;</span>, e));</span><br><span class="line">      <span class="comment">//...</span></span><br><span class="line">      <span class="comment">// node start</span></span><br><span class="line">      node.<span class="title function_ invoke__">start</span>(</span><br><span class="line">          engines.engines.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          server.<span class="title function_ invoke__">transport</span>(),</span><br><span class="line">          snap_mgr,</span><br><span class="line">          pd_worker,</span><br><span class="line">          engines.store_meta.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          <span class="keyword">self</span>.coprocessor_host.<span class="title function_ invoke__">clone</span>().<span class="title function_ invoke__">unwrap</span>(),</span><br><span class="line">          importer.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          split_check_scheduler,</span><br><span class="line">          auto_split_controller,</span><br><span class="line">          <span class="keyword">self</span>.concurrency_manager.<span class="title function_ invoke__">clone</span>(),</span><br><span class="line">          collector_reg_handle,</span><br><span class="line">      )</span><br><span class="line">      .<span class="title function_ invoke__">unwrap_or_else</span>(|e| fatal!(<span class="string">&quot;failed to start node: &#123;&#125;&quot;</span>, e));</span><br><span class="line">      <span class="comment">//..</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>TiKV 包含多个服务，其中比较重要的是 TiKVService.</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+         
+          <li><a href="/about/">About</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#Service"><span class="toc-number">1.</span> <span class="toc-text">Service</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ServerRaftStoreRouter"><span class="toc-number">2.</span> <span class="toc-text">ServerRaftStoreRouter</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Server"><span class="toc-number"></span> <span class="toc-text">Server</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ServerTransport"><span class="toc-number">1.</span> <span class="toc-text">ServerTransport</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Node"><span class="toc-number">2.</span> <span class="toc-text">Node</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&text=TiKV RaftStoreRouter"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&is_video=false&description=TiKV RaftStoreRouter"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=TiKV RaftStoreRouter&body=Check out this article: https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&title=TiKV RaftStoreRouter"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&name=TiKV RaftStoreRouter&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/02/TiKV/RaftStoreRouter/&t=TiKV RaftStoreRouter"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+         
+          <li><a href="/about/">About</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

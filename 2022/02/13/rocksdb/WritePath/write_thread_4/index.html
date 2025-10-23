@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="在前面几篇讲解了从 WriteBatch 的内部序列化流程 和 WriteThread 如何控制并发写入的基本流程，本文进一步讲解 WriteThread 如何使用 PipelinedWrite 来提升写吞吐，其中和前文相似的逻辑不再细说。 通过设置选项 DBOptions::enable_pipelined_write &#x3D; true 来开启，开启后整个db的 WriteThread 都是通过 P">
+<meta property="og:type" content="article">
+<meta property="og:title" content="WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟">
+<meta property="og:url" content="https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="在前面几篇讲解了从 WriteBatch 的内部序列化流程 和 WriteThread 如何控制并发写入的基本流程，本文进一步讲解 WriteThread 如何使用 PipelinedWrite 来提升写吞吐，其中和前文相似的逻辑不再细说。 通过设置选项 DBOptions::enable_pipelined_write &#x3D; true 来开启，开启后整个db的 WriteThread 都是通过 P">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_write_thread_4_1.png?raw=true">
+<meta property="article:published_time" content="2022-02-13T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="RocksDb">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_write_thread_4_1.png?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/03/01/rocksdb/WritePath/WAL_1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/02/02/rocksdb/WritePath/write_thread_3/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&text=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&is_video=false&description=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟&body=Check out this article: https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&name=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&t=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#WAL-Pipelined-Write"><span class="toc-number">1.</span> <span class="toc-text">WAL: Pipelined Write</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#MemTable-Concurrent-Write"><span class="toc-number">2.</span> <span class="toc-text">MemTable: Concurrent Write</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#T1"><span class="toc-number"></span> <span class="toc-text">T1</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ExitAsBatchGroupLeader"><span class="toc-number">1.</span> <span class="toc-text">ExitAsBatchGroupLeader</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#CompleteFollower"><span class="toc-number">2.</span> <span class="toc-text">CompleteFollower</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#LinkGroup"><span class="toc-number">3.</span> <span class="toc-text">LinkGroup</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#T2"><span class="toc-number"></span> <span class="toc-text">T2</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#T3"><span class="toc-number"></span> <span class="toc-text">T3</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#EnterAsMemTableWriter"><span class="toc-number">1.</span> <span class="toc-text">EnterAsMemTableWriter</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#LaunchParallelMemTableWriters"><span class="toc-number">2.</span> <span class="toc-text">LaunchParallelMemTableWriters</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#CompleteParallelMemTableWriter"><span class="toc-number">3.</span> <span class="toc-text">CompleteParallelMemTableWriter</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ExitAsMemTableWriter"><span class="toc-number">4.</span> <span class="toc-text">ExitAsMemTableWriter</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-02-13T06:15:35.000Z" itemprop="datePublished">2022-02-13</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在前面几篇讲解了从 WriteBatch 的内部序列化流程 和 WriteThread 如何控制并发写入的基本流程，本文进一步讲解 WriteThread 如何使用 PipelinedWrite 来提升写吞吐，其中和前文相似的逻辑不再细说。</p>
+<p>通过设置选项 <code>DBOptions::enable_pipelined_write = true</code> 来开启，开启后整个db的 WriteThread 都是通过 PipelinedWrite 方式控制写入流程。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (immutable_db_options_.enable_pipelined_write) &#123;</span><br><span class="line">  <span class="keyword">return</span> <span class="built_in">PipelinedWriteImpl</span>(write_options, my_batch, callback, log_used,</span><br><span class="line">                            log_ref, disable_memtable, seq_used);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="WAL-Pipelined-Write"><a href="#WAL-Pipelined-Write" class="headerlink" title="WAL: Pipelined Write"></a>WAL: Pipelined Write</h4><p>在之前的 WriteThread 写入控制流程中， 是依次有序地将数据写入 WAL 和 MemTable，那么如何使得 WAL 和 MemTable 的写入操作并行起来？</p>
+<p>在多个 writers 并发写入同一个 RocksdB 实例时，只要前一个 <code>writer_group0</code> 将数据写入 WAL 了，那么下一个 <code>writer_group1</code> 就不必等待 writer_group0 完成 MemTable 写入流程，writer_group1 就可以开始自己的 WAL 写入流程: 因此 writer_group0 的 MemTable 写流程和 writer_group1 的 WAL 写流程就可以并行起来。</p>
+<p>上述就是 <code>PipelinedWrite</code> 的核心思想。因此 PipelinedWrite 需要开启 WAL，来保证 writer_group0 写入 WAL 的数据不会丢。</p>
+<h4 id="MemTable-Concurrent-Write"><a href="#MemTable-Concurrent-Write" class="headerlink" title="MemTable: Concurrent Write"></a>MemTable: Concurrent Write</h4><p>已经写入 WAL 的数据不会丢，那么是否可以在写入 MemTable 时，允许多个 writers 并发地写 MemTable，而不是原先由 leader-writer 来完成 memtable_write_group 的写入？</p>
+<p>选项 <code>DBOptions::allow_concurrent_memtable_write</code> 默认值为 true，即默认支持并发写入 MemTable，但实际上当前只有基于 skiplist 实现的 MemTable 才支持这一特性（ <code>SkipListRep</code> 也是 MemTable 的默认实现）。</p>
+<p>因此，在写路径使用 <code>PipelineWrite</code> 实现时，实际上就有了两种优化：</p>
+<ul>
+<li>WriteGroup 之间可以 Pipeline</li>
+<li>MemTable 可以并发写入</li>
+</ul>
+<p>从实现角度，可以粗略地将有 <code>PipelinedWriteImpl</code> 函数划分成三个阶段（任务）:</p>
+<ul>
+<li><p>T1：完成当前 write_group0 的 WAL 写入流程，</p>
+</li>
+<li><p>T2：通知 write_group1 开启 WAL 写入流程，即 write_group1 无需等待 write_group0 完成 MemTable 写入流程才开启自己的 WAL 写入流程；</p>
+</li>
+<li><p>T3：write_group0 的 WAL 写入流程完成后，需要启动 write_group0 的并发写 MemTable 流程。</p>
+<p>实际上，在 T3 阶段可能会携带其他 write_group 的 writers 一起进入 T3 阶段，来提升性能，详情见后文。</p>
+</li>
+</ul>
+<p>由于后两个任务都需要等待第一个任务完成，因此三个任务的分界点就可以设置在 <code>WrriteThread::ExitAsBatchGroupLeader</code> 函数中: T1 在写 WAL 期间需要整个 RocksDB 只有一个 leader-writer，在 T1 任务结束后就可以不再担任 leader 角色。此时有两件事需要做 <em>1）</em> 挑选出下一个 WriteGroup 中的 leader-writer，让 T2 任务可以 pipeline 执行；<em>2）</em> 开启当前 WriteGroup 并发写入 MemTable 流程。</p>
+<p>整个设计如下图：</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_write_thread_4_1.png?raw=true" alt="write_path_4_1"></p>
+<h2 id="T1"><a href="#T1" class="headerlink" title="T1"></a>T1</h2><p>T1 任务的流程和 <a href="https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/">WriteThread 如何控制并发写入流程</a> 的基本一致，都需要经过 <code>JoinBatchGroup</code> -&gt; <code>EnterAsBatchGroupLeader</code> -&gt; <code>ExitAsBatchGroupLeader</code>， 只是将原来 leader-writer 作用范围（WriteToWAL 和 MemTable::Add） 范围缩小到了仅有 WALs。</p>
+<p>因此，只有当 <code>JoinBatchGroup</code> 函数返回的 writer 是 leader-writer 时才会进入 WAL 写流程，而且当前 write_group0 的其他 writers 和后续 write_group1 等都会阻塞在 <code>JoinBatchGroupl</code> 函数处。</p>
+<p>具体的阻塞逻辑可以参考 <a href="https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/">WriteThread 如何自适应优化线程同步</a>。PipelineWriteImpl 的函数入口代码如下:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">WriteThread::Writer <span class="title">w</span><span class="params">(write_options, my_batch, callback, log_ref,</span></span></span><br><span class="line"><span class="params"><span class="function">                      disable_memtable, <span class="comment">/*_batch_cnt=*/</span><span class="number">0</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">                      <span class="comment">/*_pre_release_callback=*/</span><span class="literal">nullptr</span>)</span></span>;</span><br><span class="line">write_thread_.<span class="built_in">JoinBatchGroup</span>(&amp;w);</span><br><span class="line"><span class="keyword">if</span> (w.state == WriteThread::STATE_GROUP_LEADER) &#123;</span><br><span class="line">  WriteThread::WriteGroup wal_write_group;</span><br><span class="line">  last_batch_group_size_ =</span><br><span class="line">      write_thread_.<span class="built_in">EnterAsBatchGroupLeader</span>(&amp;w, &amp;wal_write_group);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (w.status.<span class="built_in">ok</span>() &amp;&amp; !write_options.disableWAL) &#123;</span><br><span class="line">    <span class="comment">// 将当前 wal_write_group 数据写入 WAL</span></span><br><span class="line">    io_s =</span><br><span class="line">        <span class="built_in">WriteToWAL</span>(wal_write_group, log_context.writer, log_used,</span><br><span class="line">                   log_context.need_log_sync, log_context.need_log_dir_sync,</span><br><span class="line">                   current_sequence, log_file_number_size);</span><br><span class="line">    w.status = io_s;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">  write_thread_.<span class="built_in">ExitAsBatchGroupLeader</span>(wal_write_group, w.status);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因此，PipelinedWrite 如何关联前后 writer_group 的核心就在 <code>ExitAsBatchGroupLeader</code> 函数中了。</p>
+<h4 id="ExitAsBatchGroupLeader"><a href="#ExitAsBatchGroupLeader" class="headerlink" title="ExitAsBatchGroupLeader"></a>ExitAsBatchGroupLeader</h4><p>在前文 <a href="https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2">WriteThread 如何控制并发写入流程</a> 已经详细讲解了 <code>ExitAsBatchGroupLeader</code> 函数在 <code>enable_pipelined_write == false</code> 时的执行流程，下面来讲另一个分支。主要有两个任务：</p>
+<ul>
+<li><p>T2：选出下一个 write_group1 中的 leader-writer，使其也进入写 WAL 流程</p>
+</li>
+<li><p>T3：由 <code>CompleteLeader</code> 和 <code>CompleteFollower</code> 函数提前将不用写入 MemTable 的 writrs 从 write_group0 链表中删除。将 <code>write_group0</code> 中剩余的 writers 移动到 <code>newest_memtable_writer_</code> 指向的链表。</p>
+<p>只有 leader-memtable-writer 才能开启并发写 MemTable 的流程，<code>w-&gt;state</code> 状态会变成 <code>STATE_MEMTABLE_WRITER_LEADER</code>。</p>
+<p>如果此时多个 write_group（wg0，wg1）的 leader-writer 都想变成 leader-memtable-writer，假设最终 wg0-&gt;leader 成功，则新的 memtable_write_group 实际上会包含 (wg0, wg1)，并且 wg1-&gt;link_older &#x3D; wg0 的方式串联起来。</p>
+<p>接着，leader-memtable-writer 通过 <code>LaunchParallelMemTableWriters</code> 函数来启动 <code>memtable_write_group</code> 并发写 MemTables 的流程，follower-writer 才会解除阻塞等待， 进入 MemTable::Add 写入流程。</p>
+</li>
+</ul>
+<p>整体代码如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::ExitAsBatchGroupLeader</span><span class="params">(WriteGroup&amp; write_group,</span></span></span><br><span class="line"><span class="params"><span class="function">                                         Status&amp; status)</span> </span>&#123;</span><br><span class="line">  Writer* leader = write_group.leader;</span><br><span class="line">  Writer* last_writer = write_group.last_writer;</span><br><span class="line">  <span class="built_in">assert</span>(leader-&gt;link_older == <span class="literal">nullptr</span>);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (enable_pipelined_write_) &#123;</span><br><span class="line">    Writer dummy;</span><br><span class="line">    Writer* head = newest_writer_.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">    <span class="comment">// 1. 在当前 write_group0 和下一个 write_group1 中间插入一个 dummy 节点</span></span><br><span class="line">    <span class="keyword">if</span> (head != last_writer ||</span><br><span class="line">        !newest_writer_.<span class="built_in">compare_exchange_strong</span>(head, &amp;dummy)) &#123;</span><br><span class="line">  </span><br><span class="line">      <span class="built_in">CreateMissingNewerLinks</span>(head);</span><br><span class="line">      <span class="built_in">assert</span>(last_writer-&gt;link_newer != <span class="literal">nullptr</span>);</span><br><span class="line">      last_writer-&gt;link_newer-&gt;link_older = &amp;dummy;</span><br><span class="line">      dummy.link_newer = last_writer-&gt;link_newer;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 3. 提前删除不用写 MemTable 的 writers 节点</span></span><br><span class="line">    <span class="keyword">for</span> (Writer* w = last_writer; w != leader;) &#123;</span><br><span class="line">      Writer* next = w-&gt;link_older;</span><br><span class="line">      w-&gt;status = status;</span><br><span class="line">      <span class="keyword">if</span> (!w-&gt;<span class="built_in">ShouldWriteToMemtable</span>()) &#123;</span><br><span class="line">        <span class="built_in">CompleteFollower</span>(w, write_group);</span><br><span class="line">      &#125;</span><br><span class="line">      w = next;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!leader-&gt;<span class="built_in">ShouldWriteToMemtable</span>()) &#123;</span><br><span class="line">      <span class="built_in">CompleteLeader</span>(write_group);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 3.1 (T3) 将 write_group0 中剩余的 writers 转移到</span></span><br><span class="line">    <span class="comment">//     newest_memtable_writer_  指向的链表</span></span><br><span class="line">    <span class="keyword">if</span> (write_group.size &gt; <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="keyword">if</span> (<span class="built_in">LinkGroup</span>(write_group, &amp;newest_memtable_writer_)) &#123;</span><br><span class="line">        <span class="comment">// 设置 leader-memtable-writer</span></span><br><span class="line">        <span class="built_in">SetState</span>(write_group.leader, STATE_MEMTABLE_WRITER_LEADER);</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 4. (T2) 选取 writ_group1 中 leader-writer</span></span><br><span class="line">    head = newest_writer_.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">    <span class="keyword">if</span> (head != &amp;dummy ||</span><br><span class="line">        !newest_writer_.<span class="built_in">compare_exchange_strong</span>(head, <span class="literal">nullptr</span>)) &#123;</span><br><span class="line">      <span class="built_in">CreateMissingNewerLinks</span>(head);</span><br><span class="line">      Writer* new_leader = dummy.link_newer;</span><br><span class="line">      <span class="built_in">assert</span>(new_leader != <span class="literal">nullptr</span>);</span><br><span class="line">      new_leader-&gt;link_older = <span class="literal">nullptr</span>;</span><br><span class="line">      <span class="built_in">SetState</span>(new_leader, STATE_GROUP_LEADER);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 5. 等待 leader-memtable-writer 调用 LaunchParallelMemTableWriters</span></span><br><span class="line">    <span class="built_in">AwaitState</span>(leader,</span><br><span class="line">               STATE_MEMTABLE_WRITER_LEADER | STATE_PARALLEL_MEMTABLE_WRITER |</span><br><span class="line">                   STATE_COMPLETED,</span><br><span class="line">               &amp;eabgl_ctx);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">//... enable_pipelined_write_ == false</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="CompleteFollower"><a href="#CompleteFollower" class="headerlink" title="CompleteFollower"></a>CompleteFollower</h4><p>WriteThread 是逆序从 <code>[last_writer, leader)</code> 来删除不需要写入 MemTable 的 writers-follower 节点。这个 write_group 的 writers list 首尾节点是 <code>leader</code> 和 <code>last_writer</code>。 CompleteFollower 删除的都是 followers 节点，因此在删除时需要注意下是不是尾部节点 last_writer 即可。</p>
+<p>这里只需要将 w 从 write_group 中剔除即可，并不需要 delete w，而是将 <code>w-&gt;state</code> 状态设置为 <code>STATE_COMPLETED</code>。这是因为 w 这份资源由 w 所属的线程去释放，将其状态更改为 <code>STATE_COMPLETED</code> 后，w 所属的线程就会解除阻塞，去释放这份资源，回到应用层。</p>
+<p><code>CompleteLeader</code> 逻辑也类似。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::CompleteFollower</span><span class="params">(Writer* w, WriteGroup&amp; write_group)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(write_group.size &gt; <span class="number">1</span>);</span><br><span class="line">  <span class="built_in">assert</span>(w != write_group.leader);</span><br><span class="line">  <span class="keyword">if</span> (w == write_group.last_writer) &#123;</span><br><span class="line">    w-&gt;link_older-&gt;link_newer = <span class="literal">nullptr</span>;</span><br><span class="line">    write_group.last_writer = w-&gt;link_older;</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    w-&gt;link_older-&gt;link_newer = w-&gt;link_newer;</span><br><span class="line">    w-&gt;link_newer-&gt;link_older = w-&gt;link_older;</span><br><span class="line">  &#125;</span><br><span class="line">  write_group.size -= <span class="number">1</span>;</span><br><span class="line">  <span class="built_in">SetState</span>(w, STATE_COMPLETED);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="LinkGroup"><a href="#LinkGroup" class="headerlink" title="LinkGroup"></a>LinkGroup</h4><p><code>LinkGroup</code> 函数的作用是将当前 write_group0 中需要向 MemTable 写数据的 writers 转移到 <code>newest_memtable_writer_</code> 中来，并且保持 write_group0 中的顺序。</p>
+<ol>
+<li><p>先断开 <code>(leader, last_writer]</code> 区间所有的 <code>w-&gt;link_newer/prev</code> 指针（leader-&gt;link_newer 已经是 NULL)。这是因为 <code>LinkGroup</code> 可能会将多个 WriteGroup 的 writers 串到一个 <code>newest_memtable_writer_</code> 指针中，后续需要重新建立 prev 指针。</p>
+</li>
+<li><p>通过 <code>compare_exchange_weak</code> 尝试让 <code>newest_memtable_writer_</code> 指向 <code>last_writer</code>。多个并发的 WriteGroup 通过 link_older 指针串联起来。</p>
+<p> 因此，在 <code>ExitAsBatchGroupLeader</code> 函数末尾会有个 <code>AwaitState(leader, state)</code> 代码，用于阻塞那些被串在 memtable_write_group 中的 follower-memtable-writers，等待 leader-memtable-writer 调用 <code>LaunchParallelMemTableWriters</code> 函数才能解除阻塞。</p>
+</li>
+</ol>
+<p>原理和 <code>LinkOne</code> 函数差不多，代码如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">WriteThread::LinkGroup</span><span class="params">(WriteGroup&amp; write_group,</span></span></span><br><span class="line"><span class="params"><span class="function">                            std::atomic&lt;Writer*&gt;* newest_writer)</span> </span>&#123;</span><br><span class="line">  Writer* leader = write_group.leader; <span class="comment">// head</span></span><br><span class="line">  Writer* last_writer = write_group.last_writer; <span class="comment">// tail</span></span><br><span class="line">  Writer* w = last_writer;</span><br><span class="line">  <span class="comment">// 1. 断开 [last_writer, leader) 区间 w-&gt;link_newer 指针</span></span><br><span class="line">  <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    w-&gt;link_newer = <span class="literal">nullptr</span>;</span><br><span class="line">    w-&gt;write_group = <span class="literal">nullptr</span>;</span><br><span class="line">    <span class="keyword">if</span> (w == leader) &#123;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    w = w-&gt;link_older;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 2. 将 newest_writer 指向 last_writer</span></span><br><span class="line">  Writer* newest = newest_writer-&gt;<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">  <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    leader-&gt;link_older = newest; <span class="comment">// leader-&gt;next = newest</span></span><br><span class="line">    <span class="keyword">if</span> (newest_writer-&gt;<span class="built_in">compare_exchange_weak</span>(newest, last_writer)) &#123;</span><br><span class="line">      <span class="comment">// newest_writer = last_writer</span></span><br><span class="line">      <span class="keyword">return</span> (newest == <span class="literal">nullptr</span>);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="T2"><a href="#T2" class="headerlink" title="T2"></a>T2</h2><p>T1 在 <code>ExitAsBatchGroupLeader</code> 函数中已经选出 write_group1 的 leader-writer， 因此不会等待 write_group0 完成，T2 就会直接启动。重复write_group0 的 T1 流程。</p>
+<h2 id="T3"><a href="#T3" class="headerlink" title="T3"></a>T3</h2><p>write_group0 执行完 T1 任务后就进入 T3 阶段，准备并发写 MemTables 操作。这个阶段的写流程如下:</p>
+<p>leader-memtable-writer 会通过 <code>EnterAsMemTableWriter</code> 获取 <code>memtable_write_group</code>，</p>
+<ul>
+<li><p>如果 memtable_write_group 的 writers 数量大于 1 则调用 <code>LaunchParallelMemTableWriters</code> 函数启动所有的 writers 进入 MemTable::Add 阶段。</p>
+</li>
+<li><p>否则，当前 leader-memtable-writer 就直接写 MemTable。</p>
+<p>写 MemTable 的操作是由 <code>WriteBatchInternal::InsertInto</code> 函数完成。</p>
+</li>
+</ul>
+<p>而 follower-memtable-writers 会一直阻塞等待在两个的地方:</p>
+<ul>
+<li>当前 write_group0 的 followers 会阻塞在 PipelineWriteImpl 函数开始的 JoinBatchGroup 处</li>
+<li>其他 write_group1 的 followers 会阻塞在 ExitAsBatchGroupLeader 函数末尾的 AwaitState 处</li>
+</ul>
+<p>因此，当 leader-memtable-writer 调用 <code>LaunchParallelMemTableWriters</code> 函数，则会解除上述两处阻塞状态的 writers，进入 T3 阶段。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">WriteThread::WriteGroup memtable_write_group;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> (w.state == WriteThread::STATE_MEMTABLE_WRITER_LEADER) &#123;</span><br><span class="line">  <span class="comment">// memtable-writer-leader reach here</span></span><br><span class="line">  write_thread_.<span class="built_in">EnterAsMemTableWriter</span>(&amp;w, &amp;memtable_write_group);</span><br><span class="line">  <span class="keyword">if</span> (memtable_write_group.size &gt; <span class="number">1</span> &amp;&amp;</span><br><span class="line">      immutable_db_options_.allow_concurrent_memtable_write) &#123;</span><br><span class="line">    write_thread_.<span class="built_in">LaunchParallelMemTableWriters</span>(&amp;memtable_write_group);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    memtable_write_group.status = WriteBatchInternal::<span class="built_in">InsertInto</span>(</span><br><span class="line">        memtable_write_group, w.sequence, column_family_memtables_.<span class="built_in">get</span>(),</span><br><span class="line">        &amp;flush_scheduler_, &amp;trim_history_scheduler_,</span><br><span class="line">        write_options.ignore_missing_column_families, <span class="number">0</span> <span class="comment">/*log_number*/</span>, <span class="keyword">this</span>,</span><br><span class="line">        <span class="literal">false</span> <span class="comment">/*concurrent_memtable_writes*/</span>, seq_per_batch_, batch_per_txn_);</span><br><span class="line">    versions_-&gt;<span class="built_in">SetLastSequence</span>(memtable_write_group.last_sequence);</span><br><span class="line">    write_thread_.<span class="built_in">ExitAsMemTableWriter</span>(&amp;w, memtable_write_group);</span><br><span class="line">  &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">  <span class="comment">// memtable-writer-follower reach here</span></span><br><span class="line">  memtable_write_group.status.<span class="built_in">PermitUncheckedError</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="EnterAsMemTableWriter"><a href="#EnterAsMemTableWriter" class="headerlink" title="EnterAsMemTableWriter"></a>EnterAsMemTableWriter</h4><p><code>EnterAsMemTableWriter</code> 函数和 <code>EnterAsBatchGroupLeader</code> 工作逻辑类似，从 <code>newest_memtable_writer_</code> 中取出memtable-writers，组成一个由 <code>[leader, last_writer]</code> 组成的 memtable_write_group。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::EnterAsMemTableWriter</span><span class="params">(Writer* leader,</span></span></span><br><span class="line"><span class="params"><span class="function">                                        WriteGroup* write_group)</span> </span>&#123;</span><br><span class="line">  <span class="type">size_t</span> size = WriteBatchInternal::<span class="built_in">ByteSize</span>(leader-&gt;batch);</span><br><span class="line">  <span class="comment">//..</span></span><br><span class="line">  leader-&gt;write_group = write_group;</span><br><span class="line">  write_group-&gt;leader = leader;</span><br><span class="line">  write_group-&gt;size = <span class="number">1</span>;</span><br><span class="line">  Writer* last_writer = leader;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (allow_concurrent_memtable_write_ &amp;&amp; !leader-&gt;batch-&gt;<span class="built_in">HasMerge</span>()) &#123;</span><br><span class="line">    Writer* newest_writer = newest_memtable_writer_.<span class="built_in">load</span>();</span><br><span class="line">    <span class="built_in">CreateMissingNewerLinks</span>(newest_writer);</span><br><span class="line"></span><br><span class="line">    Writer* w = leader;</span><br><span class="line">    <span class="keyword">while</span> (w != newest_writer) &#123;</span><br><span class="line">      <span class="built_in">assert</span>(w-&gt;link_newer);</span><br><span class="line">      w = w-&gt;link_newer;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (w-&gt;batch == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      <span class="keyword">if</span> (w-&gt;batch-&gt;<span class="built_in">HasMerge</span>()) &#123;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      &#125;</span><br><span class="line"></span><br><span class="line">      w-&gt;write_group = write_group;</span><br><span class="line">      last_writer = w;</span><br><span class="line">      write_group-&gt;size++;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  write_group-&gt;last_writer = last_writer;</span><br><span class="line">  write_group-&gt;last_sequence =</span><br><span class="line">      last_writer-&gt;sequence + WriteBatchInternal::<span class="built_in">Count</span>(last_writer-&gt;batch) - <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="LaunchParallelMemTableWriters"><a href="#LaunchParallelMemTableWriters" class="headerlink" title="LaunchParallelMemTableWriters"></a>LaunchParallelMemTableWriters</h4><p><code>LaunchParallelMemTableWriters</code> 函数即遍历 <code>memtable_write_group</code> 中所有的 writers，将其 w-&gt;state 设置为 <code>STATE_PARALLEL_MEMTABLE_WRITER</code> 来解除阻塞。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::LaunchParallelMemTableWriters</span><span class="params">(WriteGroup* memtable_write_group)</span> </span>&#123;</span><br><span class="line">  memtable_write_group-&gt;running.<span class="built_in">store</span>(memtable_write_group-&gt;size);</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span> w : *memtable_write_group) &#123;</span><br><span class="line">    <span class="built_in">SetState</span>(w, STATE_PARALLEL_MEMTABLE_WRITER);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="CompleteParallelMemTableWriter"><a href="#CompleteParallelMemTableWriter" class="headerlink" title="CompleteParallelMemTableWriter"></a>CompleteParallelMemTableWriter</h4><p>所有的 <code>w-&gt;state</code> 都在 LaunchParallelMemTableWriters 函数中被更改 <code>STATE_PARALLEL_MEMTABLE_WRITER</code>，此时已经没有主从 writers 的概念。</p>
+<p>每个 writer 都并发地调用 WriteBatchInternal::InsertInto 函数向 MemTable 写数据。每个 writer 写完 MemTable，都会调用一次 CompleteParallelMemTableWriter 来检测自己是不是 memtable_write_group 中最后一个完成写 MemTable 的 writer。最后一个 memtable-writers 在 <code>ExitAsMemTableWriter</code> 函数中做善后工作。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (w.state == WriteThread::STATE_PARALLEL_MEMTABLE_WRITER) &#123;</span><br><span class="line">  <span class="function">ColumnFamilyMemTablesImpl <span class="title">column_family_memtables</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">      versions_-&gt;GetColumnFamilySet())</span></span>;</span><br><span class="line">  w.status = WriteBatchInternal::<span class="built_in">InsertInto</span>(</span><br><span class="line">      &amp;w, w.sequence, &amp;column_family_memtables, &amp;flush_scheduler_,</span><br><span class="line">      &amp;trim_history_scheduler_, write_options.ignore_missing_column_families,</span><br><span class="line">      <span class="number">0</span> <span class="comment">/*log_number*/</span>, <span class="keyword">this</span>, <span class="literal">true</span> <span class="comment">/*concurrent_memtable_writes*/</span>,</span><br><span class="line">      <span class="literal">false</span> <span class="comment">/*seq_per_batch*/</span>, <span class="number">0</span> <span class="comment">/*batch_cnt*/</span>, <span class="literal">true</span> <span class="comment">/*batch_per_txn*/</span>,</span><br><span class="line">      write_options.memtable_insert_hint_per_batch);</span><br><span class="line">  <span class="keyword">if</span> (write_thread_.<span class="built_in">CompleteParallelMemTableWriter</span>(&amp;w)) &#123;</span><br><span class="line">    <span class="built_in">MemTableInsertStatusCheck</span>(w.status);</span><br><span class="line">    versions_-&gt;<span class="built_in">SetLastSequence</span>(w.write_group-&gt;last_sequence);</span><br><span class="line">    write_thread_.<span class="built_in">ExitAsMemTableWriter</span>(&amp;w, *w.write_group);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>每次 memtable-writer 写完 MemTable，都会进入 <code>CompleteParallelMemTableWriter</code> 将 <code>memtable_write_group-&gt;running</code> 减 1: 如果不是最后一个 memtable-writer，则阻塞等待最后一个 memtable-writer 完成后在 <code>ExitAsMemTableWriter</code> 函数中将所有的 writers 状态更改为 STATE_COMPLETED，则本次并发写 MemTable 操作结束。 </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">WriteThread::CompleteParallelMemTableWriter</span><span class="params">(Writer* w)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span>* write_group = w-&gt;write_group;</span><br><span class="line">  <span class="keyword">if</span> (!w-&gt;status.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">    <span class="function">std::lock_guard&lt;std::mutex&gt; <span class="title">guard</span><span class="params">(write_group-&gt;leader-&gt;StateMutex())</span></span>;</span><br><span class="line">    write_group-&gt;status = w-&gt;status;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (write_group-&gt;running-- &gt; <span class="number">1</span>) &#123;</span><br><span class="line">    <span class="comment">// we&#x27;re not the last one</span></span><br><span class="line">    <span class="built_in">AwaitState</span>(w, STATE_COMPLETED, &amp;cpmtw_ctx);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// else we&#x27;re the last parallel worker and should perform exit duties.</span></span><br><span class="line">  w-&gt;status = write_group-&gt;status;</span><br><span class="line">  <span class="comment">// Callers of this function must ensure w-&gt;status is checked.</span></span><br><span class="line">  write_group-&gt;status.<span class="built_in">PermitUncheckedError</span>();</span><br><span class="line">  <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="ExitAsMemTableWriter"><a href="#ExitAsMemTableWriter" class="headerlink" title="ExitAsMemTableWriter"></a>ExitAsMemTableWriter</h4><p><code>ExitAsMemTableWriter</code> 函数和 <code>ExitAsBatchGroupLeader</code> 函数类似，主要有两个作用：</p>
+<ul>
+<li><p>选出下一轮 memtable_write_group1 的的 leader-memtable-writer，将其 state 设置为 <code>STATE_MEMTABLE_WRITER_LEADER</code>，使下一轮 memtable_write_group1 能尽快进入 T3 阶段；</p>
+</li>
+<li><p>将本轮 memtable_write_group0 的所有 memtable-writers 的状态更改为 <code>STATE_COMPLETED</code>，解除阻塞在 <code>CompleteParallelMemTableWriter</code> 函数处阻塞的 writers，让他们释放资源返回应用层。</p>
+<p>这里需要让 leader-memtable-writer 最后一个退出，因为它拥有 memtable_write_group 所有权：如果它不是最后一个释放，会造成 <code>ExitAsMemTableWriter</code> 函数在执行过程中 coredump。</p>
+</li>
+</ul>
+<p>这部分代码如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::ExitAsMemTableWriter</span><span class="params">(Writer* <span class="comment">/*self*/</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">                                       WriteGroup&amp; write_group)</span> </span>&#123;</span><br><span class="line">  Writer* leader = write_group.leader;</span><br><span class="line">  Writer* last_writer = write_group.last_writer;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 1. </span></span><br><span class="line">  Writer* newest_writer = last_writer;</span><br><span class="line">  <span class="keyword">if</span> (!newest_memtable_writer_.<span class="built_in">compare_exchange_strong</span>(newest_writer,</span><br><span class="line">                                                       <span class="literal">nullptr</span>)) &#123;</span><br><span class="line">    <span class="built_in">CreateMissingNewerLinks</span>(newest_writer);</span><br><span class="line">    Writer* next_leader = last_writer-&gt;link_newer;</span><br><span class="line">    <span class="built_in">assert</span>(next_leader != <span class="literal">nullptr</span>);</span><br><span class="line">    next_leader-&gt;link_older = <span class="literal">nullptr</span>;</span><br><span class="line">    <span class="built_in">SetState</span>(next_leader, STATE_MEMTABLE_WRITER_LEADER);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 2.</span></span><br><span class="line">  Writer* w = leader;</span><br><span class="line">  <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> (!write_group.status.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">      w-&gt;status = write_group.status;</span><br><span class="line">    &#125;</span><br><span class="line">    Writer* next = w-&gt;link_newer;</span><br><span class="line">    <span class="keyword">if</span> (w != leader) &#123;</span><br><span class="line">      <span class="built_in">SetState</span>(w, STATE_COMPLETED);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (w == last_writer) &#123;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">assert</span>(next);</span><br><span class="line">    w = next;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//! Note that leader has to exit last, since it owns the write group.</span></span><br><span class="line">  <span class="built_in">SetState</span>(leader, STATE_COMPLETED);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-4"><a class="toc-link" href="#WAL-Pipelined-Write"><span class="toc-number">1.</span> <span class="toc-text">WAL: Pipelined Write</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#MemTable-Concurrent-Write"><span class="toc-number">2.</span> <span class="toc-text">MemTable: Concurrent Write</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#T1"><span class="toc-number"></span> <span class="toc-text">T1</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#ExitAsBatchGroupLeader"><span class="toc-number">1.</span> <span class="toc-text">ExitAsBatchGroupLeader</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#CompleteFollower"><span class="toc-number">2.</span> <span class="toc-text">CompleteFollower</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#LinkGroup"><span class="toc-number">3.</span> <span class="toc-text">LinkGroup</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#T2"><span class="toc-number"></span> <span class="toc-text">T2</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#T3"><span class="toc-number"></span> <span class="toc-text">T3</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#EnterAsMemTableWriter"><span class="toc-number">1.</span> <span class="toc-text">EnterAsMemTableWriter</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#LaunchParallelMemTableWriters"><span class="toc-number">2.</span> <span class="toc-text">LaunchParallelMemTableWriters</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#CompleteParallelMemTableWriter"><span class="toc-number">3.</span> <span class="toc-text">CompleteParallelMemTableWriter</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ExitAsMemTableWriter"><span class="toc-number">4.</span> <span class="toc-text">ExitAsMemTableWriter</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&text=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&is_video=false&description=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟&body=Check out this article: https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&title=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&name=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/02/13/rocksdb/WritePath/write_thread_4/&t=WriteThread 如何使用 Pipeline 提升写入吞吐，降低延迟"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。 本文专注于 QuerySharedDriverQueue 的实现，ResuorceGrou">
+<meta property="og:type" content="article">
+<meta property="og:title" content="QuerySharedDriverQueue: 多级反馈队列">
+<meta property="og:url" content="https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。 本文专注于 QuerySharedDriverQueue 的实现，ResuorceGrou">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-driver-queue-1.svg?raw=true">
+<meta property="article:published_time" content="2023-07-19T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-26T02:32:05.944Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-driver-queue-1.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>QuerySharedDriverQueue: 多级反馈队列</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/07/25/Pipeline/PipelineExecutor/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/07/15/Pipeline/PipelineDriver_2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&text=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&is_video=false&description=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=QuerySharedDriverQueue: 多级反馈队列&body=Check out this article: https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&name=QuerySharedDriverQueue: 多级反馈队列&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&t=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#DriverAcct"><span class="toc-number">1.</span> <span class="toc-text">DriverAcct</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SubQuerySharedDriverQueue"><span class="toc-number">2.</span> <span class="toc-text">SubQuerySharedDriverQueue</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#put"><span class="toc-number">2.1.</span> <span class="toc-text">put</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#take"><span class="toc-number">2.2.</span> <span class="toc-text">take</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#QuerySharedDriverQueue"><span class="toc-number">3.</span> <span class="toc-text">QuerySharedDriverQueue</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#compute-driver-level"><span class="toc-number">3.1.</span> <span class="toc-text">_compute_driver_level</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#put-back"><span class="toc-number">3.2.</span> <span class="toc-text">put_back</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#take-1"><span class="toc-number">3.3.</span> <span class="toc-text">take</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        QuerySharedDriverQueue: 多级反馈队列
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-07-19T02:00:01.000Z" itemprop="datePublished">2023-07-19</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>DriverQueue 的继承派生关系如下图所示。QuerySharedDriverQueue 是用于没有设置 ResuorceGroup 的 query，即 default ResourceGroup，而 WorkGroupDriverQueue 是针对设置了 ResourceGroup 的 query。</p>
+<p>本文专注于 QuerySharedDriverQueue 的实现，ResuorceGroup 后文单独讲解。下文 DriverQueue 一般指 QuerySharedDriverQueue。 </p>
+<p>DriverQueue 本质上是个调度 PipelineDrivers 的数据结构，这样 DrvierQueue 本身就不需要占据一个线程，它可以在 GloablEexecuotr::work_thread 所在的核上运行。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-driver-queue-1.svg?raw=true" alt="pipeline-driver-queue-1"></p>
+<h2 id="DriverAcct"><a href="#DriverAcct" class="headerlink" title="DriverAcct"></a>DriverAcct</h2><p>DriverQueue 实现调度，需要依赖 PipelineDriver 运行时的统计信息。比如，在前文我们说过了 <a href="https://szza.github.io/2023/07/15/Pipeline/PipelineDriver_2">PipelineDriver</a> 每执行一次 PipelineDriver:process 函数都会更新统计信息。</p>
+<p>统计信息由 DriverAcct 记录：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">DriverAcct</span> &#123;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="function"><span class="type">int64_t</span> <span class="title">get_last_time_spent</span><span class="params">()</span> </span>&#123; <span class="keyword">return</span> last_time_spent; &#125;</span><br><span class="line">    <span class="function"><span class="type">int64_t</span> <span class="title">get_accumulated_time_spent</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> accumulated_time_spent; &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">int64_t</span> schedule_times&#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="type">int64_t</span> schedule_effective_times&#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="type">int64_t</span> last_time_spent&#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="type">int64_t</span> last_chunks_moved&#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="type">int64_t</span> accumulated_time_spent&#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="type">int64_t</span> accumulated_chunks_moved&#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="type">int64_t</span> accumulated_rows_moved&#123;<span class="number">0</span>&#125;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>PipelineDriver 中统计信息如下。利用这些统计信息就能实现更为准确的调度。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DriverAcct&amp; <span class="title">PipelineDriver::driver_acct</span><span class="params">()</span> </span>&#123; </span><br><span class="line">    <span class="keyword">return</span> _driver_acct; </span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> PipelineDriver::_update_driver_acct(<span class="type">size_t</span> total_chunks_moved,</span><br><span class="line">                                         <span class="type">size_t</span> total_rows_moved,</span><br><span class="line">                                         <span class="type">size_t</span> time_spent) &#123;</span><br><span class="line">    <span class="built_in">driver_acct</span>().<span class="built_in">update_last_chunks_moved</span>(total_chunks_moved);</span><br><span class="line">    <span class="built_in">driver_acct</span>().<span class="built_in">update_accumulated_rows_moved</span>(total_rows_moved);</span><br><span class="line">    <span class="built_in">driver_acct</span>().<span class="built_in">update_last_time_spent</span>(time_spent);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> PipelineDriver::_update_statistics(<span class="type">size_t</span> total_chunks_moved,</span><br><span class="line">                                        <span class="type">size_t</span> total_rows_moved,</span><br><span class="line">                                        <span class="type">size_t</span> time_spent) &#123;</span><br><span class="line">    _update_driver_acct(total_chunks_moved,</span><br><span class="line">                        total_rows_moved,</span><br><span class="line">                        time_spent);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Update statistics of scan operator</span></span><br><span class="line">    <span class="keyword">if</span> (ScanOperator* scan = <span class="built_in">source_scan_operator</span>()) &#123;</span><br><span class="line">        <span class="built_in">query_ctx</span>()-&gt;<span class="built_in">incr_cur_scan_rows_num</span>(</span><br><span class="line">            scan-&gt;<span class="built_in">get_last_scan_rows_num</span>());</span><br><span class="line">        <span class="built_in">query_ctx</span>()-&gt;<span class="built_in">incr_cur_scan_bytes</span>(</span><br><span class="line">            scan-&gt;<span class="built_in">get_last_scan_bytes</span>());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Update cpu cost of this query</span></span><br><span class="line">    <span class="type">int64_t</span> accounted_cpu_cost </span><br><span class="line">        = <span class="built_in">driver_acct</span>().<span class="built_in">get_last_time_spent</span>()</span><br><span class="line">        + <span class="built_in">source_operator</span>()-&gt;<span class="built_in">get_last_growth_cpu_time_ns</span>()</span><br><span class="line">        + <span class="built_in">sink_operator</span>()-&gt;<span class="built_in">get_last_growth_cpu_time_ns</span>();</span><br><span class="line">    <span class="built_in">query_ctx</span>()-&gt;<span class="built_in">incr_cpu_cost</span>(accounted_cpu_cost);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="SubQuerySharedDriverQueue"><a href="#SubQuerySharedDriverQueue" class="headerlink" title="SubQuerySharedDriverQueue"></a>SubQuerySharedDriverQueue</h2><p>QuerySharedDriverQueue 基于多级反馈队列实现，每一 level 的时间片不同，每一 level 的 PipelineDriver 是由 SubQuerySharedDriverQueue 来存储。</p>
+<p>SubQuerySharedDriverQueue 有三个字段：</p>
+<ul>
+<li>queue：用于存放 Pipelinerivers，如果 driver 已经 DriverState::CANCELED 状态则从头部压入，否则从尾部压入</li>
+<li>pending_cancel_queue：用于存放正在取消的 driver</li>
+<li>cancelled_set：用于记录已经取消的 drivers，如果 queue 中取出的 drivers 已经在 canceled_set 中，则忽略该 driver，从 queue 中重新取</li>
+</ul>
+<p>结构如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">SubQuerySharedDriverQueue</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">update_accu_time</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span> </span>&#123;</span><br><span class="line">        _accu_consume_time.<span class="built_in">fetch_add</span>(</span><br><span class="line">            driver-&gt;<span class="built_in">driver_acct</span>().<span class="built_in">get_last_time_spent</span>());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">double</span> <span class="title">accu_time_after_divisor</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> _accu_consume_time.<span class="built_in">load</span>() / factor_for_normal; </span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">put</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span></span>;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">cancel</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span></span>;</span><br><span class="line">    <span class="function">DriverRawPtr <span class="title">take</span><span class="params">()</span></span>;</span><br><span class="line"></span><br><span class="line">    std::deque&lt;DriverRawPtr&gt; queue;</span><br><span class="line">    std::queue&lt;DriverRawPtr&gt; pending_cancel_queue;</span><br><span class="line">    std::unordered_set&lt;DriverRawPtr&gt; cancelled_set;</span><br><span class="line">    <span class="type">size_t</span> num_drivers = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// factor for normalization</span></span><br><span class="line">    <span class="type">double</span> factor_for_normal = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    std::atomic&lt;<span class="type">int64_t</span>&gt; _accu_consume_time = <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="put"><a href="#put" class="headerlink" title="put"></a>put</h3><p>driver 如果已经处于 DriverState::CANCELED 状态，则从头部压入，否则从尾部压入。cancel 函数是直接压入 pending_cancel_queue 中。 queue 和 pending_cancel_queue 是可能存在重复的 driver，因此需要 cancelled_set 去重。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">SubQuerySharedDriverQueue::put</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (driver-&gt;<span class="built_in">driver_state</span>() == DriverState::CANCELED) &#123;</span><br><span class="line">        queue.<span class="built_in">emplace_front</span>(driver);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        queue.<span class="built_in">emplace_back</span>(driver);</span><br><span class="line">    &#125;</span><br><span class="line">    num_drivers++;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">SubQuerySharedDriverQueue::cancel</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (cancelled_set.<span class="built_in">count</span>(driver) == <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="built_in">DCHECK</span>(driver-&gt;<span class="built_in">is_in_ready_queue</span>());</span><br><span class="line">        pending_cancel_queue.<span class="built_in">emplace</span>(driver);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="take"><a href="#take" class="headerlink" title="take"></a>take</h3><p>从 SubQuerySharedDriverQueue 中获取 driver 时</p>
+<ul>
+<li>如果 pending_cancel_queue 不为空，率先从 pending_cancel_queue 中取，并将获得的 driver 记录在 cancelld_set 中。</li>
+<li>否则，再从 queue 中获取，如果 driver 已经在 cancelled_set 中记录，则忽略并重新从 queue 中获取。</li>
+</ul>
+<p>代码也是比较简单的。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DriverRawPtr <span class="title">SubQuerySharedDriverQueue::take</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">DCHECK</span>(!<span class="built_in">empty</span>());</span><br><span class="line">    <span class="keyword">if</span> (!pending_cancel_queue.<span class="built_in">empty</span>()) &#123;</span><br><span class="line">        DriverRawPtr driver = pending_cancel_queue.<span class="built_in">front</span>();</span><br><span class="line">        pending_cancel_queue.<span class="built_in">pop</span>();</span><br><span class="line">        cancelled_set.<span class="built_in">insert</span>(driver);</span><br><span class="line">        --num_drivers;</span><br><span class="line">        <span class="keyword">return</span> driver;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">while</span> (!queue.<span class="built_in">empty</span>()) &#123;</span><br><span class="line">        DriverRawPtr driver = queue.<span class="built_in">front</span>();</span><br><span class="line">        queue.<span class="built_in">pop_front</span>();</span><br><span class="line">        <span class="keyword">auto</span> iter = cancelled_set.<span class="built_in">find</span>(driver);</span><br><span class="line">        <span class="keyword">if</span> (iter != cancelled_set.<span class="built_in">end</span>()) &#123;</span><br><span class="line">            cancelled_set.<span class="built_in">erase</span>(iter);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            --num_drivers;</span><br><span class="line">            <span class="keyword">return</span> driver;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="QuerySharedDriverQueue"><a href="#QuerySharedDriverQueue" class="headerlink" title="QuerySharedDriverQueue"></a>QuerySharedDriverQueue</h2><p>QuerySharedDriverQueue 一共有 QUEUE_SIZE（值是 8）个 SubQuerySharedDriverQueue，每个 SubQueue 对应的时间片依次是 <strong>{0.2s, 0.6s, 1.2s, 2s, 3s, 4.2s, 5.6s, 7.2s}</strong>:</p>
+<ul>
+<li>比如 SubQueue[0] 的时间片范围是 <strong>[0, 0.2)</strong>, </li>
+<li>超过 7.2s 的 Pipeline 都位于最后一个队列 SubQueue[7] 中，即 SubQueue[7] 的时间范围是 [5.6, +∞)。</li>
+</ul>
+<p>每个 Driver 消耗的时间片记录在 <code>DriverAcct::accumulated_time_spent</code>，PipelineDriver 每执行一次就会调用一次 _update_statistics 函数来更新 DriverAcct 中的统计值，当 <em>accumulated_time_spent</em> 超过当前 SubQueue 的时间片区间，driver 就进入下一个 SubQueue。</p>
+<p>QuerySharedDriverQueue 的构造函数如下 。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">QuerySharedDriverQueue::<span class="built_in">QuerySharedDriverQueue</span>() &#123;</span><br><span class="line">    <span class="type">double</span> factor = <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = QUEUE_SIZE - <span class="number">1</span>; i &gt;= <span class="number">0</span>; --i) &#123;</span><br><span class="line">        <span class="comment">// initialize factor for every sub queue,</span></span><br><span class="line">        <span class="comment">// Higher priority queues have more execution time,</span></span><br><span class="line">        <span class="comment">// so they have a larger factor.</span></span><br><span class="line">        _queues[i].factor_for_normal = factor;</span><br><span class="line">        factor *= RATIO_OF_ADJACENT_QUEUE;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">int64_t</span> time_slice = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; QUEUE_SIZE; ++i) &#123;</span><br><span class="line">        time_slice += LEVEL_TIME_SLICE_BASE_NS * (i + <span class="number">1</span>);</span><br><span class="line">        _level_time_slices[i] = time_slice;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="compute-driver-level"><a href="#compute-driver-level" class="headerlink" title="_compute_driver_level"></a>_compute_driver_level</h3><p>向 QuerySharedDriverQueue 添加 driver 时，从上一次所处的层 <code>PipelineDriver::get_driver_queue_level</code> 开始，再基于 accumulated_time_spent 计算 driver 本次将位于 DriverQueue 中的哪一层。</p>
+<p>因此，一个长时间的运行的 driver 在 DriverQueue 中不断下沉。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> QuerySharedDriverQueue::_compute_driver_level(<span class="type">const</span> DriverRawPtr driver) <span class="type">const</span> &#123;</span><br><span class="line">    <span class="type">int</span> time_spent = driver-&gt;<span class="built_in">driver_acct</span>().<span class="built_in">get_accumulated_time_spent</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = driver-&gt;<span class="built_in">get_driver_queue_level</span>(); i &lt; QUEUE_SIZE; ++i) &#123;</span><br><span class="line">        <span class="keyword">if</span> (time_spent &lt; _level_time_slices[i]) &#123;</span><br><span class="line">            <span class="keyword">return</span> i;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> QUEUE_SIZE - <span class="number">1</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="put-back"><a href="#put-back" class="headerlink" title="put_back"></a>put_back</h3><p>put_back 函数将 READY 的 driver 放入到 DriverQueue，</p>
+<ul>
+<li>PipelineDriver::_driver_queue_level 记录每次在 DrvierQueue 中的层。</li>
+<li>PipelineDriver::_in_ready_queue 标记是否被 <code>put_back</code> 到 DrvierQueue 中</li>
+<li>PipelineDriver::_in_queue 即 driver 所属的 DriverQueue</li>
+</ul>
+<p>插入一个 driver 后，通过 _cv 解除 take 函数处的阻塞，Executor 就可以继续通过 DriverQueue::take 函数获得新的可执行的 driver</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">QuerySharedDriverQueue::put_back</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span> </span>&#123;</span><br><span class="line">    <span class="type">int</span> level = _compute_driver_level(driver);</span><br><span class="line">    driver-&gt;<span class="built_in">set_driver_queue_level</span>(level);</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="function">std::lock_guard&lt;std::mutex&gt; <span class="title">lock</span><span class="params">(_global_mutex)</span></span>;</span><br><span class="line">        _queues[level].<span class="built_in">put</span>(driver);</span><br><span class="line">        driver-&gt;<span class="built_in">set_in_ready_queue</span>(<span class="literal">true</span>);</span><br><span class="line">        driver-&gt;<span class="built_in">set_in_queue</span>(<span class="keyword">this</span>);</span><br><span class="line">        _cv.<span class="built_in">notify_one</span>();</span><br><span class="line">        ++_num_drivers;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// QuerySharedDriverQueue::put_back_from_executor is identical to put_back.</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">QuerySharedDriverQueue::put_back_from_executor</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">put_back</span>(driver);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="take-1"><a href="#take-1" class="headerlink" title="take"></a>take</h3><p>put_back 函数是通过 <em>_compute_driver_level</em> 函数来确定 SubQueue 的层数。take 函数则通过 SubQuerySharedDriverQueue::accu_time_after_divisor() 来确定。 </p>
+<ul>
+<li><p>_accu_consume_time 字段是该 SubQueue 的耗时</p>
+<p>这个值实际上和 <code>DriverAcct::accumulated_time_spent</code> 大小一样：每次更新统计时都是累加的 <code>DriverAcct::last_time_spent</code>。因此 put_back&#x2F;take 的衡量标准是一样的。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">DriverAcct::update_last_time_spent</span><span class="params">(<span class="type">int64_t</span> time_spent)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">this</span>-&gt;last_time_spent = time_spent;</span><br><span class="line">    <span class="keyword">this</span>-&gt;accumulated_time_spent += time_spent;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">SubQuerySharedDriverQueue::update_accu_time</span><span class="params">(<span class="type">const</span> DriverRawPtr driver)</span> </span>&#123;</span><br><span class="line">    _accu_consume_time.<span class="built_in">fetch_add</span>(driver-&gt;<span class="built_in">driver_acct</span>().<span class="built_in">get_last_time_spent</span>());</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li><p>factor_for_normal 是在 QUEUE_SIZE 个 SubQueue 的正则系数</p>
+</li>
+</ul>
+<p>二者相处得到归一化的时间系数，<u>使得每一层都有机会被访问到</u>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">double</span> <span class="title">SubQuerySharedDriverQueue::accu_time_after_divisor</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _accu_consume_time.<span class="built_in">load</span>() / factor_for_normal;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>确定好 level 后，就可以直接从该 level 提取出 READY 状态的 PipelineDriver。如果整个 DriverQueue 都空的，则基于 _cv 阻塞等待。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">StatusOr&lt;DriverRawPtr&gt; <span class="title">QuerySharedDriverQueue::take</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="comment">// -1 means no candidates; else has candidate.</span></span><br><span class="line">  <span class="type">int</span> queue_idx = <span class="number">-1</span>;</span><br><span class="line">  <span class="type">double</span> target_accu_time = <span class="number">0</span>;</span><br><span class="line">  DriverRawPtr driver_ptr;</span><br><span class="line"></span><br><span class="line">  &#123;</span><br><span class="line">    <span class="function">std::unique_lock&lt;std::mutex&gt; <span class="title">lock</span><span class="params">(_global_mutex)</span></span>;</span><br><span class="line">    <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">        <span class="built_in">RETURN_IF</span>(_is_closed, Status::<span class="built_in">Cancelled</span>(<span class="string">&quot;Shutdown&quot;</span>));</span><br><span class="line">        <span class="comment">// Find the queue with the smallest execution time.</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; QUEUE_SIZE; ++i) &#123;</span><br><span class="line">            <span class="comment">// we just search for queue has element</span></span><br><span class="line">            <span class="keyword">if</span> (!_queues[i].<span class="built_in">empty</span>()) &#123;</span><br><span class="line">                <span class="type">double</span> local_target_time = _queues[i].<span class="built_in">accu_time_after_divisor</span>();</span><br><span class="line">                <span class="keyword">if</span> (queue_idx &lt; <span class="number">0</span> || local_target_time &lt; target_accu_time) &#123;</span><br><span class="line">                    target_accu_time = local_target_time;</span><br><span class="line">                    queue_idx = i;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (queue_idx &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        _cv.<span class="built_in">wait</span>(lock);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// record queue&#x27;s index to accumulate time for it.</span></span><br><span class="line">    driver_ptr = _queues[queue_idx].<span class="built_in">take</span>();</span><br><span class="line">    driver_ptr-&gt;<span class="built_in">set_in_ready_queue</span>(<span class="literal">false</span>);</span><br><span class="line"></span><br><span class="line">    --_num_drivers;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// next pipeline driver to execute.</span></span><br><span class="line">  <span class="keyword">return</span> driver_ptr;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#DriverAcct"><span class="toc-number">1.</span> <span class="toc-text">DriverAcct</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SubQuerySharedDriverQueue"><span class="toc-number">2.</span> <span class="toc-text">SubQuerySharedDriverQueue</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#put"><span class="toc-number">2.1.</span> <span class="toc-text">put</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#take"><span class="toc-number">2.2.</span> <span class="toc-text">take</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#QuerySharedDriverQueue"><span class="toc-number">3.</span> <span class="toc-text">QuerySharedDriverQueue</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#compute-driver-level"><span class="toc-number">3.1.</span> <span class="toc-text">_compute_driver_level</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#put-back"><span class="toc-number">3.2.</span> <span class="toc-text">put_back</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#take-1"><span class="toc-number">3.3.</span> <span class="toc-text">take</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&text=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&is_video=false&description=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=QuerySharedDriverQueue: 多级反馈队列&body=Check out this article: https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&title=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&name=QuerySharedDriverQueue: 多级反馈队列&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/19/Pipeline/DriverQueue_1/&t=QuerySharedDriverQueue: 多级反馈队列"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

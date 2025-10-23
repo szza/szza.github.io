@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="从本期，就开始智能指针源码分析之路，从源码中了解他们的设计。 智能指针，可以分为两类：  独占型：如std::unique_ptr，一份资源，仅能由一个std::unique_ptr对象管理； 共享型：如std::shared_ptr，一份资源，可以由多个std::shared_ptr对象共同管理，当没有std::shared_ptr对象指向这份的资源，资源才会被释放，即基于引用技术原理。  本期">
+<meta property="og:type" content="article">
+<meta property="og:title" content="从 std::auto_ptr 到 std::unique_ptr">
+<meta property="og:url" content="https://szza.github.io/2021/12/21/C++/unique_ptr/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="从本期，就开始智能指针源码分析之路，从源码中了解他们的设计。 智能指针，可以分为两类：  独占型：如std::unique_ptr，一份资源，仅能由一个std::unique_ptr对象管理； 共享型：如std::shared_ptr，一份资源，可以由多个std::shared_ptr对象共同管理，当没有std::shared_ptr对象指向这份的资源，资源才会被释放，即基于引用技术原理。  本期">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-12-21T04:47:23.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Modern C++">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>从 std::auto_ptr 到 std::unique_ptr</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/01/01/C++/align/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/12/02/rocksdb/utility/persistent_cache/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&text=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&is_video=false&description=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=从 std::auto_ptr 到 std::unique_ptr&body=Check out this article: https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&name=从 std::auto_ptr 到 std::unique_ptr&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/12/21/C++/unique_ptr/&t=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#std-auto-ptr"><span class="toc-number">1.</span> <span class="toc-text">std::auto_ptr</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#by-the-way"><span class="toc-number">1.1.</span> <span class="toc-text">by the way</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#std-unique-ptr"><span class="toc-number">2.</span> <span class="toc-text">std::unique_ptr</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#std-default-delete"><span class="toc-number">2.1.</span> <span class="toc-text">std::default_delete</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#delete"><span class="toc-number">2.1.1.</span> <span class="toc-text">delete</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#delete-1"><span class="toc-number">2.1.2.</span> <span class="toc-text">delete[]</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-uniq-ptr-impl"><span class="toc-number">2.2.</span> <span class="toc-text">std::__uniq_ptr_impl</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-unique-ptr-1"><span class="toc-number">2.3.</span> <span class="toc-text">std::unique_ptr</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#DeleterConstraint"><span class="toc-number">2.3.1.</span> <span class="toc-text">_DeleterConstraint</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Require"><span class="toc-number">2.3.2.</span> <span class="toc-text">_Require</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#safe-conversion-up"><span class="toc-number">2.3.3.</span> <span class="toc-text">__safe_conversion_up</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-make-unique"><span class="toc-number">2.4.</span> <span class="toc-text">std::make_unique</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        从 std::auto_ptr 到 std::unique_ptr
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-12-21T04:47:23.000Z" itemprop="datePublished">2021-12-21</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Modern-C/" rel="tag">Modern C++</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>从本期，就开始智能指针源码分析之路，从源码中了解他们的设计。</p>
+<p>智能指针，可以分为两类：</p>
+<ul>
+<li>独占型：如<code>std::unique_ptr</code>，一份资源，仅能由一个<code>std::unique_ptr</code>对象管理；</li>
+<li>共享型：如<code>std::shared_ptr</code>，一份资源，可以由多个<code>std::shared_ptr</code>对象共同管理，当没有<code>std::shared_ptr</code>对象指向这份的资源，资源才会被释放，即基于引用技术原理。</li>
+</ul>
+<p>本期，先来讲解<code>std::unique_ptr</code>，之后会分几期来讲解<code>std::shared_ptr</code>的设计。</p>
+<p>不过，在讲解<code>std::unique_ptr</code>之前，先讲解下C++03中的失败品：<code>std::auto_ptr</code>。</p>
+<h2 id="std-auto-ptr"><a href="#std-auto-ptr" class="headerlink" title="std::auto_ptr"></a>std::auto_ptr</h2><p>原本也是想要将 <code>std::auto_ptr</code> 设计成资源独占型的指针，即像现在的<code>std::unique_ptr</code>，但由于移动语义直到C++11中才出现，使得<code>std::auto_ptr</code>终究成了失败品。</p>
+<p>不明白，没关系，go on。</p>
+<p>在C++03标准下，有如下demo中的一个场景。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    <span class="function">std::auto_ptr&lt;<span class="type">int</span>&gt; <span class="title">iptr</span><span class="params">(<span class="keyword">new</span> <span class="type">int</span>(<span class="number">1</span>))</span></span>;</span><br><span class="line">    std::vector&lt;std::auto_ptr&lt;<span class="type">int</span>&gt; &gt; integer_vec;</span><br><span class="line"></span><br><span class="line">    integer_vec.<span class="built_in">push_back</span>(iptr);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>由于在C++03标准中还没有引入移动语义，只能以<code>push_back</code>函数向<code>vector</code>中添加元素。</p>
+<p>如果你没接触过<code>std::auto_ptr</code>，应该会认为上面的demo是能编译通过的，但实际上是无法编译通过的。</p>
+<p>编译指令如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -std=c++<span class="number">03</span>  main.cc -o main &amp;&amp; ./main</span><br></pre></td></tr></table></figure>
+
+<p>下面只贴出最初的错误信息：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">gcc<span class="number">-8.2</span>/include/c++/<span class="number">8.2</span><span class="number">.0</span>/ext/new_allocator.h:<span class="number">146</span>:<span class="number">9</span>: error: no matching function <span class="keyword">for</span> call to ‘std::auto_ptr&lt;<span class="type">int</span>&gt;::<span class="built_in">auto_ptr</span>(<span class="type">const</span> std::auto_ptr&lt;<span class="type">int</span>&gt;&amp;)’</span><br><span class="line">       &#123; ::<span class="keyword">new</span>((<span class="type">void</span> *)__p) _Tp(__val); &#125;</span><br><span class="line">         ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~</span><br></pre></td></tr></table></figure>
+
+<p>先给出导致错误的结论：是由于类<code>std::auto_ptr</code> 没有提供<code>const std::auto_ptr&lt;T&gt;&amp;</code>类型的复制构造函数。</p>
+<p>那为啥会没有呢？</p>
+<p>因为<code>std::auto_ptr</code>的设计者，想使<code>std::auto_ptr</code>的复制构造函数具备移动构造函数的属性（如果不懂右值、移动等内容，可以看看 <a href="https://szza.github.io/2021/03/04/C++/reference_1">右值引用的正确用法</a>），这就使得<code>std::auto_ptr</code>复制构造函数的输入参数<code>__a</code>不能由 const 修饰，否则<code>__a</code>指向的资源就无法移动到新创建的对象中了。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">auto_ptr</span>(auto_ptr&amp; __a) <span class="keyword">throw</span>() : _M_ptr(__a.<span class="built_in">release</span>()) &#123;&#125; </span><br></pre></td></tr></table></figure>
+
+<p>这就导致<code>std::auto_ptr</code>中，所有和赋值有关的操作，都不能有<code>const</code>修饰。</p>
+<p><code>std::auto_ptr</code>的核心代码如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">auto_ptr</span></span><br><span class="line">&#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  _Tp *_M_ptr;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">typedef</span> _Tp element_type;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">auto_ptr</span><span class="params">(element_type *__p = <span class="number">0</span>)</span> <span class="title">throw</span><span class="params">()</span> : _M_ptr(__p) &#123;</span> &#125;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">auto_ptr</span>(auto_ptr&amp; __a) <span class="keyword">throw</span>() : _M_ptr(__a.<span class="built_in">release</span>()) &#123;&#125; </span><br><span class="line"></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp1&gt;</span><br><span class="line">  <span class="built_in">auto_ptr</span>(auto_ptr&lt;_Tp1&gt;&amp; __a) <span class="built_in">throw</span>() : _M_ptr(__a.<span class="built_in">release</span>()) &#123;&#125;</span><br><span class="line"></span><br><span class="line">  auto_ptr &amp;<span class="keyword">operator</span>=(auto_ptr&amp; __a) <span class="built_in">throw</span>() &#123;</span><br><span class="line">    <span class="built_in">reset</span>(__a.<span class="built_in">release</span>());</span><br><span class="line">    <span class="keyword">return</span> *<span class="keyword">this</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  ~<span class="built_in">auto_ptr</span>() &#123; <span class="keyword">delete</span> _M_ptr; &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="function">element_type* <span class="title">release</span><span class="params">()</span> <span class="title">throw</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    element_type *__tmp = _M_ptr;</span><br><span class="line">    _M_ptr = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">return</span> __tmp;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">reset</span><span class="params">(element_type *__p = <span class="number">0</span>)</span> <span class="title">throw</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (__p != _M_ptr) &#123;</span><br><span class="line">      <span class="keyword">delete</span> _M_ptr;</span><br><span class="line">      _M_ptr = __p;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="by-the-way"><a href="#by-the-way" class="headerlink" title="by the way"></a>by the way</h3><p>对于最上面的demo，我们再啰嗦几点：为什么会在 <code>construct</code>函数中报错？</p>
+<ol>
+<li><p>因为<code>push_back</code>函数中，输入参数<code>__x</code>是<code>const std::auto_ptr&amp;</code>类型，能接受<code>iptr</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span> _Alloc&gt; </span><br><span class="line"><span class="type">void</span> std::vector&lt;_Tp, _Alloc&gt;::<span class="built_in">push_back</span>(<span class="type">const</span> value_type&amp; __x);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>在<code>push_back</code>函数内部会调用 <code>_Alloc_traits::construct</code> 函数来构造一个新的<code>std::auto_ptr</code>对象<code>obj</code>，然后将这个<code>obj</code>放到<code>integer_vec</code>中。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">_Alloc_traits::<span class="built_in">construct</span>(<span class="keyword">this</span>-&gt;_M_impl, <span class="keyword">this</span>-&gt;_M_impl._M_finish, __x);</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>因为要构造<code>obj</code>，那么必要会调用<code>std::auto_ptr</code>的复制构造函数，且输入参数是<code>__x</code>；</p>
+</li>
+<li><p>但由于<code>__x</code> 是 <code>const std::auto_ptr&amp;</code> 类型，二<code>std::auto_ptr</code>的复制构造函数输入类型是<code>std::auto_ptr&amp;</code>，接受不了<code>__x</code>作为输入，因此会导致<code>construct</code>函数执行失败。出现上述的错误。</p>
+</li>
+</ol>
+<h2 id="std-unique-ptr"><a href="#std-unique-ptr" class="headerlink" title="std::unique_ptr"></a>std::unique_ptr</h2><p>C++11引入移动语义，提出了<code>std::unique_ptr</code>，才真正地完成了<code>std::auto_ptr</code>的设计意图，而原本的<code>std::auto_ptr</code>也被标记为<code>deprecated</code>。</p>
+<p>由于 <code>std::unique_ptr</code> 对象管理的资源，不可共享，只能在 <code>std::unique_ptr</code> 对象之间转移，因此类<code>std::unique_ptr</code> 就禁止了复制构造函数、赋值表达式，仅实现了移动构造函数等。</p>
+<p>此外，<code>std::unique_ptr</code> 有两个版本：</p>
+<ol>
+<li>管理单个对象（例如以 <code>new</code> 分配）</li>
+<li>管理动态分配的对象数组（例如以 <code>new[]</code> 分配）</li>
+</ol>
+<p>因此， <code>std::unique_ptr</code> 的类模板有如下两个。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// 适合 new 分配的内存</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span> _Dp = default_delete&lt;_Tp&gt;&gt;</span><br><span class="line"><span class="keyword">class</span> unique_ptr &#123; <span class="comment">/****/</span> &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// 针对 new[] 特化</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span> _Dp&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">unique_ptr</span>&lt;_Tp[], _Dp&gt; &#123; <span class="comment">/****/</span> &#125;;</span><br></pre></td></tr></table></figure>
+
+<p>在下面的情况中，<code>std::unique_ptr</code>对象管理的资源，会调用传入的析构器<code>_Dp</code>来释放放资源：</p>
+<ul>
+<li>当前<code>std::unique_ptr</code> 对象被销毁，生命周期结束；</li>
+<li>重新给当前<code>std::unique_ptr</code>对象赋值，比如调用 <code>operator=</code>、<code>reset()</code> 等操作。</li>
+</ul>
+<p>下面就先讲解下默认的析构器<code>std::default_delete</code>。</p>
+<h3 id="std-default-delete"><a href="#std-default-delete" class="headerlink" title="std::default_delete"></a>std::default_delete</h3><p>由于<code>std::unique_ptr</code> 有两个版本，因此默认的析构器也存在两个版本，即对<code>new[]</code> 进行特化。</p>
+<p>此外，这就导致后文的<code>make_unique</code> 函数也需要对<code>new[]</code>进行特化。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">default_delete</span> &#123; <span class="comment">/****/</span> &#125;;</span><br><span class="line">  </span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">default_delete</span>&lt;_Tp[]&gt; &#123; <span class="comment">/****/</span> &#125;;</span><br></pre></td></tr></table></figure>
+
+<p>由于默认采用<code>new</code>、<code>new[]</code>来分配内存的，而<code>sd::default_delete</code> 实际上是个仿函数，内部也是基于<code>delete</code>、<code>delete[]</code>来释放内存资源的。</p>
+<h4 id="delete"><a href="#delete" class="headerlink" title="delete"></a>delete</h4><p>类<code>std::default_delete</code>  实际上是个仿函数，并且是个空类，因此他的默认构造函数直接设置为<code>default</code>了。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">default_delete</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="comment">/// @brief 默认构造函数</span></span><br><span class="line">  <span class="function"><span class="keyword">constexpr</span> <span class="title">default_delete</span><span class="params">()</span> <span class="keyword">noexcept</span> </span>= <span class="keyword">default</span>;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">/// @brief 复制构造函数</span></span><br><span class="line">  <span class="comment">///        _Up* 必须能转为 _Tp*，否则无法编译通过</span></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up, </span><br><span class="line">            <span class="keyword">typename</span> = <span class="keyword">typename</span> enable_if&lt;is_convertible&lt;_Up*, _Tp*&gt;::value&gt;::type&gt;</span><br><span class="line">  <span class="built_in">default_delete</span>(<span class="type">const</span> default_delete&lt;_Up&gt;&amp; ) <span class="keyword">noexcept</span> &#123; &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// @brief 释放内存</span></span><br><span class="line">  <span class="type">void</span> <span class="built_in">operator</span>()(_Tp *__ptr) <span class="type">const</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>此外，<code>std::default_delete</code> 还有个复制构造函数，这里传入<code>_Up*</code>参数 必须能转换为 <code>_Tp*</code> 类型，否则在编译期会报错。所谓<code>_Up*</code> 能转换为 <code>_Tp*</code>，即<code>is_convertible&lt;_Up*, _Tp*&gt;::value</code> 为 true，这个值在编译期就能确定，如果为false，就相当于不存在这个复制构造函数。</p>
+<p>不信，可以把下面的代码复制到IDE中，会有红线提示，编译会出错。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">std::is_convertible&lt;<span class="type">float</span>*, <span class="type">double</span>*&gt;::value;                  <span class="comment">// false: float* 不能直接转换为 double*</span></span><br><span class="line"><span class="function">std::default_delete&lt;<span class="type">double</span>&gt; <span class="title">de</span><span class="params">(std::default_delete&lt;<span class="type">float</span>&gt;&#123;&#125;)</span></span>; <span class="comment">// compile error</span></span><br></pre></td></tr></table></figure>
+
+<p>在<code>std::default_delete</code>的内部，实现的<code>operator()</code> 函数会调用<code>delete</code>来 析构传入的指针<code>__ptr</code>，对于<code>__ptr</code>需要满足两点：</p>
+<ul>
+<li><code>__ptr</code>不能是个<code>void</code>类型；</li>
+<li>大小也不能是0。</li>
+</ul>
+<p>否则无法提供完整的信息去析构<code>__ptr</code>指向的内存。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">operator</span><span class="params">()</span><span class="params">(_Tp *__ptr)</span> <span class="type">const</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">  <span class="built_in">static_assert</span>(!is_void&lt;_Tp&gt;::value, <span class="string">&quot;can&#x27;t delete pointer to incomplete type&quot;</span>);</span><br><span class="line">  <span class="built_in">static_assert</span>(<span class="built_in">sizeof</span>(_Tp) &gt; <span class="number">0</span>, <span class="string">&quot;can&#x27;t delete pointer to incomplete type&quot;</span>);</span><br><span class="line">  <span class="keyword">delete</span> __ptr;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>那么，你就可以这样来使用<code>std::default_delete</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>* iptr = <span class="keyword">new</span> <span class="type">int</span>;</span><br><span class="line"><span class="comment">//...</span></span><br><span class="line">std::<span class="built_in">default_delete</span>&lt;<span class="type">int</span>&gt;()(iptr); <span class="comment">// delete iptr;</span></span><br></pre></td></tr></table></figure>
+
+<p>使用<code>valgrind</code>检测也不存在内存泄露。</p>
+<h4 id="delete-1"><a href="#delete-1" class="headerlink" title="delete[]"></a>delete[]</h4><p>当输入类型是<code>_Tp[]</code>时，会进入此版本。实现和上面的版本差不多。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">default_delete</span>&lt;_Tp[]&gt;</span><br><span class="line">&#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">/// @brief 默认构造函数</span></span><br><span class="line">  <span class="function"><span class="keyword">constexpr</span> <span class="title">default_delete</span><span class="params">()</span> <span class="keyword">noexcept</span> </span>= <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// @brief 复制构造函数</span></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up, </span><br><span class="line">            <span class="keyword">typename</span> = <span class="keyword">typename</span> enable_if&lt;is_convertible&lt;_Up (*)[], _Tp (*)[]&gt;::value&gt;::type&gt;</span><br><span class="line">  <span class="built_in">default_delete</span>(<span class="type">const</span> default_delete&lt;_Up[]&gt; &amp;) <span class="keyword">noexcept</span> &#123;&#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">/// @brief 释放内存</span></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up&gt;</span><br><span class="line">            <span class="keyword">typename</span> enable_if&lt;is_convertible&lt;_Up (*)[], _Tp (*)[]&gt;::value&gt;::type</span><br><span class="line">  <span class="built_in">operator</span>()(_Up *__ptr) <span class="type">const</span></span><br><span class="line">  &#123;</span><br><span class="line">    <span class="built_in">static_assert</span>(<span class="built_in">sizeof</span>(_Tp) &gt; <span class="number">0</span>, <span class="string">&quot;can&#x27;t delete pointer to incomplete type&quot;</span>);</span><br><span class="line">    <span class="keyword">delete</span>[] __ptr;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>因此，这样就可以使用</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span>* iptr = <span class="keyword">new</span> <span class="type">int</span>[<span class="number">3</span>];</span><br><span class="line"><span class="comment">//...</span></span><br><span class="line">std::<span class="built_in">default_delete</span>&lt;<span class="type">int</span>[]&gt;()(iptr); </span><br></pre></td></tr></table></figure>
+
+<p>使用<code>valgrind</code>检查也没有任何内存泄露。</p>
+<p>因此，<code>std::default_delete</code> 对两种常用的内存释放方式进行重载，提供了同一个统一接口。</p>
+<h3 id="std-uniq-ptr-impl"><a href="#std-uniq-ptr-impl" class="headerlink" title="std::__uniq_ptr_impl"></a>std::__uniq_ptr_impl</h3><p>类<code>std::unique_ptr</code> 内部只有一个成员变量，其类型是 <code>std::__uniq_ptr_impl</code>。</p>
+<p>类<code>std::__uniq_ptr_impl</code>实际上就一个<code>&lt;pointer, Deleter&gt;</code>的一个wrapper，即简单封装了指向资源的指针，以及对应的析构器 <code>Deleter</code>。</p>
+<p>先大致看下<code>std::__uniq_ptr_impl</code>的部分实现。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span> _Dp&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">__uniq_ptr_impl</span></span><br><span class="line">&#123;</span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">using</span> _DeleterConstraint = enable_if&lt;__and_&lt;__not_&lt;is_pointer&lt;_Dp&gt;&gt;, </span><br><span class="line">                                              is_default_constructible&lt;_Dp&gt;&gt;::value&gt;;</span><br><span class="line">  </span><br><span class="line">  __uniq_ptr_impl() = <span class="keyword">default</span>;</span><br><span class="line">  __uniq_ptr_impl(pointer __p) : _M_t() &#123; _M_ptr() = __p; &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Del&gt;</span><br><span class="line">  __uniq_ptr_impl(pointer __p, _Del&amp;&amp; __d)</span><br><span class="line">  : _M_t(__p, std::forward&lt;_Del&gt;(__d)) &#123; &#125;</span><br><span class="line"></span><br><span class="line">  pointer&amp;   _M_ptr()           &#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;<span class="number">0</span>&gt;(_M_t); &#125;</span><br><span class="line">  pointer    _M_ptr()     <span class="type">const</span> &#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;<span class="number">0</span>&gt;(_M_t); &#125;</span><br><span class="line">  _Dp&amp;       _M_deleter()       &#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;<span class="number">1</span>&gt;(_M_t); &#125;</span><br><span class="line">  <span class="type">const</span> _Dp&amp; _M_deleter() <span class="type">const</span> &#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;<span class="number">1</span>&gt;(_M_t); &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">swap</span><span class="params">(__uniq_ptr_impl&amp; __rhs)</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function">  </span>&#123;</span><br><span class="line">    std::<span class="built_in">swap</span>(<span class="keyword">this</span>-&gt;_M_ptr(), __rhs._M_ptr());</span><br><span class="line">    std::<span class="built_in">swap</span>(<span class="keyword">this</span>-&gt;_M_deleter(), __rhs._M_deleter());</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  tuple&lt;pointer, _Dp&gt; _M_t; <span class="comment">// pointer 的定义后文讲解</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>类<code>std::__uniq_ptr_impl</code> 的成员变量<code>_M_t</code>是由<code>tuple</code>类型：</p>
+<ul>
+<li>第一个成员：是指针，指向资源；</li>
+<li>第二个成员：是析构器，用于释放指针指向的资源。</li>
+</ul>
+<p>由于在X86-84位系统上指针大小是8，而<code>_Dp</code>在默认情况下（即<code>std::default_delete</code>）是个空类，得益于<a target="_blank" rel="noopener" href="https://mp.weixin.qq.com/s?__biz=MzkyMjIxMzIxNA==&mid=2247485249&idx=1&sn=f395397f1621cf8a4d897d0213ca1788&chksm=c1f68970f68100666cbb65313780797bc65490703dac02a9603e0b9733fa01db270ca445f0e6&token=1599630750&lang=zh_CN#rd">空基类优化</a>，因此<code>_M_t</code> 的大小是8。</p>
+<blockquote>
+<p><strong>NOTICE</strong>：如果自定义了一个<code>Deleter</code>，且不是空类，则<code>std::unique_ptr</code>的大小会增加。</p>
+</blockquote>
+<p>下面，来分析下<code>std::__uniq_ptr_impl</code> 中的 <code>pointer</code>类型，他的完整实现及注释如下。</p>
+<p>因此，当<code>_Dp</code>是默认的析构器<code>std::default_delete</code>时，<code>pointer</code> 即 <code>_Tp*</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"> <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span> _Dp&gt;</span><br><span class="line"> <span class="keyword">class</span> <span class="title class_">__uniq_ptr_impl</span></span><br><span class="line"> &#123;    </span><br><span class="line">   <span class="comment">/// 原型</span></span><br><span class="line">   <span class="comment">/// @brief 特化版本决议失败，则会进入此版本</span></span><br><span class="line">   <span class="comment">/// @type  此时 type 就是 _up*</span></span><br><span class="line">   <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up, <span class="keyword">typename</span> _Ep, <span class="keyword">typename</span> = <span class="type">void</span>&gt;</span><br><span class="line">   <span class="keyword">struct</span> _Ptr</span><br><span class="line">   &#123;</span><br><span class="line">     <span class="keyword">using</span> type = _Up*;</span><br><span class="line">   &#125;;</span><br><span class="line"></span><br><span class="line">   <span class="comment">/// 特化版本</span></span><br><span class="line">   <span class="comment">/// @brief 如果 类 _Ep 中有 pointer 的定义，则会进入此特化版本</span></span><br><span class="line">   <span class="comment">/// @type  此时 type 是 _Ep 中的 pointer </span></span><br><span class="line">   <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up, <span class="keyword">typename</span> _Ep&gt;</span><br><span class="line">   <span class="keyword">struct</span> <span class="title class_">_Ptr</span>&lt;_Up, _Ep, <span class="type">__void_t</span>&lt;<span class="keyword">typename</span> remove_reference&lt;_Ep&gt;::type::pointer&gt;&gt;</span><br><span class="line">   &#123;</span><br><span class="line">     <span class="keyword">using</span> type = <span class="keyword">typename</span> remove_reference&lt;_Ep&gt;::type::pointer;</span><br><span class="line">   &#125;;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">   <span class="keyword">using</span> pointer = <span class="keyword">typename</span> _Ptr&lt;_Tp, _Dp&gt;::type;</span><br><span class="line">   <span class="comment">//...</span></span><br><span class="line"> &#125;；</span><br></pre></td></tr></table></figure>
+
+<h3 id="std-unique-ptr-1"><a href="#std-unique-ptr-1" class="headerlink" title="std::unique_ptr"></a>std::unique_ptr</h3><p>分析的进度终于到了类<code>std::unique_ptr</code>，它的设计主要如下四点：</p>
+<ol>
+<li>禁止复制构造函数、复制赋值的重载，即设置为<code>=delete</code>；</li>
+<li>实现各种移动构造函数；</li>
+<li>实现移动赋值重载，即<code>operator=</code>，需要先释放本身的资源，再将对方的资源移动过来；</li>
+<li>如果资源没有释放过，则会在析构函数中释放。</li>
+</ol>
+<p>为便于理解，先看下<code>std::unique_ptr</code>的部分源码及其注释，另一个特化版本差不多。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span> _Dp = default_delete&lt;_Tp&gt;&gt;</span><br><span class="line"><span class="keyword">class</span> unique_ptr</span><br><span class="line">&#123;</span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up&gt;</span><br><span class="line">  <span class="keyword">using</span> _DeleterConstraint = <span class="keyword">typename</span> __uniq_ptr_impl&lt;_Tp, _Up&gt;::_DeleterConstraint::type;</span><br><span class="line"></span><br><span class="line">  __uniq_ptr_impl&lt;_Tp, _Dp&gt; _M_t; <span class="comment">// 成员变量</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="keyword">using</span> pointer = <span class="keyword">typename</span> __uniq_ptr_impl&lt;_Tp, _Dp&gt;::pointer;</span><br><span class="line">  <span class="keyword">using</span> element_type = _Tp;</span><br><span class="line">  <span class="keyword">using</span> deleter_type = _Dp;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  <span class="comment">/// 用于检测从另一个 std::unique_ptr 对象转换过来是否安全</span></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up, <span class="keyword">typename</span> _Ep&gt;</span><br><span class="line">  <span class="keyword">using</span> __safe_conversion_up = __and_&lt;is_convertible&lt;<span class="keyword">typename</span> unique_ptr&lt;_Up, _Ep&gt;::pointer, pointer&gt;,</span><br><span class="line">                                      __not_&lt;is_array&lt;_Up&gt;&gt;&gt;;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">/*** Move constructors. ***/</span></span><br><span class="line"></span><br><span class="line">  <span class="comment">/// @brief 移动构造函数</span></span><br><span class="line">  <span class="built_in">unique_ptr</span>(unique_ptr&amp;&amp; __u) <span class="keyword">noexcept</span></span><br><span class="line">  : _M_t(__u.<span class="built_in">release</span>(), std::forward&lt;deleter_type&gt;(__u.<span class="built_in">get_deleter</span>())) &#123; &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">/// @brief 移动赋值</span></span><br><span class="line">  unique_ptr&amp; <span class="keyword">operator</span>=(unique_ptr&amp;&amp; __u) <span class="keyword">noexcept</span></span><br><span class="line">  &#123;</span><br><span class="line">    <span class="built_in">reset</span>(__u.<span class="built_in">release</span>()); </span><br><span class="line">    <span class="built_in">get_deleter</span>() = std::forward&lt;deleter_type&gt;(__u.<span class="built_in">get_deleter</span>());</span><br><span class="line">    <span class="keyword">return</span> *<span class="keyword">this</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// @brief 设置 unique_ptr 对象为初始化状态</span></span><br><span class="line">  unique_ptr&amp; <span class="keyword">operator</span>=(<span class="type">nullptr_t</span>) <span class="keyword">noexcept</span></span><br><span class="line">  &#123;</span><br><span class="line">    <span class="built_in">reset</span>();</span><br><span class="line">    <span class="keyword">return</span> *<span class="keyword">this</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// @brief 禁止复制</span></span><br><span class="line">  <span class="built_in">unique_ptr</span>(<span class="type">const</span> unique_ptr &amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  unique_ptr &amp;<span class="keyword">operator</span>=(<span class="type">const</span> unique_ptr &amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  </span><br><span class="line">  ~<span class="built_in">unique_ptr</span>() <span class="keyword">noexcept</span></span><br><span class="line">  &#123;</span><br><span class="line">    <span class="built_in">static_assert</span>(__is_invocable&lt;deleter_type&amp;, pointer&gt;::value,</span><br><span class="line">                  <span class="string">&quot;unique_ptr&#x27;s deleter must be invocable with a pointer&quot;</span>);</span><br><span class="line">    <span class="keyword">auto</span>&amp; __ptr = _M_t._M_ptr();</span><br><span class="line">    <span class="keyword">if</span> (__ptr != <span class="literal">nullptr</span>)</span><br><span class="line">       <span class="built_in">get_deleter</span>()(std::<span class="built_in">move</span>(__ptr)); <span class="comment">// 析构</span></span><br><span class="line">    __ptr = <span class="built_in">pointer</span>();                  <span class="comment">// 设置为初始化状态</span></span><br><span class="line">  &#125;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">/// @brief 返回指针</span></span><br><span class="line">  <span class="function">pointer <span class="title">get</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function">  </span>&#123; <span class="keyword">return</span> _M_t._M_ptr(); &#125;</span><br><span class="line">  </span><br><span class="line"><span class="comment">/// @brief 返回一个指向内部的deleter的引用</span></span><br><span class="line">  <span class="function">deleter_type&amp; <span class="title">get_deleter</span><span class="params">()</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function">  </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _M_t._M_deleter();</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Return @c true if the stored pointer is not null.</span></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="keyword">operator</span> <span class="title">bool</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function">  </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">get</span>() == <span class="built_in">pointer</span>() ? <span class="literal">false</span> : <span class="literal">true</span>;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// Release ownership of any stored pointer.</span></span><br><span class="line">  <span class="function">pointer <span class="title">release</span><span class="params">()</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function">  </span>&#123;</span><br><span class="line">    pointer __p = <span class="built_in">get</span>();</span><br><span class="line">    _M_t._M_ptr() = <span class="built_in">pointer</span>();</span><br><span class="line">    <span class="keyword">return</span> __p;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">reset</span><span class="params">(pointer __p = pointer())</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function">  </span>&#123;</span><br><span class="line">    <span class="built_in">static_assert</span>(__is_invocable&lt;deleter_type &amp;, pointer&gt;::value,</span><br><span class="line">                  <span class="string">&quot;unique_ptr&#x27;s deleter must be invocable with a pointer&quot;</span>);</span><br><span class="line">    std::<span class="built_in">swap</span>(_M_t._M_ptr(), __p);</span><br><span class="line">    <span class="keyword">if</span> (__p != <span class="built_in">pointer</span>())</span><br><span class="line">      <span class="built_in">get_deleter</span>()(std::<span class="built_in">move</span>(__p));</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="type">void</span> <span class="title">swap</span><span class="params">(unique_ptr &amp;__u)</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function">  </span>&#123;</span><br><span class="line">    <span class="built_in">static_assert</span>(__is_swappable&lt;_Dp&gt;::value, <span class="string">&quot;deleter must be swappable&quot;</span>);</span><br><span class="line">    _M_t.<span class="built_in">swap</span>(__u._M_t);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p><code>std::unique_ptr</code> 的设计总体比较清晰。</p>
+<p>到此，<code>std::unique_ptr</code>的设计分析差不多就结束了，下面对源码中（上面未列出）几个模板稍微分析下。</p>
+<h4 id="DeleterConstraint"><a href="#DeleterConstraint" class="headerlink" title="_DeleterConstraint"></a>_DeleterConstraint</h4><p><code>_DeleterConstraint</code> 定义于<code>std::__uniq_ptr_impl</code>之中，用于限制传入的析构器<code>Deleter</code>必须满足以下两点：</p>
+<ol>
+<li>传入的<code>Deleter</code> 不能是指针；</li>
+<li>必须具备默认构造函数。</li>
+</ol>
+<p>否则，<code>std::unique_ptr</code> 的构造函数会失败。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">using</span> _DeleterConstraint = enable_if&lt;__and_&lt;__not_&lt;is_pointer&lt;_Dp&gt;&gt;, </span><br><span class="line">                                        is_default_constructible&lt;_Dp&gt;&gt;::value&gt;;</span><br><span class="line">   </span><br><span class="line"><span class="comment">/// 构造函数</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Del = _Dp, <span class="keyword">typename</span> = _DeleterConstraint&lt;_Del&gt;&gt;</span><br><span class="line"><span class="keyword">constexpr</span> <span class="built_in">unique_ptr</span>() <span class="keyword">noexcept</span></span><br><span class="line">: _M_t()</span><br><span class="line">&#123; &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Del = _Dp, <span class="keyword">typename</span> = _DeleterConstraint&lt;_Del&gt;&gt;</span><br><span class="line"><span class="keyword">explicit</span> <span class="built_in">unique_ptr</span>(pointer __p) <span class="keyword">noexcept</span></span><br><span class="line">: _M_t(__p)</span><br><span class="line">&#123; &#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Require"><a href="#Require" class="headerlink" title="_Require"></a>_Require</h4><p>其原型如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span>... _Cond&gt;</span><br><span class="line"><span class="keyword">using</span> _Require = <span class="type">__enable_if_t</span>&lt;__and_&lt;_Cond...&gt;::value&gt;;</span><br></pre></td></tr></table></figure>
+
+<p><code>_Require</code>模板是要求所有传入的条件<code>Cond</code>都为true，则<code>_Require</code>修饰的函数才会存在。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// @brief 如果传入的 _Del 没有复制构造函数，则unique_ptr此版本构造函数就不存在</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Del = deleter_type,</span><br><span class="line">          <span class="keyword">typename</span> = _Require&lt;is_copy_constructible&lt;_Del&gt;&gt;&gt;</span><br><span class="line"><span class="built_in">unique_ptr</span>(pointer __p, <span class="type">const</span> deleter_type&amp; __d) <span class="keyword">noexcept</span></span><br><span class="line">: _M_t(__p, __d) &#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// @brief 如果传入的 _Del 没有移动构造函数，则 unique_ptr此版本构造函数就不存在</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Del = deleter_type,</span><br><span class="line">          <span class="keyword">typename</span> = _Require&lt;is_move_constructible&lt;_Del&gt;&gt;&gt;</span><br><span class="line"><span class="built_in">unique_ptr</span>(pointer __p, <span class="type">__enable_if_t</span>&lt;!is_lvalue_reference&lt;_Del&gt;::value, _Del&amp;&amp;&gt; __d) <span class="keyword">noexcept</span></span><br><span class="line">: _M_t(__p, std::<span class="built_in">move</span>(__d))</span><br><span class="line">&#123; &#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="safe-conversion-up"><a href="#safe-conversion-up" class="headerlink" title="__safe_conversion_up"></a>__safe_conversion_up</h4><p>在构造函数中，有时候需要通过其他<code>std::unique_ptr</code>对象来构造当前<code>std::unique_ptr</code>对象，但是<code>pointer</code>类型可能不同，模板<code>__safe_conversion_up</code>可以在编译期确定是否可以转换。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up, <span class="keyword">typename</span> _Ep&gt;</span><br><span class="line"><span class="keyword">using</span> __safe_conversion_up = __and_&lt;is_convertible&lt;<span class="keyword">typename</span> unique_ptr&lt;_Up, _Ep&gt;::pointer, pointer&gt;,</span><br><span class="line">                                    __not_&lt;is_array&lt;_Up&gt;&gt;&gt;;</span><br></pre></td></tr></table></figure>
+
+<p>此外还有个条件模板<code>conditional</code>，实现编译期的条件表达式：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// _Cond ? _Iftrue ： _Iffalse;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 原型</span></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="type">bool</span> _Cond, <span class="keyword">typename</span> _Iftrue, <span class="keyword">typename</span> _Iffalse&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">conditional</span></span><br><span class="line">&#123; <span class="keyword">typedef</span> _Iftrue type; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 特化</span></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Iftrue, <span class="keyword">typename</span> _Iffalse&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">conditional</span>&lt;<span class="literal">false</span>, _Iftrue, _Iffalse&gt;</span><br><span class="line">&#123; <span class="keyword">typedef</span> _Iffalse type; &#125;;</span><br></pre></td></tr></table></figure>
+
+<p>最终，可以用于构造函数。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// @brief 由其他std::unique_ptr对象 __u 构造this</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Up, </span><br><span class="line">          <span class="keyword">typename</span> _Ep, </span><br><span class="line">          <span class="keyword">typename</span> = _Require&lt;__safe_conversion_up&lt;_Up, _Ep&gt;,   <span class="comment">// 先判断指针，必须可转换</span></span><br><span class="line">          <span class="keyword">typename</span> conditional&lt;is_reference&lt;_Dp&gt;::value,        <span class="comment">// 再判断析构器</span></span><br><span class="line">                               is_same&lt;_Ep, _Dp&gt;,               </span><br><span class="line">                               is_convertible&lt;_Ep, _Dp&gt;&gt;::type&gt;&gt;</span><br><span class="line"> <span class="built_in">unique_ptr</span>(unique_ptr&lt;_Up, _Ep&gt;&amp;&amp; __u) <span class="keyword">noexcept</span></span><br><span class="line"> : _M_t(__u.<span class="built_in">release</span>(), std::forward&lt;_Ep&gt;(__u.<span class="built_in">get_deleter</span>()))</span><br><span class="line"> &#123; &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="std-make-unique"><a href="#std-make-unique" class="headerlink" title="std::make_unique"></a>std::make_unique</h3><p>最后，再来看下<code>std::make_unique</code> 函数，它在C++14中引入，这在之前的’编译器优化之copy elision’一期中也讲解过怎么设计它。</p>
+<p>现在，我们再来看看C++14中 <code>std::make_unique()</code> 的实现，如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/*** 返回类型 ***/</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/// 原型</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">_MakeUniq</span></span><br><span class="line">&#123; <span class="keyword">typedef</span> unique_ptr&lt;_Tp&gt; __single_object; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// @brief 为数组类型特化</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">_MakeUniq</span>&lt;_Tp[]&gt;</span><br><span class="line">&#123; <span class="keyword">typedef</span> unique_ptr&lt;_Tp[]&gt; __array; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// @brief 无效</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="type">size_t</span> _Bound&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">_MakeUniq</span>&lt;_Tp[_Bound]&gt;</span><br><span class="line">&#123;</span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">__invalid_type</span> &#123; &#125;;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">/*** 函数实现 ***/</span></span><br><span class="line"></span><br><span class="line"><span class="comment">/// std::make_unique for single objects</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span>... _Args&gt;</span><br><span class="line"><span class="keyword">inline</span> </span><br><span class="line"><span class="keyword">typename</span> _MakeUniq&lt;_Tp&gt;::<span class="function">__single_object <span class="title">make_unique</span><span class="params">(_Args&amp;&amp; ...__args)</span></span></span><br><span class="line"><span class="function"></span>&#123; <span class="keyword">return</span> <span class="built_in">unique_ptr</span>&lt;_Tp&gt;(<span class="keyword">new</span> _Tp(std::forward&lt;_Args&gt;(__args)...)); &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// std::make_unique for arrays of unknown bound</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp&gt;</span><br><span class="line"><span class="keyword">inline</span> </span><br><span class="line"><span class="keyword">typename</span> _MakeUniq&lt;_Tp&gt;::<span class="function">__array <span class="title">make_unique</span><span class="params">(<span class="type">size_t</span> __num)</span></span></span><br><span class="line"><span class="function"></span>&#123; <span class="keyword">return</span> <span class="built_in">unique_ptr</span>&lt;_Tp&gt;(<span class="keyword">new</span> <span class="type">remove_extent_t</span>&lt;_Tp&gt;[__num]()); &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">/// Disable std::make_unique for arrays of known bound</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> _Tp, <span class="keyword">typename</span>... _Args&gt;</span><br><span class="line"><span class="keyword">inline</span> </span><br><span class="line"><span class="keyword">typename</span> _MakeUniq&lt;_Tp&gt;::<span class="function">__invalid_type <span class="title">make_unique</span><span class="params">(_Args&amp;&amp; ...)</span> </span>= <span class="keyword">delete</span>;</span><br></pre></td></tr></table></figure>
+
+<p>结束，再回顾下<code>std::unique_ptr</code> 和 <code>std::auto_ptr</code>。</p>
+<p>可以发现<code>std::auto_ptr</code>的失败在于CXX03中并不支持移动语义，而<code>std::auto_ptr</code> 却试图用复制构造函数来实现移动构造函数的功能，结果导致其无法与<code>vector</code> 等容器兼容，论为失败品。</p>
+<p><code>std::unique_ptr</code> 的分析为止。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#std-auto-ptr"><span class="toc-number">1.</span> <span class="toc-text">std::auto_ptr</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#by-the-way"><span class="toc-number">1.1.</span> <span class="toc-text">by the way</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#std-unique-ptr"><span class="toc-number">2.</span> <span class="toc-text">std::unique_ptr</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#std-default-delete"><span class="toc-number">2.1.</span> <span class="toc-text">std::default_delete</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#delete"><span class="toc-number">2.1.1.</span> <span class="toc-text">delete</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#delete-1"><span class="toc-number">2.1.2.</span> <span class="toc-text">delete[]</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-uniq-ptr-impl"><span class="toc-number">2.2.</span> <span class="toc-text">std::__uniq_ptr_impl</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-unique-ptr-1"><span class="toc-number">2.3.</span> <span class="toc-text">std::unique_ptr</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#DeleterConstraint"><span class="toc-number">2.3.1.</span> <span class="toc-text">_DeleterConstraint</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Require"><span class="toc-number">2.3.2.</span> <span class="toc-text">_Require</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#safe-conversion-up"><span class="toc-number">2.3.3.</span> <span class="toc-text">__safe_conversion_up</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-make-unique"><span class="toc-number">2.4.</span> <span class="toc-text">std::make_unique</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&text=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&is_video=false&description=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=从 std::auto_ptr 到 std::unique_ptr&body=Check out this article: https://szza.github.io/2021/12/21/C++/unique_ptr/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&title=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/12/21/C++/unique_ptr/&name=从 std::auto_ptr 到 std::unique_ptr&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/12/21/C++/unique_ptr/&t=从 std::auto_ptr 到 std::unique_ptr"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

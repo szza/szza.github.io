@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="backendOverviewbackend 的接口定义如下: 1234567891011121314151617type Backend interface &amp;#123;	&#x2F;&#x2F; ReadTx returns a read transaction. It is replaced by ConcurrentReadTx in the main data path, see #10523.	ReadT">
+<meta property="og:type" content="article">
+<meta property="og:title" content="剖析 ETCD.Backend">
+<meta property="og:url" content="https://szza.github.io/2024/08/01/ETCD/1_backend/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="backendOverviewbackend 的接口定义如下: 1234567891011121314151617type Backend interface &amp;#123;	&#x2F;&#x2F; ReadTx returns a read transaction. It is replaced by ConcurrentReadTx in the main data path, see #10523.	ReadT">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2024-08-01T01:38:49.000Z">
+<meta property="article:modified_time" content="2025-10-23T12:59:01.047Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="ETCD">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>剖析 ETCD.Backend</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2024/08/19/ETCD/2_kv/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/12/31/Paper/CRDT/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2024/08/01/ETCD/1_backend/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&text=剖析 ETCD.Backend"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&is_video=false&description=剖析 ETCD.Backend"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 ETCD.Backend&body=Check out this article: https://szza.github.io/2024/08/01/ETCD/1_backend/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&name=剖析 ETCD.Backend&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2024/08/01/ETCD/1_backend/&t=剖析 ETCD.Backend"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#backend"><span class="toc-number">1.</span> <span class="toc-text">backend</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Overview"><span class="toc-number">1.1.</span> <span class="toc-text">Overview</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#BatchTx"><span class="toc-number">1.1.1.</span> <span class="toc-text">BatchTx</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ReadTx"><span class="toc-number">1.1.2.</span> <span class="toc-text">ReadTx</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%93%E5%86%B2%E5%8C%BA%E5%90%8C%E6%AD%A5%E6%9C%BA%E5%88%B6"><span class="toc-number">1.1.3.</span> <span class="toc-text">缓冲区同步机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-%E6%B5%81%E7%A8%8B"><span class="toc-number">1.1.4.</span> <span class="toc-text">Lock 流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Detail"><span class="toc-number">1.2.</span> <span class="toc-text">Detail</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#batchTxBuffered"><span class="toc-number">1.2.1.</span> <span class="toc-text">batchTxBuffered</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Unlock"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">Unlock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#unsafeCommit"><span class="toc-number">1.2.1.2.</span> <span class="toc-text">unsafeCommit</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#WaitGroup-%E7%9A%84%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.1.2.1.</span> <span class="toc-text">WaitGroup 的保护机制</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#commit"><span class="toc-number">1.2.1.3.</span> <span class="toc-text">commit</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Commit"><span class="toc-number">1.2.1.4.</span> <span class="toc-text">Commit</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#UsafePut-UnsafeDelete"><span class="toc-number">1.2.1.5.</span> <span class="toc-text">UsafePut&#x2F;UnsafeDelete</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Unlock-1"><span class="toc-number">1.2.1.6.</span> <span class="toc-text">Unlock</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ReadTx-1"><span class="toc-number">1.2.2.</span> <span class="toc-text">ReadTx</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#txReadBufferCache"><span class="toc-number">1.2.2.1.</span> <span class="toc-text">txReadBufferCache</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#TxReadBuffer"><span class="toc-number">1.2.2.2.</span> <span class="toc-text">TxReadBuffer</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ConcurrentReadTx"><span class="toc-number">1.2.2.3.</span> <span class="toc-text">ConcurrentReadTx</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E5%88%86%E6%9E%90"><span class="toc-number">1.2.2.4.</span> <span class="toc-text">实现分析</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        剖析 ETCD.Backend
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-08-01T01:38:49.000Z" itemprop="datePublished">2024-08-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/ETCD/" rel="tag">ETCD</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="backend"><a href="#backend" class="headerlink" title="backend"></a>backend</h1><h2 id="Overview"><a href="#Overview" class="headerlink" title="Overview"></a>Overview</h2><p>backend 的接口定义如下:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Backend <span class="keyword">interface</span> &#123;</span><br><span class="line">	<span class="comment">// ReadTx returns a read transaction. It is replaced by ConcurrentReadTx in the main data path, see #10523.</span></span><br><span class="line">	ReadTx() ReadTx</span><br><span class="line">	BatchTx() BatchTx</span><br><span class="line">	<span class="comment">// ConcurrentReadTx returns a non-blocking read transaction.</span></span><br><span class="line">	ConcurrentReadTx() ReadTx</span><br><span class="line"></span><br><span class="line">	Snapshot() Snapshot</span><br><span class="line">	Hash(ignores <span class="function"><span class="keyword">func</span><span class="params">(bucketName, keyName []<span class="type">byte</span>)</span></span> <span class="type">bool</span>) (<span class="type">uint32</span>, <span class="type">error</span>)</span><br><span class="line">	Size() <span class="type">int64</span></span><br><span class="line">	SizeInUse() <span class="type">int64</span></span><br><span class="line">	OpenReadTxN() <span class="type">int64</span></span><br><span class="line">	Defrag() <span class="type">error</span></span><br><span class="line">	ForceCommit()</span><br><span class="line">	Close() <span class="type">error</span></span><br><span class="line">	SetTxPostLockInsideApplyHook(<span class="function"><span class="keyword">func</span><span class="params">()</span></span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>所有的读写操作都需要通过 <code>func BatchTx</code>(for write) 和 <code>func ConcurrentReadTx</code> (for read) 来实现，这符合DB的读写操作：读写都需要在一个 transaction 中完成。</p>
+<p>除了读写操作， backend 还需要提供一些 ForceCommit 、Close 等保证数据安全的操作。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                                Backend 架构                                      │</span><br><span class="line">└─────────────────────────────────────────────────────────────────────────────────┘</span><br><span class="line"></span><br><span class="line">┌─────────────────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                              Backend Interface                                  │</span><br><span class="line">│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────┐ │</span><br><span class="line">│  │   BatchTx()     │  │   ReadTx()      │  │ ConcurrentReadTx│  │  Snapshot() │ │</span><br><span class="line">│  │                 │  │                 │  │                 │  │             │ │</span><br><span class="line">│  └─────────────────┘  └─────────────────┘  └─────────────────┘  └─────────────┘ │</span><br><span class="line">└─────────────────────────────────────────────────────────────────────────────────┘</span><br><span class="line">                                        │</span><br><span class="line">                                        ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│                              Backend 实现层                                      │</span><br><span class="line">│                                                                                 │</span><br><span class="line">│  ┌─────────────────────────────────────────────────────────────────────────┐   │</span><br><span class="line">│  │                        backend struct                                  │   │</span><br><span class="line">│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │   │</span><br><span class="line">│  │  │   mu        │  │    db       │  │  batchTx    │  │   readTx    │   │   │</span><br><span class="line">│  │  │(RWMutex)    │  │(*bolt.DB)   │  │(*batchTxBuf)│  │(*readTx)    │   │   │</span><br><span class="line">│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │   │</span><br><span class="line">│  │                                                                       │   │</span><br><span class="line">│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐   │   │</span><br><span class="line">│  │  │txReadBuffer │  │   hooks     │  │   stopc     │  │     lg      │   │   │</span><br><span class="line">│  │  │   Cache     │  │   (Hooks)   │  │  (chan)     │  │(*zap.Logger)│   │   │</span><br><span class="line">│  │  └─────────────┘  └─────────────┘  └─────────────┘  └─────────────┘   │   │</span><br><span class="line">│  └─────────────────────────────────────────────────────────────────────────┘   │</span><br><span class="line">└─────────────────────────────────────────────────────────────────────────────────┘</span><br><span class="line">                                        │</span><br><span class="line">                    ┌───────────────────┼───────────────────┐</span><br><span class="line">                    ▼                   ▼                   ▼</span><br><span class="line">┌─────────────────────────┐  ┌─────────────────────────┐  ┌─────────────────────────┐</span><br><span class="line">│      BatchTx 系统        │  │     ReadTx 系统         │  │    其他核心操作          │</span><br><span class="line">│                         │  │                         │  │                         │</span><br><span class="line">│ ┌─────────────────────┐ │  │ ┌─────────────────────┐ │  │ ┌─────────────────────┐ │</span><br><span class="line">│ │   batchTxBuffered   │ │  │ │      readTx         │ │  │ │     Snapshot        │ │</span><br><span class="line">│ │                     │ │  │ │                     │ │  │ │                     │ │</span><br><span class="line">│ │ ┌─────────────────┐ │ │  │ │ ┌─────────────────┐ │ │  │ │ ┌─────────────────┐ │ │</span><br><span class="line">│ │ │   txWriteBuffer │ │ │  │ │ │  baseReadTx     │ │ │  │ │ │   bolt.Tx       │ │ │</span><br><span class="line">│ │ │                 │ │ │  │ │ │                 │ │ │  │ │ │   (read-only)   │ │ │</span><br><span class="line">│ │ │ ┌─────────────┐ │ │ │  │ │ │ ┌─────────────┐ │ │ │  │ │ └─────────────────┘ │ │</span><br><span class="line">│ │ │ │bucketBuffer │ │ │ │  │ │ │ │txReadBuffer │ │ │ │  │ └─────────────────────┘ │</span><br><span class="line">│ │ │ │   (sorted)  │ │ │ │  │ │ │ │             │ │ │ │  │                         │</span><br><span class="line">│ │ │ └─────────────┘ │ │ │  │ │ │ └─────────────┘ │ │ │  │ ┌─────────────────────┐ │</span><br><span class="line">│ │ └─────────────────┘ │ │  │ │ └─────────────────┘ │ │  │ │      Defrag         │ │</span><br><span class="line">│ └─────────────────────┘ │  │ └─────────────────────┘ │  │ │                     │ │</span><br><span class="line">│                         │  │                         │  │ │ ┌─────────────────┐ │ │</span><br><span class="line">│ ┌─────────────────────┐ │  │ ┌─────────────────────┐ │  │ │ │   Temp DB       │ │ │</span><br><span class="line">│ │   Lock 机制         │ │  │ │  concurrentReadTx   │ │  │ │ │   (defrag)      │ │ │</span><br><span class="line">│ │                     │ │  │ │                     │ │  │ │ └─────────────────┘ │ │</span><br><span class="line">│ │ ┌─────────────────┐ │ │  │ │ ┌─────────────────┐ │ │  │ └─────────────────────┘ │</span><br><span class="line">│ │ │LockInsideApply │ │ │  │ │ │   baseReadTx    │ │ │  │                         │</span><br><span class="line">│ │ │LockOutsideApply│ │ │  │ │ │   (no locks)    │ │ │  │ ┌─────────────────────┐ │</span><br><span class="line">│ │ │   + Hook       │ │ │  │ │ └─────────────────┘ │ │  │ │      Hash           │ │</span><br><span class="line">│ │ └─────────────────┘ │ │  │ └─────────────────────┘ │  │ │                     │ │</span><br><span class="line">│ └─────────────────────┘ │  └─────────────────────────┘  │ │ ┌─────────────────┐ │ │</span><br><span class="line">└─────────────────────────┘                              │ │ │   CRC32 Hash    │ │ │</span><br><span class="line">                                                         │ │ └─────────────────┘ │ │</span><br><span class="line">                                                         │ └─────────────────────┘ │</span><br><span class="line">                                                         └─────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="BatchTx"><a href="#BatchTx" class="headerlink" title="BatchTx"></a>BatchTx</h3><p>写入流程</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Client Request</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">┌─────────────────┐</span><br><span class="line">│   BatchTx()     │ ──► batchTxBuffered</span><br><span class="line">│                 │</span><br><span class="line">│ LockInsideApply │ ──► 1. 获取锁</span><br><span class="line">│                 │     2. 执行 Hook (更新一致性索引)</span><br><span class="line">│                 │     3. 写入 txWriteBuffer</span><br><span class="line">│                 │     4. 批量提交到 BoltDB</span><br><span class="line">└─────────────────┘</span><br></pre></td></tr></table></figure>
+<p>写缓冲区：批量写入，减少磁盘 I&#x2F;O</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line"><span class="keyword">type</span> batchTxBuffered <span class="keyword">struct</span> &#123;</span><br><span class="line">	batchTx</span><br><span class="line">	buf                     txWriteBuffer</span><br><span class="line">	pendingDeleteOperations <span class="type">int</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ReadTx"><a href="#ReadTx" class="headerlink" title="ReadTx"></a>ReadTx</h3><p>读缓存：避免重复复制，支持并发读取</p>
+<p>分离读写：读写事务独立，提高并发性</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">Client Request</span><br><span class="line">     │</span><br><span class="line">     ▼</span><br><span class="line">┌─────────────────┐</span><br><span class="line">│   ReadTx()      │ ──► readTx (单线程)</span><br><span class="line">│                 │</span><br><span class="line">│ ConcurrentReadTx│ ──► concurrentReadTx (多线程)</span><br><span class="line">│                 │     1. 从 txReadBufferCache 获取数据</span><br><span class="line">│                 │     2. 如果缓存过期，从 readTx 复制</span><br><span class="line">│                 │     3. 无锁并发读取</span><br><span class="line">└─────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="缓冲区同步机制"><a href="#缓冲区同步机制" class="headerlink" title="缓冲区同步机制"></a>缓冲区同步机制</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────┐    writeback    ┌─────────────────┐</span><br><span class="line">│ txWriteBuffer   │ ──────────────► │ txReadBuffer    │</span><br><span class="line">│                 │                 │                 │</span><br><span class="line">│ ┌─────────────┐ │                 │ ┌─────────────┐ │</span><br><span class="line">│ │bucketBuffer │ │                 │ │bucketBuffer │ │</span><br><span class="line">│ │  (sorted)   │ │                 │ │  (sorted)   │ │</span><br><span class="line">│ └─────────────┘ │                 │ └─────────────┘ │</span><br><span class="line">└─────────────────┘                 └─────────────────┘</span><br><span class="line">        │                                   │</span><br><span class="line">        ▼                                   ▼</span><br><span class="line">┌─────────────────┐                 ┌─────────────────┐</span><br><span class="line">│    BoltDB       │                 │  Read Cache     │</span><br><span class="line">│   (持久化)       │                 │  (内存缓存)      │</span><br><span class="line">└─────────────────┘                 └─────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="Lock-流程"><a href="#Lock-流程" class="headerlink" title="Lock 流程"></a>Lock 流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────┐</span><br><span class="line">│                    锁的获取顺序                          │</span><br><span class="line">├─────────────────────────────────────────────────────────┤</span><br><span class="line">│ 1. batchTx.LockInsideApply() / LockOutsideApply()       │</span><br><span class="line">│ 2. backend.mu.RLock() / Lock()                          │</span><br><span class="line">│ 3. readTx.Lock() / RLock()                              │</span><br><span class="line">└─────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h2 id="Detail"><a href="#Detail" class="headerlink" title="Detail"></a>Detail</h2><h3 id="batchTxBuffered"><a href="#batchTxBuffered" class="headerlink" title="batchTxBuffered"></a>batchTxBuffered</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> batchTxBuffered <span class="keyword">struct</span> &#123;</span><br><span class="line">    batchTx                               <span class="comment">// base</span></span><br><span class="line">    buf                     txWriteBuffer <span class="comment">// 写缓冲区</span></span><br><span class="line">    pendingDeleteOperations <span class="type">int</span>           <span class="comment">// 待删除操作计数</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>batchTxBuffered</code> 继承 batchTx， 进行双重写入（同时写入 BoltDB 和内存缓冲区）的核心设计:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">Client Write Request</span><br><span class="line">        │</span><br><span class="line">        ▼</span><br><span class="line">┌─────────────────┐</span><br><span class="line">│ batchTxBuffered │</span><br><span class="line">│                 │</span><br><span class="line">│ ┌─────────────┐ │    ┌─────────────────┐</span><br><span class="line">│ │ batchTx     │ │───►│    BoltDB       │ (持久化)</span><br><span class="line">│ │ (直接写入)   │ │    │   (最终存储)    │</span><br><span class="line">│ └─────────────┘ │    └─────────────────┘</span><br><span class="line">│                 │</span><br><span class="line">│ ┌─────────────┐ │    ┌─────────────────┐</span><br><span class="line">│ │ buf         │ │───►│ txWriteBuffer   │ (内存缓冲)</span><br><span class="line">│ │ (缓冲写入)   │ │    │   (性能优化)    │</span><br><span class="line">│ └─────────────┘ │    └─────────────────┘</span><br><span class="line">└─────────────────┘</span><br></pre></td></tr></table></figure>
+<h4 id="Unlock"><a href="#Unlock" class="headerlink" title="Unlock"></a>Unlock</h4><p><code>Unlock</code> 函数在 unlock 中进行智能commit，进行 commit 的条件是:</p>
+<ul>
+<li>批量限制: pending &gt;&#x3D; batchLimit（默认 10000）</li>
+<li>删除操作: pendingDeleteOperations &gt; 0（立即提交）</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> Unlock() &#123;</span><br><span class="line">    <span class="keyword">if</span> t.pending != <span class="number">0</span> &#123;</span><br><span class="line">        <span class="comment">// 1. 同步缓冲区到读缓存</span></span><br><span class="line">        t.backend.readTx.Lock()</span><br><span class="line">        t.buf.writeback(&amp;t.backend.readTx.buf)</span><br><span class="line">        t.backend.readTx.Unlock()</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// 2. 智能提交判断</span></span><br><span class="line">        <span class="keyword">if</span> t.pending &gt;= t.backend.batchLimit || t.pendingDeleteOperations &gt; <span class="number">0</span> &#123;</span><br><span class="line">            t.commit(<span class="literal">false</span>)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    t.batchTx.Unlock()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>为什么删除操作需要立即提交？线性一致性保证：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">时间线: T1 ────── T2 ────── T3</span><br><span class="line">操作:   PUT A    DELETE A  READ A</span><br></pre></td></tr></table></figure>
+<p>如果删除操作不立即提交：</p>
+<ul>
+<li>T2 删除操作在缓冲区中</li>
+<li>T3 读取可能从 <code>BoltDB</code> 读到旧数据 </li>
+<li>违反线性一致性</li>
+</ul>
+<h4 id="unsafeCommit"><a href="#unsafeCommit" class="headerlink" title="unsafeCommit"></a>unsafeCommit</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">1. 写操作完成，触发 commit</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">2. 检查是否有旧的读事务</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">3. 启动异步 goroutine 处理旧事务</span><br><span class="line">   │</span><br><span class="line">   ├─→ 等待所有读操作完成 (wg.Wait())</span><br><span class="line">   │</span><br><span class="line">   ├─→ 回滚旧读事务 (tx.Rollback())</span><br><span class="line">   │</span><br><span class="line">   └─→ 释放资源</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">4. 立即重置 readTx 状态</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">5. 提交写事务到 BoltDB</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">6. 开始新的读事务</span><br></pre></td></tr></table></figure>
+
+<p>unsafeCommit 中存在一个异步优化：</p>
+<ul>
+<li><p>非阻塞提交：读事务回滚在 goroutine 中异步进行</p>
+<p>BlotDB 的 Read Transaction 有几个关键点:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// BoltDB 读事务是只读的，不能提交</span></span><br><span class="line">tx, err := b.db.Begin(<span class="literal">false</span>)  <span class="comment">// false = 只读事务</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li>只读事务：BoltDB 的读事务是只读的，不能调用 Commit()</li>
+<li>必须关闭：读事务必须通过 Rollback() 来关闭</li>
+<li>资源管理：未关闭的事务会占用数据库资源</li>
+</ul>
+</li>
+<li><p>无缝切换：新读事务立即开始，不等待旧事务完成</p>
+<p>  原因：</p>
+<ul>
+<li>数据一致性：新提交的数据需要对新读事务可见, 基于当前 snapshot 创建新的读事物</li>
+<li>快照隔离：每个读事务看到的是特定时间点的数据快照</li>
+<li>资源管理：避免长时间持有旧事务</li>
+</ul>
+</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> unsafeCommit(stop <span class="type">bool</span>) &#123;</span><br><span class="line">    <span class="comment">// 1. 异步处理旧读事务</span></span><br><span class="line">    <span class="keyword">if</span> t.backend.readTx.tx != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">(tx *bolt.Tx, wg *sync.WaitGroup)</span></span> &#123;</span><br><span class="line">            wg.Wait()  <span class="comment">// 异步等待所有读操作完成</span></span><br><span class="line">            tx.Rollback()</span><br><span class="line">        &#125;(t.backend.readTx.tx, t.backend.readTx.txWg)</span><br><span class="line">		<span class="comment">// 立即重置读事物</span></span><br><span class="line">        t.backend.readTx.reset()</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 提交写事务</span></span><br><span class="line">    t.batchTx.commit(stop)</span><br><span class="line">    t.pendingDeleteOperations = <span class="number">0</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 开始新读事务，保证新提交的数据对新读事务可见</span></span><br><span class="line">    <span class="keyword">if</span> !stop &#123;</span><br><span class="line">        t.backend.readTx.tx = t.backend.begin(<span class="literal">false</span>)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="WaitGroup-的保护机制"><a href="#WaitGroup-的保护机制" class="headerlink" title="WaitGroup 的保护机制"></a>WaitGroup 的保护机制</h5><p>在 <code>ConcurrentReadTx</code> 中有个 txWg，在创建并发读事物时会增加一个引用计数:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 在 ConcurrentReadTx 中</span></span><br><span class="line">b.readTx.txWg.Add(<span class="number">1</span>)  <span class="comment">// 增加计数</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 在 concurrentReadTx.RUnlock() 中</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rt *concurrentReadTx)</span></span> RUnlock() &#123; </span><br><span class="line">    rt.txWg.Done()  <span class="comment">// 减少计数</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>WaitGroup 在 <code>unsafeCommit</code> 中的异步保护机制：</p>
+<ul>
+<li>引用计数：每个活跃的读操作增加计数         <code>b.readTx.txWg.Add(1)</code></li>
+<li>安全关闭：只有当所有读操作完成后才回滚事务   <code>RUnlock: txWg.Done()</code></li>
+<li>避免崩溃：防止在活跃读操作时关闭事务        <code>wg.Wait(); tx.Rollback()</code></li>
+</ul>
+<h4 id="commit"><a href="#commit" class="headerlink" title="commit"></a>commit</h4><p>流程如下:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">batchTxBuffered.commit()</span><br><span class="line">    │</span><br><span class="line">    ├─→ t.backend.readTx.Lock()  // 1. 锁定读事务</span><br><span class="line">    │</span><br><span class="line">    ├─→ t.unsafeCommit()         // 2. 执行提交逻辑</span><br><span class="line">    │   │</span><br><span class="line">    │   ├─→ 异步回滚旧读事务</span><br><span class="line">    │   ├─→ 提交写事务到 BoltDB</span><br><span class="line">    │   └─→ 创建新读事务</span><br><span class="line">    │</span><br><span class="line">    └─→ t.backend.readTx.Unlock() // 3. 释放读事务锁</span><br></pre></td></tr></table></figure>
+
+<p><code>commit</code> 函数中先执行 <code>t.backend.readTx.Lock()</code> 的作用:</p>
+<ul>
+<li>阻止新读事务: 防止在提交期间启动新的读事务</li>
+<li>等待活跃读事务: 等待所有正在进行的读事务完成</li>
+<li>保护事务切换: 确保读事务的安全切换<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> commit(stop <span class="type">bool</span>) &#123;</span><br><span class="line">	<span class="comment">// all read txs must be closed to acquire boltdb commit rwlock</span></span><br><span class="line">	t.backend.readTx.Lock()</span><br><span class="line">	t.unsafeCommit(stop)</span><br><span class="line">	t.backend.readTx.Unlock()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>这里的核心是 <code>t.backend.readTx.Lock() </code> 的作用。</p>
+<p>首先，这里使用的 <code>Lock</code> 而不是 <code>RLOCK()</code>，由于写锁会阻塞所有的读锁，即阻塞 <code>ConcurrentReadTx</code> 函数创建新的 ReadTx, 需要等待当前所有活跃的 ReadTxs 完成，并确保写操作提交完成，再释放 Lock，才允许创建新的 ReadTx。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(b *backend)</span></span> ConcurrentReadTx() ReadTx &#123;</span><br><span class="line">    b.readTx.RLock()         <span class="comment">// 获取读锁</span></span><br><span class="line">    <span class="keyword">defer</span> b.readTx.RUnlock()</span><br><span class="line">    <span class="comment">// prevent boltdb read Tx from been rolled back until store read Tx is done. </span></span><br><span class="line">    <span class="comment">// Needs to be called when holding readTx.RLock().</span></span><br><span class="line">    b.readTx.txWg.Add(<span class="number">1</span>)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>无写操作</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">时间线: T1 ────── T2 ────── T3</span><br><span class="line">操作:   读事务1   读事务2   读事务3</span><br><span class="line">锁状态: RLock()   RLock()   RLock()  (并发)</span><br></pre></td></tr></table></figure>
+
+<p><strong>有写操作</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">时间线: T1 ────── T2 ────── T3 ────── T4</span><br><span class="line">操作:   读事务1   写提交    新读事务   写提交完成</span><br><span class="line">锁状态: RLock()   Lock()   阻塞       Unlock()</span><br></pre></td></tr></table></figure>
+
+<p>如果没有 <code>readTx.Lock()</code> 的情况：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">时间线: T1 ────── T2 ────── T3 ────── T4</span><br><span class="line">操作:   写事务提交  新读事务开始  旧读事务回滚  新读事务读取</span><br><span class="line">状态:   准备提交    创建新事务    回滚旧事务    可能读到不一致数据</span><br></pre></td></tr></table></figure>
+<p>问题：</p>
+<ul>
+<li>数据不一致：新读事务可能读到部分更新的数据</li>
+<li>竞态条件：读事务创建和旧事务回滚的竞态</li>
+<li>资源冲突：多个读事务同时访问 BoltDB</li>
+</ul>
+<p>存在 <code>readTx.Lock()</code> 的情况:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">时间线: T1 ────── T2 ────── T3 ────── T4</span><br><span class="line">操作:   获取读锁    等待读事务完成  提交写事务  释放锁</span><br><span class="line">状态:   阻塞新读    等待活跃读完成  原子提交   允许新读事务</span><br></pre></td></tr></table></figure>
+
+<h4 id="Commit"><a href="#Commit" class="headerlink" title="Commit"></a>Commit</h4><p><code>Commit</code> 函数相比较 <code>commit</code> 函数多了一个 <code>lock()</code> 函数，这是继承自 <code>BatchTx</code> 的 <code>lock</code> 函数:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> Commit() &#123;</span><br><span class="line">    t.lock()           <span class="comment">// 第一层：batchTx 的互斥锁</span></span><br><span class="line">    t.commit(<span class="literal">false</span>)    <span class="comment">// 内部调用</span></span><br><span class="line">    t.Unlock()</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> batchTx <span class="keyword">struct</span> &#123;</span><br><span class="line">    sync.Mutex        <span class="comment">// for lcok()</span></span><br><span class="line">    tx      *bolt.Tx  <span class="comment">// BoltDB 事务对象</span></span><br><span class="line">    backend *backend  <span class="comment">// 后端引用</span></span><br><span class="line">    pending <span class="type">int</span>       <span class="comment">// 待处理操作计数</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><code>lock</code> 主要是保护 <code>BatchTx</code> 的共享状态，与 <code>readTx.Lock()</code> 的协同作用:</p>
+<ul>
+<li><code>t.lock()</code>：保护 batchTx 内部状态，防止并发写操作</li>
+<li><code>readTx.Lock()</code>：保护 BoltDB 事务提交，防止读事务干扰</li>
+</ul>
+<p>这么设计设计，优点是确保数据一致性和事务完整性， 缺点是在提交期间阻塞所有写操作，因此通过批量提交减少锁的持有时间来优化。</p>
+<h4 id="UsafePut-UnsafeDelete"><a href="#UsafePut-UnsafeDelete" class="headerlink" title="UsafePut&#x2F;UnsafeDelete"></a>UsafePut&#x2F;UnsafeDelete</h4><p><code>batchTxBuffered</code> 有几个 Unsafe 函数，<code>Unsafe</code> 的意思这些函数都需要在 <code>t.lock()</code> 的保护下执行，分别由 <code>BatchTx</code> 接口中的 <code>LockInsideApply</code> 和 <code>LockOutsideApply</code> 封装。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> UnsafePut(bucket Bucket, key []<span class="type">byte</span>, value []<span class="type">byte</span>) &#123;</span><br><span class="line">	t.batchTx.UnsafePut(bucket, key, value)</span><br><span class="line">	t.buf.put(bucket, key, value)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> UnsafeSeqPut(bucket Bucket, key []<span class="type">byte</span>, value []<span class="type">byte</span>) &#123;</span><br><span class="line">	t.batchTx.UnsafeSeqPut(bucket, key, value)</span><br><span class="line">	t.buf.putSeq(bucket, key, value)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> UnsafeDelete(bucketType Bucket, key []<span class="type">byte</span>) &#123;</span><br><span class="line">	t.batchTx.UnsafeDelete(bucketType, key)</span><br><span class="line">	t.pendingDeleteOperations++</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> UnsafeDeleteBucket(bucket Bucket) &#123;</span><br><span class="line">	t.batchTx.UnsafeDeleteBucket(bucket)</span><br><span class="line">	t.pendingDeleteOperations++</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>BatchTx</code> 的 <code>LockOutsideApply</code> 和 <code>LockInsideApply</code> 区别就是在于是否在 Log Apply 的过程。</p>
+<ul>
+<li><p><code>LockInsideApply</code>：</p>
+<ul>
+<li>验证调用是否在 Apply 上下文中（即 Raft 日志应用过程中）</li>
+<li>通过检查调用栈是否包含 .applyEntries 来判断</li>
+<li>如果设置了 <code>txPostLockInsideApplyHook</code>，会额外验证调用栈</li>
+</ul>
+<p> 实现如下:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">   <span class="function"><span class="keyword">func</span> <span class="params">(t *batchTx)</span></span> LockInsideApply() &#123;</span><br><span class="line">       t.lock()</span><br><span class="line">       <span class="keyword">if</span> t.backend.txPostLockInsideApplyHook != <span class="literal">nil</span> &#123;</span><br><span class="line">           ValidateCalledInsideApply(t.backend.lg)</span><br><span class="line">           t.backend.txPostLockInsideApplyHook()  <span class="comment">// 执行钩子函数</span></span><br><span class="line">       &#125;</span><br><span class="line">   &#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// HOOK: 这个钩子确保在 Apply 过程中，consistIndex 能够正确更新</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *EtcdServer)</span></span> getTxPostLockInsideApplyHook() <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">       <span class="keyword">return</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">           applyingIdx, applyingTerm := s.consistIndex.ConsistentApplyingIndex()</span><br><span class="line">           <span class="keyword">if</span> applyingIdx &gt; s.consistIndex.UnsafeConsistentIndex() &#123;</span><br><span class="line">               s.consistIndex.SetConsistentIndex(applyingIdx, applyingTerm)</span><br><span class="line">           &#125;</span><br><span class="line">       &#125;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure></li>
+<li><p>LockOutsideApply()：</p>
+<ul>
+<li>验证调用是否在 Apply 上下文之外</li>
+<li>如果检测到在 Apply 上下文中调用，会触发 panic</li>
+</ul>
+<p>实现如下:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTx)</span></span> LockOutsideApply() &#123;</span><br><span class="line">    ValidateCalledOutSideApply(t.backend.lg)</span><br><span class="line">    t.lock()  <span class="comment">// 只获取锁，不执行钩子函数</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p> 主要用于系统初始化、恢复、维护操作等不需要更新一致性索引的操作 例如：存储初始化、数据清理、压缩等</p>
+</li>
+</ul>
+<h4 id="Unlock-1"><a href="#Unlock-1" class="headerlink" title="Unlock"></a>Unlock</h4><p>到此，再重新审视下 <code>batchTxBuffered::Unlock</code></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *batchTxBuffered)</span></span> Unlock() &#123;</span><br><span class="line">    <span class="keyword">if</span> t.pending != <span class="number">0</span> &#123;</span><br><span class="line">        <span class="comment">// 1. 同步缓冲区到读缓存</span></span><br><span class="line">        t.backend.readTx.Lock()</span><br><span class="line">        t.buf.writeback(&amp;t.backend.readTx.buf)</span><br><span class="line">        t.backend.readTx.Unlock()</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// 2. 智能提交判断</span></span><br><span class="line">        <span class="keyword">if</span> t.pending &gt;= t.backend.batchLimit || t.pendingDeleteOperations &gt; <span class="number">0</span> &#123;</span><br><span class="line">            t.commit(<span class="literal">false</span>)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    t.batchTx.Unlock()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里核心是 <code>t.buf.writeback</code> 和 <code>t.batchTx.Unlock</code> 两个功能。后者是为了和 <code>t.lock()</code> 配对，释放锁资源。**<code>writeback</code> 的作用是将写缓冲区的数据同步到读缓冲区，来确保新写入的数据对后续读操作可见，进而保证 etcd 的线性一致性语义**</p>
+<h3 id="ReadTx-1"><a href="#ReadTx-1" class="headerlink" title="ReadTx"></a>ReadTx</h3><p>上面阐述了写事物 <code>BatchTx</code> 如何进行写操作，下面来阐述读事物 <code>ConcurrentReadTx</code>。</p>
+<h4 id="txReadBufferCache"><a href="#txReadBufferCache" class="headerlink" title="txReadBufferCache"></a>txReadBufferCache</h4><p>缓存策略</p>
+<ul>
+<li><code>bufVersion</code> 版本控制：通过版本号检测缓存有效性</li>
+<li>延迟更新：只在必要时更新缓存</li>
+<li>并发安全：使用锁保护缓存操作</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> txReadBufferCache <span class="keyword">struct</span> &#123;</span><br><span class="line">	mu         sync.Mutex</span><br><span class="line">	buf        *txReadBuffer</span><br><span class="line">	bufVersion <span class="type">uint64</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="TxReadBuffer"><a href="#TxReadBuffer" class="headerlink" title="TxReadBuffer"></a>TxReadBuffer</h4><p><code>txReadBufferCache.bufVersion</code> 缓存的是 <code>txReadBuffer.bufVersion</code> 的值: 只有当写事物提交时（BatchTx.commit）并在 writeback 函数中才会自增 <code>txReadBuffer.bufVersion++</code> 因此可以用两个 <code>bufVersion</code> 进行比较来确定缓存 <code>b.txReadBufferCache</code> 的有效性。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// txReadBuffer accesses buffered updates.</span></span><br><span class="line"><span class="keyword">type</span> txReadBuffer <span class="keyword">struct</span> &#123;</span><br><span class="line">	txBuffer</span><br><span class="line">	<span class="comment">// bufVersion is used to check if the buffer is modified recently</span></span><br><span class="line">	bufVersion <span class="type">uint64</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(txw *txWriteBuffer)</span></span> writeback(txr *txReadBuffer) &#123;</span><br><span class="line">    <span class="comment">// ... 数据合并逻辑 ...</span></span><br><span class="line">    txw.reset()</span><br><span class="line">    <span class="comment">// increase the buffer version</span></span><br><span class="line">    txr.bufVersion++  <span class="comment">// 只有每次 writeback 后版本号 +1</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>下图展示了一个 <code>txReadBufferCache.buf</code> demo: 如果在 <code>bufVersion</code> 有效期间创建 <code>ConcurrentReadTx</code>，则只会复制一次 <code>b.readTx.buf</code>，减少了多次 copy 行为，降低了集群压力。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> backend <span class="keyword">struct</span> &#123;</span><br><span class="line">	readTx *readTx</span><br><span class="line">	<span class="comment">// txReadBufferCache mirrors &quot;txReadBuffer&quot; within &quot;readTx&quot; -- readTx.baseReadTx.buf.</span></span><br><span class="line">	<span class="comment">// When creating &quot;concurrentReadTx&quot;:</span></span><br><span class="line">	<span class="comment">// - if the cache is up-to-date, &quot;readTx.baseReadTx.buf&quot; copy can be skipped</span></span><br><span class="line">	<span class="comment">// - if the cache is empty or outdated, &quot;readTx.baseReadTx.buf&quot; copy is required</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// Without Cache:</span></span><br><span class="line">	<span class="comment">// readTx.baseReadTx.buf → copy → concurrentReadTx1</span></span><br><span class="line">	<span class="comment">// readTx.baseReadTx.buf → copy → concurrentReadTx2</span></span><br><span class="line">	<span class="comment">// readTx.baseReadTx.buf → copy → concurrentReadTx3</span></span><br><span class="line"></span><br><span class="line">	<span class="comment">// With Cache:</span></span><br><span class="line">	<span class="comment">// readTx.baseReadTx.buf → copy → cache → concurrentReadTx1</span></span><br><span class="line">	<span class="comment">// .............................  cache → concurrentReadTx2</span></span><br><span class="line">	<span class="comment">// .............................  cache → concurrentReadTx3</span></span><br><span class="line">	txReadBufferCache txReadBufferCache</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="ConcurrentReadTx"><a href="#ConcurrentReadTx" class="headerlink" title="ConcurrentReadTx"></a>ConcurrentReadTx</h4><p><code>ConcurrentReadT</code> 的核心设计目标：</p>
+<ul>
+<li>非阻塞读操作<ul>
+<li>并发安全：多个读操作可以同时进行</li>
+<li>无锁设计：读操作不需要获取锁, 多个读操作可以并行执行</li>
+<li>性能优化：避免读操作被写操作阻塞<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">  	<span class="function"><span class="keyword">func</span> <span class="params">(rt *concurrentReadTx)</span></span> Lock()   &#123;&#125;  <span class="comment">// 空实现</span></span><br><span class="line">      <span class="function"><span class="keyword">func</span> <span class="params">(rt *concurrentReadTx)</span></span> RLock()  &#123;&#125;  <span class="comment">// 空实现</span></span><br><span class="line">      <span class="function"><span class="keyword">func</span> <span class="params">(rt *concurrentReadTx)</span></span> Unlock() &#123;&#125;  <span class="comment">// 空实现</span></span><br><span class="line"> <span class="comment">// 创建时：txWg.Add(1) 增加计数</span></span><br><span class="line">       <span class="comment">// 完成时：txWg.Done() 减少计数</span></span><br><span class="line">       <span class="comment">// 保护机制: 在 batchTx.commit 时，先等待所有并发读事物结束, 防止 BoltDB 事务过早回滚, </span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(rt *concurrentReadTx)</span></span> RUnlock() &#123; rt.txWg.Done() &#125; <span class="comment">// 引用计数，管理多个读事物生命周期</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+</li>
+<li>数据一致性保证<ul>
+<li>快照隔离：每个读事务看到特定时间点的数据</li>
+<li>缓冲区同步：确保读操作能看到最新的写入数据</li>
+</ul>
+</li>
+</ul>
+<h4 id="实现分析"><a href="#实现分析" class="headerlink" title="实现分析"></a>实现分析</h4><p>第一阶段: 获取 <code>readTx</code> 读锁和事务保护。这里和 <code>batchTxBuffered.commit</code> 形成对比，当 BatchTx 在执行 <code>commit</code> 时会导致 <code>backend.ConcurrentReadTx</code> 函数中第一阶段 <code>readTx.RLock()</code> 阻塞。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">func</span> (b *backend) <span class="built_in">ConcurrentReadTx</span>() ReadTx &#123;</span><br><span class="line">    b.readTx.<span class="built_in">RLock</span>()                    <span class="comment">// 1. 获取读锁: 如果在 commit 则等待 readTx.UnLock</span></span><br><span class="line">    defer b.readTx.<span class="built_in">RUnlock</span>()            <span class="comment">// 2. 确保释放读锁</span></span><br><span class="line">    b.readTx.txWg.<span class="built_in">Add</span>(<span class="number">1</span>)                <span class="comment">// 3. 增加等待组计数，用于生命周期管理，跟踪活跃的读事务</span></span><br><span class="line">    <span class="comment">// ...below</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>第二阶段: 智能缓存管理</p>
+<p>存策略： 通过 <code>bufVersion</code> 检测缓存是否过期。三种情况处理：空缓存、过期缓存、有效缓存。</p>
+<p>由于 <code>commit</code> 中存在 <code>writeback</code> 策略，因此在 <code>commit</code> 结束使得 <code>b.readTx.RLock()</code> 解除阻塞后，<code>b.readTx.buf</code> 中总是缓存着当前最新的数据，那么 <code>ConcurrentReadTx</code> 得到 ReadTx 即基于最新的 snapshot， 保证了数据一致性。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">   <span class="function"><span class="keyword">func</span> <span class="params">(b *backend)</span></span> ConcurrentReadTx() ReadTx &#123;</span><br><span class="line">	<span class="comment">//... above</span></span><br><span class="line"></span><br><span class="line">   	b.txReadBufferCache.mu.Lock()       <span class="comment">// 4. 获取缓存锁</span></span><br><span class="line">       curCache := b.txReadBufferCache.buf</span><br><span class="line">       curCacheVer := b.txReadBufferCache.bufVersion</span><br><span class="line">       curBufVer := b.readTx.buf.bufVersion</span><br><span class="line"></span><br><span class="line">       isEmptyCache := curCache == <span class="literal">nil</span></span><br><span class="line">       isStaleCache := curCacheVer != curBufVer</span><br><span class="line">	<span class="comment">//...below</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>第三阶段:缓冲区复制优化策略</p>
+<ul>
+<li>延迟复制：只在必要时才复制缓冲区</li>
+<li>并发优化：在复制时释放锁，提高并发性</li>
+<li>版本检查：防止并发复制导致的数据不一致<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">   <span class="function"><span class="keyword">func</span> <span class="params">(b *backend)</span></span> ConcurrentReadTx() ReadTx &#123;</span><br><span class="line">	<span class="comment">//... above</span></span><br><span class="line"></span><br><span class="line">       <span class="keyword">var</span> buf *txReadBuffer</span><br><span class="line">       <span class="keyword">switch</span> &#123;</span><br><span class="line">       <span class="keyword">case</span> isEmptyCache:</span><br><span class="line">           <span class="comment">// 首次创建缓存</span></span><br><span class="line">           curBuf := b.readTx.buf.unsafeCopy()</span><br><span class="line">           buf = &amp;curBuf</span><br><span class="line">           </span><br><span class="line">       <span class="keyword">case</span> isStaleCache:</span><br><span class="line">           <span class="comment">// 过期缓存，需要更新</span></span><br><span class="line">           b.txReadBufferCache.mu.Unlock()  <span class="comment">// 释放锁进行复制</span></span><br><span class="line">           curBuf := b.readTx.buf.unsafeCopy()</span><br><span class="line">           b.txReadBufferCache.mu.Lock()    <span class="comment">// 重新获取锁</span></span><br><span class="line">           buf = &amp;curBuf</span><br><span class="line">           </span><br><span class="line">       <span class="keyword">default</span>:</span><br><span class="line">           <span class="comment">// 缓存有效，直接使用</span></span><br><span class="line">           buf = curCache</span><br><span class="line">       &#125;</span><br><span class="line"></span><br><span class="line">	<span class="comment">//...below</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>第四阶段: 缓存更新和版本控制机制</p>
+<ul>
+<li>原子性检查：确保缓存版本没有被其他线程修改</li>
+<li>安全更新：只在版本一致时更新缓存</li>
+<li>失败处理：版本不一致时跳过更新，下次调用会重新复制<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> isEmptyCache || curCacheVer == b.txReadBufferCache.bufVersion &#123;</span><br><span class="line">    <span class="comment">// 更新缓存</span></span><br><span class="line">    b.txReadBufferCache.buf = buf</span><br><span class="line">    b.txReadBufferCache.bufVersion = curBufVer</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>第五阶段: 创建并发读事务</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> &amp;concurrentReadTx&#123;</span><br><span class="line">    baseReadTx: baseReadTx&#123;</span><br><span class="line">        buf:     *buf,              <span class="comment">// 复制的缓冲区</span></span><br><span class="line">        txMu:    b.readTx.txMu,     <span class="comment">// 共享的事务锁</span></span><br><span class="line">        tx:      b.readTx.tx,       <span class="comment">// 共享的 BoltDB 事务</span></span><br><span class="line">        buckets: b.readTx.buckets,  <span class="comment">// 共享的桶缓存</span></span><br><span class="line">        txWg:    b.readTx.txWg,     <span class="comment">// 共享的等待组</span></span><br><span class="line">    &#125;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#backend"><span class="toc-number">1.</span> <span class="toc-text">backend</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#Overview"><span class="toc-number">1.1.</span> <span class="toc-text">Overview</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#BatchTx"><span class="toc-number">1.1.1.</span> <span class="toc-text">BatchTx</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ReadTx"><span class="toc-number">1.1.2.</span> <span class="toc-text">ReadTx</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BC%93%E5%86%B2%E5%8C%BA%E5%90%8C%E6%AD%A5%E6%9C%BA%E5%88%B6"><span class="toc-number">1.1.3.</span> <span class="toc-text">缓冲区同步机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lock-%E6%B5%81%E7%A8%8B"><span class="toc-number">1.1.4.</span> <span class="toc-text">Lock 流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Detail"><span class="toc-number">1.2.</span> <span class="toc-text">Detail</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#batchTxBuffered"><span class="toc-number">1.2.1.</span> <span class="toc-text">batchTxBuffered</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Unlock"><span class="toc-number">1.2.1.1.</span> <span class="toc-text">Unlock</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#unsafeCommit"><span class="toc-number">1.2.1.2.</span> <span class="toc-text">unsafeCommit</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#WaitGroup-%E7%9A%84%E4%BF%9D%E6%8A%A4%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.1.2.1.</span> <span class="toc-text">WaitGroup 的保护机制</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#commit"><span class="toc-number">1.2.1.3.</span> <span class="toc-text">commit</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Commit"><span class="toc-number">1.2.1.4.</span> <span class="toc-text">Commit</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#UsafePut-UnsafeDelete"><span class="toc-number">1.2.1.5.</span> <span class="toc-text">UsafePut&#x2F;UnsafeDelete</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Unlock-1"><span class="toc-number">1.2.1.6.</span> <span class="toc-text">Unlock</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ReadTx-1"><span class="toc-number">1.2.2.</span> <span class="toc-text">ReadTx</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#txReadBufferCache"><span class="toc-number">1.2.2.1.</span> <span class="toc-text">txReadBufferCache</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#TxReadBuffer"><span class="toc-number">1.2.2.2.</span> <span class="toc-text">TxReadBuffer</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ConcurrentReadTx"><span class="toc-number">1.2.2.3.</span> <span class="toc-text">ConcurrentReadTx</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%AE%9E%E7%8E%B0%E5%88%86%E6%9E%90"><span class="toc-number">1.2.2.4.</span> <span class="toc-text">实现分析</span></a></li></ol></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2024/08/01/ETCD/1_backend/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&text=剖析 ETCD.Backend"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&is_video=false&description=剖析 ETCD.Backend"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 ETCD.Backend&body=Check out this article: https://szza.github.io/2024/08/01/ETCD/1_backend/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&title=剖析 ETCD.Backend"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2024/08/01/ETCD/1_backend/&name=剖析 ETCD.Backend&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2024/08/01/ETCD/1_backend/&t=剖析 ETCD.Backend"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

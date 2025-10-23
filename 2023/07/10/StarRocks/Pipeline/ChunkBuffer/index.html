@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本篇博客阐述 BalancedChunkBuffer 的内部实现，以及如何配合 ChunkBufferLimiter 限读取并发度。 BalancedChunkBuffer在上一篇博客 MorselQueue_3 说过 chunk_buffer 的作用：缓存一个 Fragement 中，所有 ScanOperators 从存储层读取的数据。chunk_buffer 实际上是 BalancedChu">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter">
+<meta property="og:url" content="https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本篇博客阐述 BalancedChunkBuffer 的内部实现，以及如何配合 ChunkBufferLimiter 限读取并发度。 BalancedChunkBuffer在上一篇博客 MorselQueue_3 说过 chunk_buffer 的作用：缓存一个 Fragement 中，所有 ScanOperators 从存储层读取的数据。chunk_buffer 实际上是 BalancedChu">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-07-10T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-10-19T03:14:58.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/07/12/StarRocks/Pipeline/PipelineDriver_1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/07/07/StarRocks/Pipeline/MorselQueue_3/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&text=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&is_video=false&description=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter&body=Check out this article: https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&name=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&t=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#BalancedChunkBuffer"><span class="toc-number">1.</span> <span class="toc-text">BalancedChunkBuffer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#SubBuffer"><span class="toc-number">1.1.</span> <span class="toc-text">SubBuffer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BalancBdChunkBuffer-put"><span class="toc-number">1.2.</span> <span class="toc-text">BalancBdChunkBuffer::put</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BalancedChunkBuffer-try-get"><span class="toc-number">1.3.</span> <span class="toc-text">BalancedChunkBuffer::try_get</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ChunkBufferLimiter"><span class="toc-number">2.</span> <span class="toc-text">ChunkBufferLimiter</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Token"><span class="toc-number">2.1.</span> <span class="toc-text">Token</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pin"><span class="toc-number">2.2.</span> <span class="toc-text">pin</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#update-avg-row-bytes"><span class="toc-number">2.3.</span> <span class="toc-text">update_avg_row_bytes</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-07-10T02:00:01.000Z" itemprop="datePublished">2023-07-10</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本篇博客阐述 BalancedChunkBuffer 的内部实现，以及如何配合 ChunkBufferLimiter 限读取并发度。</p>
+<h2 id="BalancedChunkBuffer"><a href="#BalancedChunkBuffer" class="headerlink" title="BalancedChunkBuffer"></a>BalancedChunkBuffer</h2><p>在上一篇博客 <a href="https://szza.github.io/2023/07/07/Pipeline/MorselQueue_3/">MorselQueue_3</a> 说过 chunk_buffer 的作用：缓存一个 Fragement 中，所有 ScanOperators 从存储层读取的数据。chunk_buffer 实际上是 <strong>BalancedChunkBuffer</strong> 对象，并在 OlapScanContextFactory 构造函数中创建。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">OlapScanContextFactory</span>(vectorized::OlapScanNode* <span class="type">const</span> scan_node,</span><br><span class="line">                       <span class="type">int32_t</span> dop,</span><br><span class="line">                       <span class="type">bool</span> shared_morsel_queue,</span><br><span class="line">                       <span class="type">bool</span> shared_scan,</span><br><span class="line">                       ChunkBufferLimiterPtr chunk_buffer_limiter)</span><br><span class="line">: _scan_node(scan_node),</span><br><span class="line">    _dop(dop),</span><br><span class="line">    _shared_morsel_queue(shared_morsel_queue),</span><br><span class="line">    _shared_scan(shared_scan),</span><br><span class="line">    <span class="comment">// BalancedChunkBuffer 创建</span></span><br><span class="line">    _chunk_buffer(shared_scan </span><br><span class="line">                    ? BalanceStrategy::kRoundRobin </span><br><span class="line">                    : BalanceStrategy::kDirect,</span><br><span class="line">                 dop,</span><br><span class="line">                 std::<span class="built_in">move</span>(chunk_buffer_limiter)),</span><br><span class="line">    _contexts(shared_morsel_queue ? <span class="number">1</span> : dop) &#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// BalancedChunkBuffer 构造函数</span></span><br><span class="line">BalancedChunkBuffer::<span class="built_in">BalancedChunkBuffer</span>(BalanceStrategy strategy,</span><br><span class="line">                                         <span class="type">int</span> output_operators,</span><br><span class="line">                                         ChunkBufferLimiterPtr limiter)</span><br><span class="line">: _output_operators(output_operators),</span><br><span class="line">  _strategy(strategy),</span><br><span class="line">  _sub_buffers(std::<span class="built_in">make_unique</span>&lt;SubBuffer[]&gt;(output_operators)),</span><br><span class="line">  _limiter(std::<span class="built_in">move</span>(limiter)) &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; output_operators; i++) &#123;</span><br><span class="line">        _sub_buffers[i] = std::<span class="built_in">make_unique</span>&lt;QueueT&gt;();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="SubBuffer"><a href="#SubBuffer" class="headerlink" title="SubBuffer"></a>SubBuffer</h3><p>BalancBdChunkBuffer 中，SubBuffer 存储着每个 Pipeline ScanOperator 待返回给上层的数据。</p>
+<p>从实现可以看出，这个 SubBuffer 实际上是个无界的队列 <em>UnboundedBlockingQueue</em>，用于缓存数据。<code>_sub_buffers</code> 是个大小为 dop 的数组，为每个 Pipeline 都分配了一个 SubBuffer。</p>
+<blockquote>
+<p>_sub_buffers 里面不应该直接存储 SubBuffer，而是应该经过 cache_line 对齐的后 AlignedSubBuffer，因为多线程同时访问 _sub_buffers，如果不cache_line 对齐，会造成 false sharing 问题。</p>
+</blockquote>
+<p>因为会多线程向 sub_buffer[seq] 插入数据，因此 <a target="_blank" rel="noopener" href="https://github.com/StarRocks/starrocks/blob/204a6cd2f40c2553adafce1c6ce0cb9774145a00/be/src/util/blocking_queue.hpp#L124">UnboundedBlockingQueue</a> 需要确保线程安全，内部实现也很朴素。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">BalancedChunkBuffer</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">try_get</span><span class="params">(<span class="type">int</span> buffer_index, vectorized::ChunkPtr* output_chunk)</span></span>;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">put</span><span class="params">(<span class="type">int</span> buffer_index, vectorized::ChunkPtr chunk, ChunkBufferTokenPtr chunk_token)</span></span>;</span><br><span class="line">    <span class="comment">//... other methods</span></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line"></span><br><span class="line">    <span class="keyword">using</span> ChunkWithToken = std::pair&lt;vectorized::ChunkPtr, ChunkBufferTokenPtr&gt;;</span><br><span class="line">    <span class="keyword">using</span> QueueT = UnboundedBlockingQueue&lt;ChunkWithToken&gt;;</span><br><span class="line">    <span class="keyword">using</span> SubBuffer = std::unique_ptr&lt;QueueT&gt;;</span><br><span class="line"></span><br><span class="line">    <span class="type">const</span> SubBuffer&amp; _get_sub_buffer(<span class="type">int</span> index) <span class="type">const</span>;</span><br><span class="line">    SubBuffer&amp; _get_sub_buffer(<span class="type">int</span> index);</span><br><span class="line"></span><br><span class="line">    <span class="type">const</span> <span class="type">int</span> _output_operators;</span><br><span class="line">    <span class="type">const</span> BalanceStrategy _strategy;</span><br><span class="line">    std::unique_ptr&lt;SubBuffer[]&gt; _sub_buffers;</span><br><span class="line">    std::<span class="type">atomic_int64_t</span> _output_index = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    ChunkBufferLimiterPtr _limiter;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="BalancBdChunkBuffer-put"><a href="#BalancBdChunkBuffer-put" class="headerlink" title="BalancBdChunkBuffer::put"></a>BalancBdChunkBuffer::put</h3><p>BalancedChunkBuffer 输入输出内存映射关系有两种，从 OlapScanContextFactory 的构造函数可以看出，</p>
+<ul>
+<li>BalanceStrategy::kDirect，直通模式，对应 IndividualMorselQueueFactory，此时 Pipeline-driver_seq ScanOperator 读取到的数据传递给 该Pipeline-driver_seq 上自己的 Operators 使用</li>
+<li>BalanceStrategy::kRoundRobin，共享模式，对应 SharedMorselQueueFactory，此时 io-tasks 会分别给所有 Pipelines 的 ChunkBuffer 依次分配自己读取到的 chunks<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">enum</span> <span class="title class_">BalanceStrategy</span> &#123;</span><br><span class="line">    kDirect,</span><br><span class="line">    kRoundRobin,</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure></li>
+</ul>
+<p>BalancedChunkBuffer::put 函数会根据 BalanceStrategy 来选择插入方式。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> BalancedChunkBuffer::SubBuffer&amp; BalancedChunkBuffer::_get_sub_buffer(<span class="type">int</span> index) <span class="type">const</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> _sub_buffers[index % _output_operators];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">BalancedChunkBuffer::put</span><span class="params">(<span class="type">int</span> buffer_index, vectorized::ChunkPtr chunk, ChunkBufferTokenPtr chunk_token)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (!chunk || (!chunk-&gt;<span class="built_in">owner_info</span>().<span class="built_in">is_last_chunk</span>() &amp;&amp; chunk-&gt;<span class="built_in">num_rows</span>() == <span class="number">0</span>)) &#123; </span><br><span class="line">       <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (_strategy == BalanceStrategy::kDirect) &#123;</span><br><span class="line">        <span class="keyword">return</span> _get_sub_buffer(buffer_index)-&gt;<span class="built_in">put</span>(</span><br><span class="line">            std::<span class="built_in">make_pair</span>(std::<span class="built_in">move</span>(chunk), std::<span class="built_in">move</span>(chunk_token)));</span><br><span class="line">    &#125; <span class="keyword">else</span> <span class="keyword">if</span> (_strategy == BalanceStrategy::kRoundRobin) &#123;</span><br><span class="line">        <span class="type">int</span> target_index = _output_index.<span class="built_in">fetch_add</span>(<span class="number">1</span>) % _output_operators;</span><br><span class="line">        <span class="keyword">return</span> _get_sub_buffer(target_index)-&gt;<span class="built_in">put</span>(</span><br><span class="line">            std::<span class="built_in">make_pair</span>(std::<span class="built_in">move</span>(chunk), std::<span class="built_in">move</span>(chunk_token)));</span><br><span class="line">    &#125;</span><br><span class="line">    __builtin_unreachable();</span><br></pre></td></tr></table></figure>
+<h3 id="BalancedChunkBuffer-try-get"><a href="#BalancedChunkBuffer-try-get" class="headerlink" title="BalancedChunkBuffer::try_get"></a>BalancedChunkBuffer::try_get</h3><p>BalancedChunkBuffer::try_get 就更加简单了，每个 Pipeline-driver_seq 从自己的 SubBuffer 中取出数据即可。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">BalancedChunkBuffer::try_get</span><span class="params">(<span class="type">int</span> buffer_index, vectorized::ChunkPtr* output_chunk)</span> </span>&#123;</span><br><span class="line">    <span class="comment">// Will release the token after exiting this scope.</span></span><br><span class="line">    ChunkWithToken chunk_with_token = std::<span class="built_in">make_pair</span>(<span class="literal">nullptr</span>, <span class="literal">nullptr</span>);</span><br><span class="line">    <span class="type">bool</span> ok = _get_sub_buffer(buffer_index)-&gt;<span class="built_in">try_get</span>(&amp;chunk_with_token);</span><br><span class="line">    <span class="keyword">if</span> (ok) &#123;</span><br><span class="line">        *output_chunk = std::<span class="built_in">move</span>(chunk_with_token.first);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> ok;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="ChunkBufferLimiter"><a href="#ChunkBufferLimiter" class="headerlink" title="ChunkBufferLimiter"></a>ChunkBufferLimiter</h2><p>在 BalancedChunkBuffer 内部存放数据的 SubBuffer 是无界队列，单独使用了一个 ChunkBufferLimiter 来限制速率。ChunkBufferLimiter 在 OlapScanNode::decompose_to_pipeline 中实例化后，经过 OlapScanContextFactory 构造函数传递给 BalancBdChunkBuffer。</p>
+<p>由于 <em>ScanOperator::max_buffer_capacity</em> 默认值是 64，因此每个 Pipeline 一次性最多可以读取 64 个 Chunks。又通过 estimated_max_concurrent_chunks 函数估计个下限。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// OlapScanNode::decompose_to_pipeline</span></span><br><span class="line"><span class="type">size_t</span> max_buffer_capacity = </span><br><span class="line">            pipeline::ScanOperator::<span class="built_in">max_buffer_capacity</span>() * dop; <span class="comment">// 64 * dop</span></span><br><span class="line"><span class="type">size_t</span> default_buffer_capacity = std::<span class="built_in">min</span>&lt;<span class="type">size_t</span>&gt;(</span><br><span class="line">            max_buffer_capacity, <span class="built_in">estimated_max_concurrent_chunks</span>());</span><br><span class="line"><span class="keyword">auto</span> buffer_limiter = std::<span class="built_in">make_unique</span>&lt;pipeline::DynamicChunkBufferLimiter&gt;(</span><br><span class="line">                    max_buffer_capacity,</span><br><span class="line">                    default_buffer_capacity,</span><br><span class="line">                    _mem_limit,</span><br><span class="line">                    <span class="built_in">runtime_state</span>()-&gt;<span class="built_in">chunk_size</span>());</span><br><span class="line">    </span><br><span class="line"><span class="keyword">auto</span> scan_ctx_factory = std::<span class="built_in">make_shared</span>&lt;pipeline::OlapScanContextFactory&gt;(</span><br><span class="line">            <span class="keyword">this</span>,</span><br><span class="line">            dop, shared_morsel_queue,</span><br><span class="line">            _enable_shared_scan,</span><br><span class="line">            std::<span class="built_in">move</span>(buffer_limiter));</span><br><span class="line"></span><br><span class="line"><span class="comment">// DynamicChunkBufferLimiter 构造函数</span></span><br><span class="line"><span class="built_in">DynamicChunkBufferLimiter</span>(<span class="type">size_t</span> max_capacity, <span class="type">size_t</span> default_capacity,</span><br><span class="line">                          <span class="type">int64_t</span> mem_limit, <span class="type">int</span> chunk_size)</span><br><span class="line">: _capacity(default_capacity),</span><br><span class="line">  _max_capacity(max_capacity),</span><br><span class="line">  _default_capacity(default_capacity),</span><br><span class="line">  _mem_limit(mem_limit) &#123;&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Token"><a href="#Token" class="headerlink" title="Token"></a>Token</h3><p><em>DynamicChunkBufferLimiter::_pinned_tokens_counter</em> 字段表征当前读取了多少个 chunk，不能超过限制。</p>
+<p>DynamicChunkBufferLimiter::Token 基于 RAII 设计，用户通过 DynamicChunkBufferLimiter::pin 函数对 pinned_tokens_counter 进行累加 <em>num_chunks</em>，并在析构函数中完成恢复，即pinned_tokens_counter 递减 num_chunks。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">DynamicChunkBufferLimiter</span> <span class="keyword">final</span> : <span class="keyword">public</span> ChunkBufferLimiter &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">class</span> <span class="title class_">Token</span> <span class="keyword">final</span> : <span class="keyword">public</span> ChunkBufferToken &#123;</span><br><span class="line">    <span class="keyword">public</span>:</span><br><span class="line">        <span class="built_in">Token</span>(std::atomic&lt;<span class="type">int</span>&gt;&amp; pinned_tokens_counter, <span class="type">int</span> num_tokens)</span><br><span class="line">        : _pinned_tokens_counter(pinned_tokens_counter),</span><br><span class="line">          _num_tokens(num_tokens) &#123;&#125;</span><br><span class="line"></span><br><span class="line">        ~<span class="built_in">Token</span>() <span class="keyword">override</span> &#123; </span><br><span class="line">            _pinned_tokens_counter.<span class="built_in">fetch_sub</span>(_num_tokens);</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span>:</span><br><span class="line">        <span class="built_in">DISALLOW_COPY_AND_MOVE</span>(Token);</span><br><span class="line"></span><br><span class="line">        std::atomic&lt;<span class="type">int</span>&gt;&amp; _pinned_tokens_counter;</span><br><span class="line">        <span class="type">const</span> <span class="type">int</span> _num_tokens;</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">update_avg_row_bytes</span><span class="params">(<span class="type">size_t</span> added_sum_row_bytes,</span></span></span><br><span class="line"><span class="params"><span class="function">                              <span class="type">size_t</span> added_num_rows,</span></span></span><br><span class="line"><span class="params"><span class="function">                              <span class="type">size_t</span> max_chunk_rows)</span> <span class="keyword">override</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="function">ChunkBufferTokenPtr <span class="title">pin</span><span class="params">(<span class="type">int</span> num_chunks)</span> <span class="keyword">override</span></span>;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    std::atomic&lt;<span class="type">int</span>&gt; _pinned_chunks_counter = <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="pin"><a href="#pin" class="headerlink" title="pin"></a>pin</h3><p>ScanOperator 在向存储层读取数据前，先会调用 DynamicChunkBufferLimiter::pin 函数申请一个 Token，是否超过 query 限制的并发读取速率 _capacity。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ChunkBufferTokenPtr <span class="title">DynamicChunkBufferLimiter::pin</span><span class="params">(<span class="type">int</span> num_chunks)</span> </span>&#123;</span><br><span class="line">    <span class="type">size_t</span> prev_value = _pinned_chunks_counter.<span class="built_in">fetch_add</span>(num_chunks);</span><br><span class="line">    <span class="keyword">if</span> (prev_value + num_chunks &gt; _capacity) &#123;</span><br><span class="line">        <span class="comment">// 回滚 counter</span></span><br><span class="line">        _pinned_chunks_counter.<span class="built_in">fetch_sub</span>(num_chunks);</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;DynamicChunkBufferLimiter::Token&gt;(</span><br><span class="line">        _pinned_chunks_counter, num_chunks);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>那么是如此控制着 ScanOperator 读取速率？</p>
+<ol>
+<li>在 ScanOperator::_trigger_next_scan 函数中，提交 io-task 前，会先向 ChunkBufferLimiter 申请一个 Token，<br>ChunkBufferLimiter::pin 判断还有余量，则返回一个 Token 对象， _trigger_next_scan 函数才能提交 io-task。否则限流。  <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">Status ScanOperator::_trigger_next_scan(</span><br><span class="line">    RuntimeState* state, <span class="type">int</span> chunk_source_index) &#123;</span><br><span class="line"></span><br><span class="line">    ChunkBufferTokenPtr buffer_token;</span><br><span class="line">    <span class="keyword">if</span> (buffer_token = <span class="built_in">pin_chunk</span>(<span class="number">1</span>); buffer_token == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">COUNTER_UPDATE</span>(_submit_task_counter, <span class="number">1</span>);</span><br><span class="line">    _chunk_sources[chunk_source_index]-&gt;<span class="built_in">pin_chunk_token</span>(std::<span class="built_in">move</span>(buffer_token));</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// function detail</span></span><br><span class="line"><span class="function">ChunkBufferTokenPtr <span class="title">OlapScanOperator::pin_chunk</span><span class="params">(<span class="type">int</span> num_chunks)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _ctx-&gt;<span class="built_in">get_chunk_buffer</span>().<span class="built_in">limiter</span>()-&gt;<span class="built_in">pin</span>(num_chunks);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">ChunkSource::pin_chunk_token</span><span class="params">(ChunkBufferTokenPtr chunk_token)</span> </span>&#123;</span><br><span class="line">    _chunk_token = std::<span class="built_in">move</span>(chunk_token);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li>在 ChunkSource::buffer_next_batch_chunks_blocking 函数中每尝试读取一次 chunk 前都会申请一 Token，只有当 Token 非空，才能继续读取。成功读取到数据后，{Chunk, Token} 作为 Pair 一起缓存到 BalancedChunkBuffer。当执行 BalancedChunkBuffer::try_get 函数时候，Chunk 会被返回给上层，而 Token 的生命周期结束，调用析构函数释放 Token，增加 _pinned_tokens_counter 让后续线程可以继续读取。<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">ChunkSource::buffer_next_batch_chunks_blocking</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">        RuntimeState* state, <span class="type">size_t</span> batch_size, </span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> workgroup::WorkGroup* running_wg)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; batch_size &amp;&amp; !state-&gt;<span class="built_in">is_cancelled</span>(); ++i) &#123;</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">if</span> (_chunk_token == <span class="literal">nullptr</span> &amp;&amp; </span><br><span class="line">                (_chunk_token = _chunk_buffer.<span class="built_in">limiter</span>()-&gt;<span class="built_in">pin</span>(<span class="number">1</span>)) == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">                <span class="keyword">break</span>;</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            ChunkPtr chunk;</span><br><span class="line">            _status = _read_chunk(state, &amp;chunk);</span><br><span class="line">            <span class="comment">//... </span></span><br><span class="line"></span><br><span class="line">            <span class="comment">// drvier_seq --&gt; &#123;chunk, token&#125;</span></span><br><span class="line">            _chunk_buffer.<span class="built_in">put</span>(_scan_operator_seq,</span><br><span class="line">                              std::<span class="built_in">move</span>(chunk),</span><br><span class="line">                              std::<span class="built_in">move</span>(_chunk_token));</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//...</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> _status;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ol>
+<h3 id="update-avg-row-bytes"><a href="#update-avg-row-bytes" class="headerlink" title="update_avg_row_bytes"></a>update_avg_row_bytes</h3><p>但是读取总的速率也不是额定的，在每次 _read_chunk 后都会更新。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#BalancedChunkBuffer"><span class="toc-number">1.</span> <span class="toc-text">BalancedChunkBuffer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#SubBuffer"><span class="toc-number">1.1.</span> <span class="toc-text">SubBuffer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BalancBdChunkBuffer-put"><span class="toc-number">1.2.</span> <span class="toc-text">BalancBdChunkBuffer::put</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BalancedChunkBuffer-try-get"><span class="toc-number">1.3.</span> <span class="toc-text">BalancedChunkBuffer::try_get</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ChunkBufferLimiter"><span class="toc-number">2.</span> <span class="toc-text">ChunkBufferLimiter</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Token"><span class="toc-number">2.1.</span> <span class="toc-text">Token</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pin"><span class="toc-number">2.2.</span> <span class="toc-text">pin</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#update-avg-row-bytes"><span class="toc-number">2.3.</span> <span class="toc-text">update_avg_row_bytes</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&text=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&is_video=false&description=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter&body=Check out this article: https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&title=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&name=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/07/10/StarRocks/Pipeline/ChunkBuffer/&t=Pipeline: BalancedChunkBuffer 与 ChunkBufferLimiter"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

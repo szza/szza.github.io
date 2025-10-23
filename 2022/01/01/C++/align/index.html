@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="关于内存对齐，有诸多好处，因此常常在分配内存时也会将内存对齐这一因素纳入考量。 这一节，来讲下内存对齐以及C++11中关于内存对齐引入的alignof、alignas、std::aligned_storage、std::align ，其中前两个为关键字，后两个分别为类和函数。 alignment我们知道，C++中的内置的基础类型，比如char、int、float、double，在内存布局上都是按照">
+<meta property="og:type" content="article">
+<meta property="og:title" content="内存对齐之 alignof、alignas 、aligned_storage、align 剖析">
+<meta property="og:url" content="https://szza.github.io/2022/01/01/C++/align/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="关于内存对齐，有诸多好处，因此常常在分配内存时也会将内存对齐这一因素纳入考量。 这一节，来讲下内存对齐以及C++11中关于内存对齐引入的alignof、alignas、std::aligned_storage、std::align ，其中前两个为关键字，后两个分别为类和函数。 alignment我们知道，C++中的内置的基础类型，比如char、int、float、double，在内存布局上都是按照">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-01-01T06:09:54.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:47:54.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Modern C++">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>内存对齐之 alignof、alignas 、aligned_storage、align 剖析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/01/06/rocksdb/MemoryAllocator/2_arena/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/12/21/C++/unique_ptr/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/01/C++/align/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/01/C++/align/&text=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/01/C++/align/&is_video=false&description=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=内存对齐之 alignof、alignas 、aligned_storage、align 剖析&body=Check out this article: https://szza.github.io/2022/01/01/C++/align/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/01/C++/align/&name=内存对齐之 alignof、alignas 、aligned_storage、align 剖析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/01/C++/align/&t=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#alignment"><span class="toc-number">1.</span> <span class="toc-text">alignment</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#alignof"><span class="toc-number">2.</span> <span class="toc-text">alignof</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#alignas"><span class="toc-number">3.</span> <span class="toc-text">alignas</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-alignment-alignof-T"><span class="toc-number">3.1.</span> <span class="toc-text">1. alignment &gt;&#x3D; alignof(T)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-alignment-pow-2-N"><span class="toc-number">3.2.</span> <span class="toc-text">2. alignment &#x3D;&#x3D; pow(2, N)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#std-aligned-storage"><span class="toc-number">4.</span> <span class="toc-text">std::aligned_storage</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#std-align"><span class="toc-number">5.</span> <span class="toc-text">std::align</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        内存对齐之 alignof、alignas 、aligned_storage、align 剖析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-01T06:09:54.000Z" itemprop="datePublished">2022-01-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Modern-C/" rel="tag">Modern C++</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>关于内存对齐，有诸多好处，因此常常在分配内存时也会将内存对齐这一因素纳入考量。</p>
+<p>这一节，来讲下内存对齐以及C++11中关于内存对齐引入的<code>alignof</code>、<code>alignas</code>、<code>std::aligned_storage</code>、<code>std::align</code> ，其中前两个为关键字，后两个分别为类和函数。</p>
+<h2 id="alignment"><a href="#alignment" class="headerlink" title="alignment"></a>alignment</h2><p>我们知道，C++中的内置的基础类型，比如<code>char</code>、<code>int</code>、<code>float</code>、<code>double</code>，在内存布局上都是按照其 <code>sizeof</code> 大小进行对齐（alignment）。</p>
+<p>什么叫对齐？</p>
+<p>比如，<code>sizoef(int)</code> 值为 4，如果满足内存对齐要求，那么int类型变量<code>a</code>的地址<code>&amp;a</code>对4取余的结果应该是0。</p>
+<p>下面提供一个编译期就能检测内存对齐的宏 <code>CHECK_ALIGN</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> CHECK_ALIGN(ptr, alignment)                       \</span></span><br><span class="line"><span class="meta">  do&#123;                                                     \</span></span><br><span class="line"><span class="meta">    constexpr size_t status                               \</span></span><br><span class="line"><span class="meta">       = reinterpret_cast<span class="string">&lt;uintptr_t&gt;</span>(ptr) % alignment;    \</span></span><br><span class="line"><span class="meta">    static_assert(status == 0, <span class="string">&quot;ptr must be aligned&quot;</span>);    \</span></span><br><span class="line"><span class="meta">  &#125;while(0)                                               \</span></span><br></pre></td></tr></table></figure>
+
+<p>下面我们来校验内置类型的内存对齐大小确实等于其<code>sizoef(T)</code>值，demo如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  <span class="type">char</span> c;</span><br><span class="line">  <span class="type">int</span> i;</span><br><span class="line">  <span class="type">long</span> l ;</span><br><span class="line">  <span class="type">float</span> f;</span><br><span class="line">  <span class="built_in">CHECK_ALIGN</span>(&amp;c, <span class="built_in">sizeof</span>(c));</span><br><span class="line">  <span class="built_in">CHECK_ALIGN</span>(&amp;i, <span class="built_in">sizeof</span>(i));</span><br><span class="line">  <span class="built_in">CHECK_ALIGN</span>(&amp;l, <span class="built_in">sizeof</span>(l));</span><br><span class="line">  <span class="built_in">CHECK_ALIGN</span>(&amp;f, <span class="built_in">sizeof</span>(f));</span><br><span class="line">  <span class="built_in">CHECK_ALIGN</span>(&amp;i, <span class="built_in">sizeof</span>(l)); <span class="comment">// 编译错误</span></span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>上述demo中的 <code>CHECK_ALIGN(&amp;i, sizeof(l));</code> 会导致编译错误，因为<code>int</code>类型变量的内存对齐大小要求是4，而<code>long</code>在gcc下是8个字节，即<code>sizoef(l)</code>为8，故而编译失败。</p>
+<p>到此，我相信你应该明白何为「内存对齐」了。</p>
+<h2 id="alignof"><a href="#alignof" class="headerlink" title="alignof"></a>alignof</h2><p>C++11引入的关键字<code>alignof</code>，可直接获取类型<code>T</code>的内存对齐要求。<code>alignof</code>的返回值类型是<code>size_t</code>，用法类似于<code>sizeof</code>。</p>
+<p>下面先来看看<code>alignof</code>的用法。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">define</span> SHOW_SIZEOF_AND_ALIGNOF(T)                                   \</span></span><br><span class="line"><span class="meta">  do &#123;                                                               \</span></span><br><span class="line"><span class="meta">    std::cout &lt;&lt; <span class="string">&quot;sizeof(&quot;</span> &lt;&lt; #T &lt;&lt; <span class="string">&quot;):\t&quot;</span> &lt;&lt; sizeof(T) &lt;&lt; <span class="string">&quot;,\t&quot;</span>     \</span></span><br><span class="line"><span class="meta">              &lt;&lt; <span class="string">&quot;alignof(&quot;</span> &lt;&lt; #T &lt;&lt; <span class="string">&quot;):\t&quot;</span> &lt;&lt; alignof(T)            \</span></span><br><span class="line"><span class="meta">              &lt;&lt; std::endl;                                          \</span></span><br><span class="line"><span class="meta">  &#125;while(0)</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  <span class="built_in">SHOW_SIZEOF_AND_ALIGNOF</span>(<span class="type">char</span>);</span><br><span class="line">  <span class="built_in">SHOW_SIZEOF_AND_ALIGNOF</span>(<span class="type">int</span>);</span><br><span class="line">  <span class="built_in">SHOW_SIZEOF_AND_ALIGNOF</span>(<span class="type">long</span>);</span><br><span class="line">  <span class="built_in">SHOW_SIZEOF_AND_ALIGNOF</span>(<span class="type">float</span>);</span><br><span class="line">  <span class="built_in">SHOW_SIZEOF_AND_ALIGNOF</span>(<span class="type">double</span>);</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>输出如下，这也是符合前文关于基础类型内存对齐的论述。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -o main &amp;&amp; ./main</span><br><span class="line">sizeof(char):   1,      alignof(char):  1</span><br><span class="line">sizeof(int):    4,      alignof(int):   4</span><br><span class="line">sizeof(long):   8,      alignof(long):  8</span><br><span class="line">sizeof(<span class="built_in">float</span>):  4,      alignof(<span class="built_in">float</span>): 4</span><br><span class="line">sizeof(double): 8,      alignof(double):8</span><br></pre></td></tr></table></figure>
+
+<p>好，到此我相信你已经对内存对齐和<code>alignof</code>有了基本了解。下面我们来看看类的内存对齐。</p>
+<p>现在有类<code>Foo</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Foo</span> &#123; </span><br><span class="line">  <span class="type">char</span> c;</span><br><span class="line">  <span class="type">int</span> i1; </span><br><span class="line">  <span class="type">int</span> i2;</span><br><span class="line">  <span class="type">long</span> l;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>考虑下<code>alignof(Foo)</code>和<code>sizeof(Foo)</code>分别会是多少，即下面的demo会输出？？？</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  <span class="built_in">SHOW_SIZEOF_AND_ALIGNOF</span>(Foo);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>Think Again~~~~</p>
+<p>3</p>
+<p>2</p>
+<p>1</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -o main &amp;&amp; ./main</span><br><span class="line">sizeof(Foo):    24,     alignof(Foo):   8</span><br></pre></td></tr></table></figure>
+
+<p>嗯？怎么会是这个结果？</p>
+<p>为了更好地解释这个结果，我准备借助<code>offsetof</code>函数，来获取成员变量距离类起始地址的偏移量，其函数原型如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* Offset of member MEMBER in a struct of type TYPE. */</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> offsetof(OBJECT_TYPE, MEMBER) __builtin_offsetof (OBJECT_TYPE, MEMBER)</span></span><br></pre></td></tr></table></figure>
+
+<p>好，现在看下如下代码，并猜测下输出？</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  std::cout &lt;&lt; <span class="built_in">offsetof</span>(Foo, c)  &lt;&lt; <span class="string">&#x27;\n&#x27;</span></span><br><span class="line">            &lt;&lt; <span class="built_in">offsetof</span>(Foo, i1) &lt;&lt; <span class="string">&#x27;\n&#x27;</span> </span><br><span class="line">            &lt;&lt; <span class="built_in">offsetof</span>(Foo, i2) &lt;&lt; <span class="string">&#x27;\n&#x27;</span></span><br><span class="line">            &lt;&lt; <span class="built_in">offsetof</span>(Foo, l)  &lt;&lt; <span class="string">&#x27;\n&#x27;</span>; </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>输出如下：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -o main &amp;&amp; ./main</span><br><span class="line">0   <span class="comment"># c 的偏移量为 0 </span></span><br><span class="line">4   <span class="comment"># i1 的偏移量为 4， c  -&gt; i1 中间填充了 3个字节，才满足 4 字节的内存对齐要求</span></span><br><span class="line">8   <span class="comment"># i2 的偏移量为 8,  i1 -&gt; i2 无填充</span></span><br><span class="line">16  <span class="comment"># l 的偏移量为 16， i2 -&gt; l  中间填充了4个字节，才满足8字节的内存对齐要求</span></span><br></pre></td></tr></table></figure>
+
+<p>好，到此，我准备基于这个输出来解释<code>alignof</code>了。</p>
+<p>对于<code>Foo</code>而言，所谓内存对齐，即<code>Foo</code>中每个字段都要满足内存对齐。而内存对齐最严格（即对齐字节数最大）的字段满足了，其他的字段也就满足了。</p>
+<p>假设现在有三个起始地址，分别是 0、1、4，我们来看看是否都能满足<code>Foo</code>中所有字段的内存对齐要求。</p>
+<p>起始地址分别0、1、4，各个字段的地址如下三列。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Foo</span> &#123;   </span><br><span class="line">  <span class="type">char</span> c;     <span class="comment">// 0  |  1  |  4</span></span><br><span class="line">  <span class="type">int</span> i1;     <span class="comment">// 4  |  5  |  8</span></span><br><span class="line">  <span class="type">int</span> i2;     <span class="comment">// 8  |  9  |  12 </span></span><br><span class="line">  <span class="type">long</span> l;     <span class="comment">// 16 |  17 |  20</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>从上面的右侧三列结果可以看出，只有起始地址为0（8的整倍数）的恰好能满足所有字段内存对齐的要求。因此，<code>alignof(Foo)</code>输出为8。</p>
+<h2 id="alignas"><a href="#alignas" class="headerlink" title="alignas"></a>alignas</h2><p>上面讲述的内存对齐要求都是默认情况下的，有时候考虑到cacheline、以及向量化操作，可能会需要改变一个类的<code>alignof</code>值。</p>
+<p>怎么办？</p>
+<p>在C++11之前，需要依赖靠编译器的扩展指令，C++11之后可以借助<code>alignas</code>关键字。</p>
+<blockquote>
+<p>比如，在C++11之前，gcc实现 <code>alignas(alignment)</code> 效果的方式为  <code>__attribute__((__aligned__((alignment)))</code></p>
+</blockquote>
+<p>仍然以上述的<code>Foo</code>为例子，不过此时你希望<code>Foo</code>对象的起始地址总是32的倍数，C++11之后借助<code>alignas</code>关键字，可以如下操作：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">alignas</span>(<span class="number">32</span>) Foo &#123; </span><br><span class="line">  <span class="built_in">Foo</span>() &#123; std::cout &lt;&lt; <span class="keyword">this</span> &lt;&lt; std::endl; &#125;</span><br><span class="line">  <span class="type">char</span> c;</span><br><span class="line">  <span class="type">int</span> i1; </span><br><span class="line">  <span class="type">int</span> i2;</span><br><span class="line">  <span class="type">long</span> l;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  Foo foo;</span><br><span class="line">  <span class="built_in">CHECK_ALIGN</span>(&amp;foo, <span class="built_in">alignof</span>(foo));</span><br><span class="line">  <span class="built_in">SHOW_SIZEOF_AND_ALIGNOF</span>(Foo);</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p> 输出如下：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -o main &amp;&amp; ./main</span><br><span class="line">0x16d6f34e0</span><br><span class="line">sizeof(Foo):    32,     alignof(Foo):   32</span><br></pre></td></tr></table></figure>
+
+<p>说完<code>alignas</code>的基础用法，下面说下使用<code>alignas</code>时的注意事项，即<code>alignas(alignment)</code>中的<code>alignment</code>也不是随意写的，对于类型<code>T</code>，需要满足如下两个条件。</p>
+<h3 id="1-alignment-alignof-T"><a href="#1-alignment-alignof-T" class="headerlink" title="1. alignment &gt;&#x3D; alignof(T)"></a>1. alignment &gt;&#x3D; alignof(T)</h3><p>仍然以<code>Foo</code>为例，在没有<code>alignas</code>修饰时，默认的Foo的内存对齐要求<code>alignof(Foo)</code>为8，现在尝试使用<code>alignas</code>让<code>Foo</code>的对齐要求为4，操作如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">alignas</span>(<span class="number">4</span>) Foo &#123; </span><br><span class="line">  <span class="type">char</span> c;</span><br><span class="line">  <span class="type">int</span> i1;</span><br><span class="line">  <span class="type">int</span> i2;</span><br><span class="line">  <span class="type">long</span> l; </span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>此时 <code>SHOW_SIZEOF_AND_ALIGNOF(Foo);</code>的输出</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -o main &amp;&amp; ./main</span><br><span class="line">sizeof(Foo):    24,     alignof(Foo):   8</span><br></pre></td></tr></table></figure>
+
+<p>可以看出，此时的<code>alignas</code>是失效的，在其他编译器下也许直接编译失败。</p>
+<h3 id="2-alignment-pow-2-N"><a href="#2-alignment-pow-2-N" class="headerlink" title="2. alignment &#x3D;&#x3D; pow(2, N)"></a>2. alignment &#x3D;&#x3D; pow(2, N)</h3><p>即<code>alignas</code> 指定的大小<code>alignment</code>必须是2的正数幂（<code>N&gt;0</code>），否则也是失效，在有些编译器下也许直接编译失败。</p>
+<p>仍然以<code>Foo</code>为例子，</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">alignas</span>(<span class="number">9</span>) Foo &#123; </span><br><span class="line">  <span class="type">char</span> c;</span><br><span class="line">  <span class="type">int</span> i1;</span><br><span class="line">  <span class="type">int</span> i2;</span><br><span class="line">  <span class="type">long</span> l; </span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>编译如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ g++ main.cc -o main &amp;&amp; ./main</span><br><span class="line">main.cc:<span class="number">20</span>:<span class="number">19</span>: error: requested alignment <span class="string">&#x27;9&#x27;</span> is <span class="keyword">not</span> a positive power of <span class="number">2</span></span><br><span class="line">   <span class="number">20</span> | <span class="keyword">struct</span> <span class="title class_">alignas</span>(<span class="number">9</span>) Foo &#123;</span><br><span class="line">      |                   ^~~</span><br></pre></td></tr></table></figure>
+
+<p>好，到此，我想你应该大致理解了<code>alignof</code>和<code>alignas</code>两个关键字，更多用法可以参&#96;<a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/%E9%A6%96%E9%A1%B5">cpprefernece</a>。</p>
+<h2 id="std-aligned-storage"><a href="#std-aligned-storage" class="headerlink" title="std::aligned_storage"></a>std::aligned_storage</h2><p>在C++11中，也引入了一个满足内存对齐要求的静态内存分配类<code>std::aligned_storage</code>，其类模板原型如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// in &lt;type_traits&gt;</span></span><br><span class="line"><span class="keyword">template</span>&lt; std::<span class="type">size_t</span> Len, </span><br><span class="line">          std::<span class="type">size_t</span> Align = <span class="comment">/*default-alignment*/</span> &gt;</span><br><span class="line"><span class="keyword">struct</span> aligned_storage;</span><br></pre></td></tr></table></figure>
+
+<p>类<code> std::aligned_storage</code>对象构造完成时，即分配了长度为<code>Len</code>个字节的内存，且该内存满足大小为 <code>Align</code> 的对齐要求。</p>
+<p>下面，我们先来看看 <a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/%E9%A6%96%E9%A1%B5">cpprefernece</a> 给的一个demo，来熟悉下怎么使用<code>std::aligned_storage</code>。</p>
+<p>类 <code>StaticVector</code> ，是一个满足内存对齐要求的静态数组，模板参数<code>T</code>是元素类型，<code>N</code>是数组元素个数。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> T, <span class="type">size_t</span> N&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">StaticVector</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">StaticVector</span>() &#123; </span><br><span class="line">      std::cout &lt;&lt; <span class="built_in">alignof</span>(T) &lt;&lt; <span class="string">&quot;/&quot;</span> &lt;&lt; <span class="built_in">sizeof</span>(T)&lt;&lt; std::endl;</span><br><span class="line">      <span class="keyword">for</span> (<span class="type">int</span> idx = <span class="number">0</span>; idx &lt; N; ++idx) &#123; </span><br><span class="line">        std::cout &lt;&lt; &amp;data[idx] &lt;&lt; std::endl;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    ~<span class="built_in">StaticVector</span>() &#123;</span><br><span class="line">      <span class="keyword">for</span>(<span class="type">size_t</span> pos = <span class="number">0</span>; pos &lt; m_size; ++pos) &#123;</span><br><span class="line">        <span class="built_in">reinterpret_cast</span>&lt;T*&gt;(data+pos)-&gt;~<span class="built_in">T</span>();</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> ...Args&gt; </span></span><br><span class="line"><span class="function">    <span class="type">void</span> <span class="title">emplace_back</span><span class="params">(Args&amp;&amp;... args)</span> </span>&#123;</span><br><span class="line">      <span class="keyword">if</span>(m_size &gt;= N) &#123;</span><br><span class="line">        <span class="keyword">throw</span> std::bad_alloc&#123;&#125;;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">new</span>(data+m_size) <span class="built_in">T</span>(std::forward&lt;Args&gt;(args)...);</span><br><span class="line">      ++m_size;</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line">    <span class="type">const</span> T&amp; <span class="keyword">operator</span>[](<span class="type">size_t</span> pos) <span class="type">const</span> &#123;</span><br><span class="line">      <span class="keyword">return</span> *<span class="built_in">reinterpret_cast</span>&lt;<span class="type">const</span> T*&gt;(data+pos);</span><br><span class="line">    &#125;</span><br><span class="line"> </span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  <span class="comment">// std::aligned_storage&lt;sizeof(T), alignof(T)&gt;::type data[N]; // C++11</span></span><br><span class="line">  std::<span class="type">aligned_storage_t</span>&lt;<span class="built_in">sizeof</span>(T), <span class="built_in">alignof</span>(T)&gt; data[N];        <span class="comment">// c++14</span></span><br><span class="line">  <span class="type">size_t</span> m_size = <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>类<code>StaticVector</code>的使用如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">alignas</span>(<span class="number">32</span>) Foo &#123; </span><br><span class="line">  <span class="type">char</span> c;</span><br><span class="line">  <span class="type">int</span> i1; </span><br><span class="line">  <span class="type">int</span> i2;</span><br><span class="line">  <span class="type">long</span> l;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    StaticVector&lt;std::string, <span class="number">2</span>&gt; v1;</span><br><span class="line">    v1.<span class="built_in">emplace_back</span>(<span class="number">5</span>, <span class="string">&#x27;*&#x27;</span>);</span><br><span class="line">    std::cout &lt;&lt; v1[<span class="number">0</span>] &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line"></span><br><span class="line">    StaticVector&lt;Foo, <span class="number">2</span>&gt;v2;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在输出前，我们预测下：</p>
+<ul>
+<li><code>std:::string</code> 的<code>alignof</code>值是8，那么<code>StaticVector</code>分配的两个<code>std::string</code>对象地址，都应该是8的倍数</li>
+<li><code>Foo</code>的<code>alignof</code>值是32，那么<code>StaticVector</code>为<code>Foo</code> 分配的两个<code>Foo</code>对象地址，都是32的倍数，</li>
+</ul>
+<p>好，现在我们来看下输出：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ g++ align_stroe.cc -o as &amp;&amp; ./as</span><br><span class="line">8/32</span><br><span class="line">0x16b5734c0</span><br><span class="line">0x16b5734e0</span><br><span class="line">*****</span><br><span class="line">32/32</span><br><span class="line">0x16b573470</span><br><span class="line">0x16b573490</span><br></pre></td></tr></table></figure>
+
+<p>所以，到此，你也许理解了<code>std::aligned_storage</code> 中<code>aligned</code>的含义，即每个对象都是经过内存对齐的。</p>
+<p>熟悉了<code>std::aligned_storage</code> 的用法，现在来看看他的实现叭，毕竟没人愿意只做个调包侠（滑稽脸）。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// in std namespace;</span></span><br><span class="line"><span class="keyword">template</span> &lt;std::<span class="type">size_t</span> _Len&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">__aligned_storage_msa</span> &#123;</span><br><span class="line">  <span class="keyword">union</span> <span class="title class_">__type</span> &#123;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">char</span> __data[_Len];</span><br><span class="line">    <span class="keyword">struct</span> <span class="title class_">__attribute__</span>((__aligned__)) &#123; &#125; __align;</span><br><span class="line">  &#125;;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;std::<span class="type">size_t</span> _Len, </span><br><span class="line">	      std::<span class="type">size_t</span> _Align = <span class="built_in">alignof</span>(<span class="keyword">typename</span> __aligned_storage_msa&lt;_Len&gt;::__type)&gt;</span><br><span class="line"><span class="keyword">struct</span> aligned_storage &#123;</span><br><span class="line">  <span class="keyword">union</span> type &#123;</span><br><span class="line">    <span class="type">unsigned</span> <span class="type">char</span> __data[_Len];</span><br><span class="line">    <span class="keyword">struct</span> <span class="title class_">alignas</span>(_Align) &#123; &#125; __align;</span><br><span class="line">  &#125;;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>在 <code>std::aligned_storage</code> 内部，是通过一个<code>union</code>来实现的：</p>
+<ul>
+<li><code>unsigned char __data[_Len];</code>：这一行保证了分配的内存大小是<code>_Len</code>个字节</li>
+<li><code>struct alignas(_Align) &#123; &#125; __align;</code> ：这一行保证了分配的内存是按照<code>Align</code> 大小进行对齐的。</li>
+</ul>
+<p>其中，第二点很好理解：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    <span class="type">char</span> data[<span class="number">16</span>];</span><br><span class="line">    <span class="built_in">alignas</span>(<span class="number">16</span>) <span class="type">char</span> aligned_data[<span class="number">16</span>];</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;unaligned: &quot;</span>&lt;&lt; <span class="built_in">alignof</span>(data) &lt;&lt; <span class="string">&quot;, aligned: &quot;</span> &lt;&lt; <span class="built_in">alignof</span>(aligned_data) &lt;&lt; std::endl;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>输出如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">unaligned: <span class="number">1</span>, aligned: <span class="number">16</span></span><br></pre></td></tr></table></figure>
+
+<p>因此，如果只有<code>unsigned char __data[_Len]；</code>，无法保证内存对齐，需要<code>struct alignas(_Align) &#123; &#125; __align</code>的辅助。</p>
+<p>最后再提下 <code>std::__aligned_storage_msa</code>的必要性：在构造类<code>std::aligned_storage</code>对象时，如果没有指定类的第二个模板参数<code>_Align</code>，即内存对齐大小，由<code>std::__aligned_storage_msa</code>为你设置默认的内存对齐大小。</p>
+<p>可以看出，在 <code>std::__aligned_storage_msa</code> 的实现中，<code>__attribute__((__aligned__))</code> 后面是没有参数的，此时gcc即会根据平台生成默认内存对齐大小。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; <span class="built_in">alignof</span>(std::__aligned_storage_msa&lt;<span class="built_in">sizeof</span>(<span class="number">1</span>)&gt;::__type) &lt;&lt; std::endl;</span><br><span class="line">    std::cout &lt;&lt; <span class="built_in">alignof</span>(std::__aligned_storage_msa&lt;<span class="built_in">sizeof</span>(<span class="number">4</span>)&gt;::__type) &lt;&lt; std::endl;</span><br><span class="line">    std::cout &lt;&lt; <span class="built_in">alignof</span>(std::__aligned_storage_msa&lt;<span class="built_in">sizeof</span>(<span class="number">16</span>)&gt;::__type) &lt;&lt; std::endl;</span><br><span class="line">    std::cout &lt;&lt; <span class="built_in">alignof</span>(std::__aligned_storage_msa&lt;<span class="built_in">sizeof</span>(<span class="number">32</span>)&gt;::__type) &lt;&lt; std::endl;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>输出如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ g++ align_stroe.cc -o as &amp;&amp; ./as</span><br><span class="line"><span class="number">16</span></span><br><span class="line"><span class="number">16</span></span><br><span class="line"><span class="number">16</span></span><br><span class="line"><span class="number">16</span></span><br></pre></td></tr></table></figure>
+
+<p>这个大小就是gcc编译器默认的内存大小。</p>
+<h2 id="std-align"><a href="#std-align" class="headerlink" title="std::align"></a>std::align</h2><p>类<code>std::aligned_storage</code> 是一个静态的内存对齐分配器，即在类<code>std::aligned_storage</code>对象构造完时，就已满足设定内存大小、内存对齐要求，但是如果现在有一块内存，想从中取出一块符合某对齐要求的内存，咋办？</p>
+<p>此时就可以使用<code>std::align</code>函数，其函数原型如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/// @param  alignment 是想要分配的内存符合的内存对齐大小</span></span><br><span class="line"><span class="comment">/// @param  size 想要分配内存的大小</span></span><br><span class="line"><span class="comment">/// @param  ptr 是个输入输出参数，输入时指向待使用的内存，输出时调整为符合alignment对齐要求的内存地址</span></span><br><span class="line"><span class="comment">/// @param  space 是ptr指向的内存剩余的空间</span></span><br><span class="line"><span class="comment">/// @return 如果 ptr 经过调整后能满足大小为 alignment 的对齐要求，则返回ptr的值，否则返回 nullptr</span></span><br><span class="line"><span class="function"><span class="type">void</span>* <span class="title">align</span><span class="params">( std::<span class="type">size_t</span> alignment,</span></span></span><br><span class="line"><span class="params"><span class="function">             std::<span class="type">size_t</span> size,</span></span></span><br><span class="line"><span class="params"><span class="function">             <span class="type">void</span>*&amp; ptr,</span></span></span><br><span class="line"><span class="params"><span class="function">             std::<span class="type">size_t</span>&amp; space)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<p>下面，我们继续先来看看 <a target="_blank" rel="noopener" href="https://zh.cppreference.com/w/%E9%A6%96%E9%A1%B5">cpprefernece</a> 中提供的一个demo，熟悉下怎么使用<code>std::align</code>这个函数。</p>
+<p>类<code>Arena</code>内已有一块缓冲区<code>buffer</code>，每次调用<code>AlignedAllocate&lt;T&gt;(size_t alignment)</code>函数时，即需要从<code>buffer</code>中取出大小为<code>sizeof(T)</code>的一块内存<code>ptr</code>，<code>AlignedAllocate</code>函数的输入参数<code>alignment</code>指定了获得的内存<code>ptr</code>满足的内存对齐要求。</p>
+<p>现在来看看实现。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="type">size_t</span> N&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Arena</span> &#123;</span><br><span class="line">  <span class="type">char</span> buffer[N];</span><br><span class="line">  <span class="type">void</span>* ptr;</span><br><span class="line">  <span class="type">size_t</span> size;</span><br><span class="line"></span><br><span class="line">  <span class="built_in">Arena</span>() : <span class="built_in">ptr</span>(buffer), <span class="built_in">size</span>(N) &#123; &#125;</span><br><span class="line">	</span><br><span class="line">  <span class="comment">/// @return 返回的指针满足大小为 alignment 的内存对齐要求</span></span><br><span class="line">  <span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line">  <span class="function">T* <span class="title">AlignedAllocate</span><span class="params">(<span class="type">size_t</span> alignment = <span class="keyword">alignof</span>(T))</span> </span>&#123;</span><br><span class="line">      std::cout &lt;&lt; <span class="string">&quot;ptr: &quot;</span> &lt;&lt; <span class="built_in">reinterpret_cast</span>&lt;<span class="type">void</span>*&gt;(ptr) &lt;&lt; <span class="string">&quot;, &quot;</span>;</span><br><span class="line">      <span class="keyword">if</span> (std::<span class="built_in">align</span>(alignment, <span class="built_in">sizeof</span>(T), ptr, size)) &#123;</span><br><span class="line">          T* result = <span class="built_in">reinterpret_cast</span>&lt;T*&gt;(ptr);</span><br><span class="line">          ptr = (<span class="type">char</span>*)ptr + <span class="built_in">sizeof</span>(T);</span><br><span class="line">          size -= <span class="built_in">sizeof</span>(T);</span><br><span class="line">          <span class="keyword">return</span> result;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="comment">// 若无，则返回 nullptr</span></span><br><span class="line">      <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>下面是测试。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    Arena&lt;<span class="number">64</span>&gt; arena;</span><br><span class="line"></span><br><span class="line">    <span class="type">char</span>* p1 = arena.<span class="built_in">AlignedAllocate</span>&lt;<span class="type">char</span>&gt;();</span><br><span class="line">    <span class="keyword">if</span> (p1) *p1 = <span class="string">&#x27;a&#x27;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;allocated a char at &quot;</span> &lt;&lt; (<span class="type">void</span>*)p1 &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line"> </span><br><span class="line">    <span class="type">int</span>* p2 = arena.<span class="built_in">AlignedAllocate</span>&lt;<span class="type">int</span>&gt;();</span><br><span class="line">    <span class="keyword">if</span> (p2) *p2 = <span class="number">1</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;allocated an int at &quot;</span> &lt;&lt; (<span class="type">void</span>*)p2 &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line"> </span><br><span class="line">    <span class="type">int</span>* p3 = arena.<span class="built_in">AlignedAllocate</span>&lt;<span class="type">int</span>&gt;(<span class="number">32</span>);</span><br><span class="line">    <span class="keyword">if</span> (p3) *p3 = <span class="number">2</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;allocated an int at &quot;</span> &lt;&lt; (<span class="type">void</span>*)p3 &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>从下面的输出可以看出，<code>AlignedAllocate</code> 函数返回的内存地址都是符合设定的内存对齐要求的。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ g++ align.cc -o align &amp;&amp; ./align </span><br><span class="line">ptr: 0x16fc2b4b8, allocated a char at 0x16fc2b4b8     <span class="comment"># 1 byte 内存对齐，指针无须调整</span></span><br><span class="line">ptr: 0x16fc2b4b9, allocated an int at 0x16fc2b4bc     <span class="comment"># 4 byte 内存对齐，指针调整了 3 个字节</span></span><br><span class="line">ptr: 0x16fc2b4c0, allocated an int at 0x16fc2b4c0     <span class="comment"># 32 byte 内存对齐，指针无须调整</span></span><br></pre></td></tr></table></figure>
+
+<p>最后，我们再来看看<code>std::align</code>函数的实现，稍微简化后如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// in &lt;memory&gt;</span></span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">void</span>* <span class="title">align</span><span class="params">(<span class="type">size_t</span> __align, <span class="type">size_t</span> __size, <span class="type">void</span> *&amp;__ptr, <span class="type">size_t</span> &amp;__space)</span> <span class="keyword">noexcept</span> </span>&#123;</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span> __intptr = <span class="built_in">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(__ptr);</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span> __aligned = (__intptr - <span class="number">1u</span> + __align) &amp; -__align;</span><br><span class="line">  <span class="type">const</span> <span class="keyword">auto</span> __diff = __aligned - __intptr;</span><br><span class="line">  <span class="comment">// 如果没有剩余的空间，直接返回 nullptr</span></span><br><span class="line">  <span class="keyword">if</span> ((__size + __diff) &gt; __space)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">   __space -= __diff;</span><br><span class="line">   <span class="keyword">return</span> __ptr = <span class="built_in">reinterpret_cast</span>&lt;<span class="type">void</span> *&gt;(__aligned);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>std::align</code>的实现里，最为关键的一步，即计算对齐后的地址：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> <span class="keyword">auto</span> __aligned = (__intptr - <span class="number">1u</span> + __align) &amp; -__align;</span><br></pre></td></tr></table></figure>
+
+<p>对于这一步，本来想写个证明啥的，还是举个例子来解释比较通俗。</p>
+<p>按照<code>__align</code>大小进行内存对齐，即可视为按<code>__align</code>进制向上取整。</p>
+<p>什么意思呢？</p>
+<p>比如说，现在按照10进制对齐，有地址12，想让12向上调整到10的倍数，怎么做？</p>
+<ol>
+<li>先加上一个步长：<code>12 + 10 - 1 = 21</code></li>
+<li>将余数1清掉：<code>21 &amp;  (-10) = 20</code>。这一步中，<code>-10</code> 的本质就是保证高位不变，将低位全部变为0，取<code>&amp;</code>之后，取余就全部清理了。</li>
+</ol>
+<p>现在的内存对齐，本质上也是向上取整：<code>__intptr - 1u + __align</code>是为了向前一个步长，再对  <code>-__align</code>取<code>&amp;</code>，来清除余数。</p>
+<p>关于内存对齐，很多项目里都有涉及，最近在阅读RocksDB也再次遇到，于是乎就找了个契机写下了这篇博客，后续会尝试更新RocksDB。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#alignment"><span class="toc-number">1.</span> <span class="toc-text">alignment</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#alignof"><span class="toc-number">2.</span> <span class="toc-text">alignof</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#alignas"><span class="toc-number">3.</span> <span class="toc-text">alignas</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-alignment-alignof-T"><span class="toc-number">3.1.</span> <span class="toc-text">1. alignment &gt;&#x3D; alignof(T)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-alignment-pow-2-N"><span class="toc-number">3.2.</span> <span class="toc-text">2. alignment &#x3D;&#x3D; pow(2, N)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#std-aligned-storage"><span class="toc-number">4.</span> <span class="toc-text">std::aligned_storage</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#std-align"><span class="toc-number">5.</span> <span class="toc-text">std::align</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/01/C++/align/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/01/C++/align/&text=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/01/C++/align/&is_video=false&description=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=内存对齐之 alignof、alignas 、aligned_storage、align 剖析&body=Check out this article: https://szza.github.io/2022/01/01/C++/align/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/01/C++/align/&title=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/01/C++/align/&name=内存对齐之 alignof、alignas 、aligned_storage、align 剖析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/01/C++/align/&t=内存对齐之 alignof、alignas 、aligned_storage、align 剖析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

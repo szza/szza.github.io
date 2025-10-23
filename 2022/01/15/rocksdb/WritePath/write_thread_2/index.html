@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="建议先阅读上一篇文章 WriteBatch 写入前的准备工作 了解一些基本概念  本篇博客讲解批量写流程的控制流程，了解这个流程之后再来讲解 PipelineWriteImpl 中优化。 整个写入流程大致如下： WriteThread::JoinBatchGroupJoinBatchGroup 函数充当着锁的作用：能成为 leader 的 writer 才能真正执行 WriteToWAL 和 M">
+<meta property="og:type" content="article">
+<meta property="og:title" content="WriteThread 如何控制并发写入流程">
+<meta property="og:url" content="https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="建议先阅读上一篇文章 WriteBatch 写入前的准备工作 了解一些基本概念  本篇博客讲解批量写流程的控制流程，了解这个流程之后再来讲解 PipelineWriteImpl 中优化。 整个写入流程大致如下： WriteThread::JoinBatchGroupJoinBatchGroup 函数充当着锁的作用：能成为 leader 的 writer 才能真正执行 WriteToWAL 和 M">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_write_thread_2_1.png?raw=true">
+<meta property="article:published_time" content="2022-01-15T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="RocksDb">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_write_thread_2_1.png?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>WriteThread 如何控制并发写入流程</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/02/02/rocksdb/WritePath/write_thread_3/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/01/10/rocksdb/WritePath/write_thread_1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&text=WriteThread 如何控制并发写入流程"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&is_video=false&description=WriteThread 如何控制并发写入流程"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何控制并发写入流程&body=Check out this article: https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&name=WriteThread 如何控制并发写入流程&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&t=WriteThread 如何控制并发写入流程"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-JoinBatchGroup"><span class="toc-number">1.</span> <span class="toc-text">WriteThread::JoinBatchGroup</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-LinkOne"><span class="toc-number">2.</span> <span class="toc-text">WriteThread::LinkOne</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#WriteStall"><span class="toc-number">2.1.</span> <span class="toc-text">WriteStall</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#compare-exchange-weak"><span class="toc-number">2.2.</span> <span class="toc-text">compare_exchange_weak</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#WriteThread-AwaitState"><span class="toc-number">2.3.</span> <span class="toc-text">WriteThread::AwaitState</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#WriteThread-CreateMissingNewerLinks"><span class="toc-number">2.4.</span> <span class="toc-text">WriteThread::CreateMissingNewerLinks</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-EnterAsBatchGroupLeader"><span class="toc-number">3.</span> <span class="toc-text">WriteThread::EnterAsBatchGroupLeader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-ExitAsBatchGroupLeader"><span class="toc-number">4.</span> <span class="toc-text">WriteThread::ExitAsBatchGroupLeader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#By-the-Way"><span class="toc-number">5.</span> <span class="toc-text">By the Way</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        WriteThread 如何控制并发写入流程
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-15T06:15:35.000Z" itemprop="datePublished">2022-01-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <blockquote>
+<p>建议先阅读上一篇文章 <a href="https://szza.github.io/2022/01/10/rocksdb/WritePath/write_thread_1/">WriteBatch 写入前的准备工作</a> 了解一些基本概念</p>
+</blockquote>
+<p>本篇博客讲解批量写流程的控制流程，了解这个流程之后再来讲解 <em>PipelineWriteImpl</em> 中优化。</p>
+<p>整个写入流程大致如下：<br><img src="https://github.com/szza/szza.github.io.images/blob/master/RocksDB/rocksdb_write_thread_2_1.png?raw=true" alt="write_path_2_1"></p>
+<h3 id="WriteThread-JoinBatchGroup"><a href="#WriteThread-JoinBatchGroup" class="headerlink" title="WriteThread::JoinBatchGroup"></a>WriteThread::JoinBatchGroup</h3><p><code>JoinBatchGroup</code> 函数充当着锁的作用：能成为 leader 的 writer 才能真正执行 <code>WriteToWAL</code> 和 <code>MemTable::Add</code> 操作，其他 writers 只能阻塞等待 leader-writer 完成。</p>
+<p>在 <code>WriteThread</code> 中有个 <code>newest_writer_</code> 字段总是指向最新插入的 <code>Writer</code> 对象：</p>
+<ol>
+<li>如果新插入一个 <code>Writer</code> 对象 w，则会尝试让 <code>newest_writer_</code> 指向该 w 。如果当前触发了 <em>WriteStall</em> 则会等待 <code>WriteStall</code> 被解除，才会再次尝试让 <code>newest_writer_</code> 指向该 w</li>
+<li>如果 w 插入时，<code>newest_writer_ == NULL</code> ，则 w 能顺利通过 <code>JoinBatchGroup</code> 函数，进入后续写入流程</li>
+<li>否则，说明当前已经存在 leader-writer，则只能阻塞等待 <code>w-&gt;state</code> 更改为下面其中一种才能解除阻塞:<ul>
+<li><code>STATE_GROUP_LEADER</code>: 变成下一个 write_group 的 leader，执行写入</li>
+<li><code>STATE_COMPLETED</code>: 说明已经存在一个 leader-writer 替自己完成了写入，解除阻塞后就可以直接返回应用层</li>
+<li><code>STATE_MEMTABLE_WRITER_LEADER</code>: …</li>
+<li><code>STATE_PARALLEL_MEMTABLE_WRITER</code>: …</li>
+</ul>
+</li>
+</ol>
+<p>代码如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::JoinBatchGroup</span><span class="params">(Writer* w)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(w-&gt;batch != <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="comment">// 1. 让 nnewest_writer_ 指向 w</span></span><br><span class="line">  <span class="type">bool</span> linked_as_leader = <span class="built_in">LinkOne</span>(w, &amp;newest_writer_);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (linked_as_leader) &#123;</span><br><span class="line">    <span class="built_in">SetState</span>(w, STATE_GROUP_LEADER);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">if</span> (!linked_as_leader) &#123;</span><br><span class="line">     <span class="comment">// 2. 阻塞等待 w-&gt;state &amp; mask != 0</span></span><br><span class="line">    <span class="built_in">AwaitState</span>(w,</span><br><span class="line">               STATE_GROUP_LEADER | STATE_MEMTABLE_WRITER_LEADER |</span><br><span class="line">                   STATE_PARALLEL_MEMTABLE_WRITER | STATE_COMPLETED,</span><br><span class="line">               &amp;jbg_ctx);</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="WriteThread-LinkOne"><a href="#WriteThread-LinkOne" class="headerlink" title="WriteThread::LinkOne"></a>WriteThread::LinkOne</h3><p><code>LinkOne</code>的功能其实就是在链表头发插入一个节点，不过需要先检查一个前提 <em>WriteStall</em>。</p>
+<h4 id="WriteStall"><a href="#WriteStall" class="headerlink" title="WriteStall"></a>WriteStall</h4><p>如果写操作触发了 <em>WriteStall</em> ，会向 WriterThread 中写入一个 <code>write_stall_dummy_</code> 标志。因此在尝试将 <code>newest_writer_</code> 指向新加入的 <code>w</code> 时都需要先检查下 <code>newest_writer_</code> 是否等于 <code>write_stall_dummy_</code>。如果等于，有以下两种情况：</p>
+<ul>
+<li><p><code>Writer::no_slowdown == false</code>，这是默认情况，即基于条件变量 <code>stall_cv_</code> 阻塞等待 <em>WriteStall</em> 解除。解除后则需要重新读取 <code>newest_writer_</code></p>
+<p>条件变量一般配合 while 一起使用，防止虚假唤醒，因此 <code>stall_cv_</code> 被唤醒后会 <em>continue</em> 并进行下一轮 while 循环，确认 <code>newest_writer_</code> 不是 <code>write_stall_dummy_</code> 才能继续下一步。</p>
+</li>
+<li><p><code>Writer::no_slowdown == true</code>，此时将错误 <code>Status::Incomplete</code> 返回给上层应用，让其自行决定如何处理 <code>WriteStall</code>，这就类似网络编程的非阻塞行为。</p>
+</li>
+</ul>
+<h4 id="compare-exchange-weak"><a href="#compare-exchange-weak" class="headerlink" title="compare_exchange_weak"></a>compare_exchange_weak</h4><p>当没有 <em>WriteStall</em> 或者有已经解除，则可以继续写入，将 <code>w-&gt;link_older = writers</code>。这里的 <code>link_older</code> 的语义其实就是 <code>next</code> 指针，效果即 <code>w-&gt;next = writers</code>。</p>
+<p>完成这一步后 <font color="red"> 却并没有执行 writers-&gt;prev &#x3D; w 操作</font>，为什么呢？这是为了在 leader-writer 写流程结束时能通过 <code>link_newer/prev</code> 是否为 NULL 选出下一轮的 leader-writer，详见后文的 <code>ExitAsBatchGroupLeader</code> 函数。</p>
+<p>再通过 <code>compare_exchange_weak</code> 操作将 <code>newest_writer_</code> 指向最新插入的 w，</p>
+<ul>
+<li><p>成功，则通过判断 <code>writers</code> 是否为 NULL，来判断 w 是不是下一轮 writer_group 的 leader-writer </p>
+<p>这是因为上一个 write_group 完成后就会尝试将 <code>newest_writer_</code> 设置为 NULL，只需要通过判断 <code>writers ==  NULL</code> 就可以确定新插入的 w 是不是下一轮 write_group 的 leader。</p>
+</li>
+<li><p>失败，则说明有个并发 <code>w0</code> 在自己之前完成了 <code>compare_exchange_weak</code> 操作，则自己会在下一轮 while 循环中完成此操作，使得 <code>newest_writer_</code> 指向 w，并形成 <code>w-&gt;next = w0</code> 连接。</p>
+</li>
+</ul>
+<p>每次有新的 w，都只是改变 <code>newest_writer_</code>，并通过 <code>link_older/next</code> 指针把所有插入的 writers 串联起来，<em>且不重不漏</em>。由于每次只有 leader-writer 具有写权限，再让 leader-writer 在将所有的 writers 打包成一个 writer_group 时，给缺失的 <code>link_newer/prev</code> 指针赋值，就完成了双链表创建。由于此时实际上已经是单线程操作，因此不需要借助任何同步措施也没有并发的风险。</p>
+<p>代码如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">WriteThread::LinkOne</span><span class="params">(Writer* w, std::atomic&lt;Writer*&gt;* newest_writer)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(newest_writer != <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="built_in">assert</span>(w-&gt;state == STATE_INIT);</span><br><span class="line">  Writer* writers = newest_writer-&gt;<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">  <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    <span class="built_in">assert</span>(writers != w);</span><br><span class="line">    <span class="keyword">if</span> (writers == &amp;write_stall_dummy_) &#123;</span><br><span class="line">      <span class="keyword">if</span> (w-&gt;no_slowdown) &#123;</span><br><span class="line">        w-&gt;status = Status::<span class="built_in">Incomplete</span>(<span class="string">&quot;Write stall&quot;</span>);</span><br><span class="line">        <span class="built_in">SetState</span>(w, STATE_COMPLETED);</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">false</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      &#123;</span><br><span class="line">        <span class="function">MutexLock <span class="title">lock</span><span class="params">(&amp;stall_mu_)</span></span>;</span><br><span class="line">        writers = newest_writer-&gt;<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">        <span class="keyword">if</span> (writers == &amp;write_stall_dummy_) &#123;</span><br><span class="line">          stall_cv_.<span class="built_in">Wait</span>();</span><br><span class="line">          <span class="comment">// Load newest_writers_ again since it may have changed</span></span><br><span class="line">          writers = newest_writer-&gt;<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">          <span class="keyword">continue</span>;</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    w-&gt;link_older = writers;</span><br><span class="line">    <span class="keyword">if</span> (newest_writer-&gt;<span class="built_in">compare_exchange_weak</span>(writers, w)) &#123;</span><br><span class="line">      <span class="keyword">return</span> (writers == <span class="literal">nullptr</span>);</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="WriteThread-AwaitState"><a href="#WriteThread-AwaitState" class="headerlink" title="WriteThread::AwaitState"></a>WriteThread::AwaitState</h4><p><code>WriteThread::AwaitState</code> 中的优化点较多，下一期单独开一篇讲解这里的优化。这个函数的作用是阻塞等待直到满足 <code>w-&gt;state &amp; goal_mask != 0</code>。 </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">uint8_t</span> <span class="title">AwaitState</span><span class="params">(Writer* w, <span class="type">uint8_t</span> goal_mask, AdaptationContext* ctx)</span></span>;</span><br></pre></td></tr></table></figure>
+
+<h4 id="WriteThread-CreateMissingNewerLinks"><a href="#WriteThread-CreateMissingNewerLinks" class="headerlink" title="WriteThread::CreateMissingNewerLinks"></a>WriteThread::CreateMissingNewerLinks</h4><p>缺失的 <code>prev</code> 指针由 <code>CreateMissingNewerLinks</code> 函数补全。</p>
+<p>传入的 <code>head</code> 即 <code>newest_writer_</code> 的值，目前所有待执行的 writers 已经通过 next 指针串联起来了，这里要做的就是将其 prev 指针补全。代码如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::CreateMissingNewerLinks</span><span class="params">(Writer* head)</span> </span>&#123;</span><br><span class="line">  <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">    Writer* next = head-&gt;link_older;</span><br><span class="line">    <span class="keyword">if</span> (next == <span class="literal">nullptr</span> || next-&gt;link_newer != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">      <span class="built_in">assert</span>(next == <span class="literal">nullptr</span> || next-&gt;link_newer == head);</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    next-&gt;link_newer = head; <span class="comment">// next-&gt;prev = head;</span></span><br><span class="line">    head = next;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="WriteThread-EnterAsBatchGroupLeader"><a href="#WriteThread-EnterAsBatchGroupLeader" class="headerlink" title="WriteThread::EnterAsBatchGroupLeader"></a>WriteThread::EnterAsBatchGroupLeader</h3><p>writer 没有阻塞在 <code>WriteThread::JoinBatchGroup</code> 函数，则说明 <code>writer</code> 目前已经成为 leader-writer，则需要由 leader-writer 尝试将目前所有待执行的 writers 封装到一个 write_group 中，这个由 <code>EnterAsBatchGroupLeader</code> 函数完成。</p>
+<p>执行到 <code>EnterAsBatchGroupLeader</code> 函数时，<code>newest_writer_</code> 可能一直在更改，即不断指向最新的 writer。但是没关系，因为此时 leader-writer 已经诞生了，更新的 writer 在执行 <code>WriteThread::JoinBatchGroup</code> 时候会被阻塞在 <code>AwaitState</code>，如果此时 leader-writer 刚好执行到 <code>EnterAsBatchGroupLeader</code> 函数，则会由 leader-writer 将 <em>[leader-writer, newest_writer]</em> 区间的所有 writers 封装到 writer_group 中，由 leader-writer 来统一执行批量写入。其中 <code>write_group-&gt;last_writer</code> 指向的就是当前最新的 newest_writer。</p>
+<p>在上一篇文章，讲解了 <code>WriteGroup</code> 内部封装了迭代器，那么就可以使用如下方式并以 <code>leader_writer -&gt; newst_writer</code> 顺序遍历所有 writers。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span>(<span class="keyword">auto</span> writer : *writer_group) &#123;</span><br><span class="line">  <span class="comment">// 批量写入 </span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>代码如下4步：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">size_t</span> <span class="title">WriteThread::EnterAsBatchGroupLeader</span><span class="params">(Writer* leader,</span></span></span><br><span class="line"><span class="params"><span class="function">                                            WriteGroup* write_group)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(leader-&gt;link_older == <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="built_in">assert</span>(leader-&gt;batch != <span class="literal">nullptr</span>);</span><br><span class="line">  <span class="built_in">assert</span>(write_group != <span class="literal">nullptr</span>);</span><br><span class="line"></span><br><span class="line">  <span class="type">size_t</span> size = WriteBatchInternal::<span class="built_in">ByteSize</span>(leader-&gt;batch);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 1. write_group 大小限制</span></span><br><span class="line">  <span class="type">size_t</span> max_size = max_write_batch_group_size_bytes;</span><br><span class="line">  <span class="type">const</span> <span class="type">uint64_t</span> min_batch_size_bytes = max_write_batch_group_size_bytes / <span class="number">8</span>;</span><br><span class="line">  <span class="keyword">if</span> (size &lt;= min_batch_size_bytes) &#123;</span><br><span class="line">    max_size = size + min_batch_size_bytes;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 2. 初始化 write_group</span></span><br><span class="line">  leader-&gt;write_group = write_group;</span><br><span class="line">  write_group-&gt;leader = leader;</span><br><span class="line">  write_group-&gt;last_writer = leader;</span><br><span class="line">  write_group-&gt;size = <span class="number">1</span>;</span><br><span class="line">  Writer* newest_writer = newest_writer_.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 3. 补全 [leader-writer, newest_writer] 丢失的 prev 指针</span></span><br><span class="line">  <span class="built_in">CreateMissingNewerLinks</span>(newest_writer);</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 4. 封装到 write_group</span></span><br><span class="line">  Writer* w = leader;</span><br><span class="line">  <span class="keyword">while</span> (w != newest_writer) &#123;</span><br><span class="line">    <span class="built_in">assert</span>(w-&gt;link_newer);</span><br><span class="line">    w = w-&gt;link_newer;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// ... other break conditions</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (size + WriteBatchInternal::<span class="built_in">ByteSize</span>(w-&gt;batch) &gt; max_size) &#123;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    w-&gt;write_group = write_group; <span class="comment">// 设置 w 属于当前 write_group</span></span><br><span class="line">    size += batch_size;           <span class="comment">// 这个 write_group 的数据量大小</span></span><br><span class="line">    write_group-&gt;last_writer = w; <span class="comment">// 更新 last_writer</span></span><br><span class="line">    write_group-&gt;size++;          <span class="comment">// writer_group 中 writers 的个数</span></span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> size;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="WriteThread-ExitAsBatchGroupLeader"><a href="#WriteThread-ExitAsBatchGroupLeader" class="headerlink" title="WriteThread::ExitAsBatchGroupLeader"></a>WriteThread::ExitAsBatchGroupLeader</h3><p>这里暂时不关注 <em>enable_pipelined_write_</em>, 这是开启 <em>PipelineWriteImpl</em> 的标志位。</p>
+<p>当数据都已经写入 WAL 和 MemTable，则会调用 <code>ExitAsBatchGroupLeader</code>，此时需要判断在当前 write_group 写入过程中是否出现了新的 writers：</p>
+<ul>
+<li>是：则需要从等待的 writers 中挑选出<em>新的</em> leader-writer</li>
+<li>否：则需要将 <code>newest_writer_</code> 赋值为 NULL</li>
+</ul>
+<p>需要先读取 <code>newest_writer_</code> 的最新值 <em>head</em>，来判断是否有新的 <code>writer</code> 插入: </p>
+<ul>
+<li><p>如果 <code>head != last_writer</code> 则说明在当前 write_group 写操作过程中有出现新的 writers ，并阻塞等待在 <code>JoinBatchGroup</code></p>
+</li>
+<li><p>如果 <code>head == last_writer</code> 但是 <code>newest_writer_.compare_exchange_strong(head, nullptr)</code> 为 false，则说明在 <code>newest_writer_</code> load <em>之后</em>并在 <code>compare_exchange_strong</code> <em>之前</em> 有新的 writers 出现</p>
+<p>上述两种情况，都需要将 <em>[<code>last_writer</code>, <code>head</code>]</em> 区间所有 writers 缺失的 prev 指针补全，因为补全后 <code>last_writer-&gt;prev</code> 指向的就是新的 leader-writer。</p>
+<p>这是因为 <code>last_writer-&gt;prev</code> 是在 last_writer 之后最早插入的 writer，为保持顺序性，这就是新的 leader-writer。</p>
+</li>
+</ul>
+<p>完成上述操作，剩下的就是将当前 write_group 中的所有 writers 状态更改为 <em>STATE_COMPLETED</em> 解除他们在 <code>JoinBatchGroup</code> 处的阻塞，尽快返回应用层。这一步也有个小细节，见代码注释。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::ExitAsBatchGroupLeader</span><span class="params">(WriteGroup&amp; write_group,</span></span></span><br><span class="line"><span class="params"><span class="function">                                         Status&amp; status)</span> </span>&#123;</span><br><span class="line">  Writer* leader = write_group.leader;</span><br><span class="line">  Writer* last_writer = write_group.last_writer;</span><br><span class="line">  <span class="built_in">assert</span>(leader-&gt;link_older == <span class="literal">nullptr</span>);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (enable_pipelined_write_) &#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    Writer* head = newest_writer_.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">    <span class="keyword">if</span> (head != last_writer ||</span><br><span class="line">        !newest_writer_.<span class="built_in">compare_exchange_strong</span>(head, <span class="literal">nullptr</span>)) &#123;</span><br><span class="line">      <span class="comment">// 存在新插入的 writer</span></span><br><span class="line">      <span class="built_in">assert</span>(head != last_writer);</span><br><span class="line"></span><br><span class="line">      <span class="comment">// 1. 补全 [last_writer, head] 的 prev指针</span></span><br><span class="line">      <span class="built_in">CreateMissingNewerLinks</span>(head);</span><br><span class="line">      <span class="built_in">assert</span>(last_writer-&gt;link_newer != <span class="literal">nullptr</span>);</span><br><span class="line">      <span class="built_in">assert</span>(last_writer-&gt;link_newer-&gt;link_older == last_writer);</span><br><span class="line">      <span class="comment">// 2. 断开链表</span></span><br><span class="line">      last_writer-&gt;link_newer-&gt;link_older = <span class="literal">nullptr</span>; </span><br><span class="line"></span><br><span class="line">      <span class="comment">// 3. 设置新的 leader-writer</span></span><br><span class="line">      <span class="built_in">SetState</span>(last_writer-&gt;link_newer, STATE_GROUP_LEADER);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 4. 将 [leader, last_writer] 区间的 writers 状态设置为 STATE_COMPLETED</span></span><br><span class="line">    <span class="comment">//    即解除阻塞，让 follower-writer 返回应用层</span></span><br><span class="line">    <span class="keyword">while</span> (last_writer != leader) &#123;</span><br><span class="line">      <span class="built_in">assert</span>(last_writer);</span><br><span class="line">      last_writer-&gt;status = status;</span><br><span class="line">      <span class="comment">// 需要先获取 next指针，再更改状态为 STATE_COMPLETED</span></span><br><span class="line">      <span class="comment">// 因为先更改 STATE_COMPLETED 很可能导致 last_writer 就被正在阻塞的线程销毁了</span></span><br><span class="line">      <span class="comment">// 再获取 next 指针就会触发 coredump</span></span><br><span class="line">      <span class="keyword">auto</span> next = last_writer-&gt;link_older;</span><br><span class="line">      <span class="built_in">SetState</span>(last_writer, STATE_COMPLETED); <span class="comment">// 解除阻塞</span></span><br><span class="line"></span><br><span class="line">      last_writer = next;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="By-the-Way"><a href="#By-the-Way" class="headerlink" title="By the Way"></a>By the Way</h3><ul>
+<li>这篇文章里面用了许多原子操作以及一些内存序，诸如 <code>compare_exchange_strong/compare_exchange_weak</code> 区别，<code>acquire/release</code>语义，等后面有空再单独讲解下这个问题。</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-JoinBatchGroup"><span class="toc-number">1.</span> <span class="toc-text">WriteThread::JoinBatchGroup</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-LinkOne"><span class="toc-number">2.</span> <span class="toc-text">WriteThread::LinkOne</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#WriteStall"><span class="toc-number">2.1.</span> <span class="toc-text">WriteStall</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#compare-exchange-weak"><span class="toc-number">2.2.</span> <span class="toc-text">compare_exchange_weak</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#WriteThread-AwaitState"><span class="toc-number">2.3.</span> <span class="toc-text">WriteThread::AwaitState</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#WriteThread-CreateMissingNewerLinks"><span class="toc-number">2.4.</span> <span class="toc-text">WriteThread::CreateMissingNewerLinks</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-EnterAsBatchGroupLeader"><span class="toc-number">3.</span> <span class="toc-text">WriteThread::EnterAsBatchGroupLeader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#WriteThread-ExitAsBatchGroupLeader"><span class="toc-number">4.</span> <span class="toc-text">WriteThread::ExitAsBatchGroupLeader</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#By-the-Way"><span class="toc-number">5.</span> <span class="toc-text">By the Way</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&text=WriteThread 如何控制并发写入流程"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&is_video=false&description=WriteThread 如何控制并发写入流程"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何控制并发写入流程&body=Check out this article: https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&title=WriteThread 如何控制并发写入流程"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&name=WriteThread 如何控制并发写入流程&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/15/rocksdb/WritePath/write_thread_2/&t=WriteThread 如何控制并发写入流程"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

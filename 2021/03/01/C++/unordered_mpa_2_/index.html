@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="观前提醒，横屏有助于提升阅读体验。 上一节剖析 std::unordered_map 具有O(1)时间复杂度的原理中讲解了std::unordered_map应对hash冲突、退化，实现O(1)时间复杂度的原理。这一节从源码角度看看它底层实现细节。 在本节，由于C++的STL中模板参数较多，为便于描述：  将模板参数较多的返回类型使用auto替代 将类的成员函数实现中的类模板参数以...替代  i">
+<meta property="og:type" content="article">
+<meta property="og:title" content="剖析 std::unordered_map 插入过程">
+<meta property="og:url" content="https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="观前提醒，横屏有助于提升阅读体验。 上一节剖析 std::unordered_map 具有O(1)时间复杂度的原理中讲解了std::unordered_map应对hash冲突、退化，实现O(1)时间复杂度的原理。这一节从源码角度看看它底层实现细节。 在本节，由于C++的STL中模板参数较多，为便于描述：  将模板参数较多的返回类型使用auto替代 将类的成员函数实现中的类模板参数以...替代  i">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-03-01T07:15:07.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Modern C++">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>剖析 std::unordered_map 插入过程</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2021/03/01/thread/thread/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/03/01/C++/unordered_map_1_/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&text=剖析 std::unordered_map 插入过程"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&is_video=false&description=剖析 std::unordered_map 插入过程"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map 插入过程&body=Check out this article: https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&name=剖析 std::unordered_map 插入过程&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&t=剖析 std::unordered_map 插入过程"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#insert"><span class="toc-number">1.</span> <span class="toc-text">insert</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hashtable-M-emplace"><span class="toc-number">2.</span> <span class="toc-text">_Hashtable::_M_emplace</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hashtable-M-find-node"><span class="toc-number">3.</span> <span class="toc-text">_Hashtable::_M_find_node</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hashtable-M-insert-unique-node"><span class="toc-number">4.</span> <span class="toc-text">_Hashtable::_M_insert_unique_node</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Power-rehash-policy-M-need-rehash"><span class="toc-number">4.1.</span> <span class="toc-text">_Power_rehash_policy::_M_need_rehash</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Hashtable-M-rehash"><span class="toc-number">4.2.</span> <span class="toc-text">_Hashtable::_M_rehash</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Hashtable-M-rehash-aux"><span class="toc-number">4.3.</span> <span class="toc-text">_Hashtable::_M_rehash_aux</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        剖析 std::unordered_map 插入过程
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-03-01T07:15:07.000Z" itemprop="datePublished">2021-03-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Modern-C/" rel="tag">Modern C++</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>观前提醒，横屏有助于提升阅读体验。</p>
+<p>上一节<a href>剖析 std::unordered_map 具有O(1)时间复杂度的原理</a>中讲解了<code>std::unordered_map</code>应对hash冲突、退化，实现O(1)时间复杂度的原理。这一节从源码角度看看它底层实现细节。</p>
+<p>在本节，由于C++的STL中模板参数较多，为便于描述：</p>
+<ul>
+<li>将模板参数较多的返回类型使用<code>auto</code>替代</li>
+<li>将类的成员函数实现中的类模板参数以<code>...</code>替代</li>
+</ul>
+<h3 id="insert"><a href="#insert" class="headerlink" title="insert"></a>insert</h3><p>下面从<code>insert</code>方法开始：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    </span><br><span class="line">    std::unordered_map&lt;<span class="type">int</span>, <span class="type">int</span>&gt; hash_map;</span><br><span class="line">    hash_map.<span class="built_in">insert</span>(&#123;<span class="number">1</span>, <span class="number">1</span>&#125;);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>insert</code>函数，内部是调用<code>_Hashtable</code>对象<code>_M_h.insert(...)</code>来实现的。为避免不必要的复制，会使用移动语义将<code>&#123;1,1&#125;</code>作为<code>_M_h.inser</code>的参数。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">std::pair&lt;iterator, <span class="type">bool</span>&gt;  <span class="title">insert</span><span class="params">(value_type&amp;&amp; __x)</span> </span>&#123; </span><br><span class="line">     <span class="keyword">return</span> _M_h.<span class="built_in">insert</span>(std::<span class="built_in">move</span>(__x)); </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>_M_h.insert</code>函数是由<code>_Hashtable</code>的父类<code>_Insert</code> 实现，因此该<code>hash_map.insert(...)</code>函数实际上调用的是<code>hashtable_policy.h/_Insert::insert(...)</code>方法：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;...&gt;</span><br><span class="line"> <span class="keyword">struct</span> <span class="title class_">_Insert</span>&lt;...&gt; &#123; </span><br><span class="line">     <span class="comment">//...</span></span><br><span class="line">    <span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Pair, <span class="keyword">typename</span> = _IFconsp&lt;_Pair&gt;&gt;</span><br><span class="line">    __ireturn_type <span class="built_in">insert</span>(_Pair&amp;&amp; __v) </span><br><span class="line">     &#123;</span><br><span class="line">      __hashtable&amp; __h = <span class="keyword">this</span>-&gt;_M_conjure_hashtable();		<span class="comment">// 从父类转换为子类</span></span><br><span class="line">      <span class="keyword">return</span> __h._M_emplace(__unique_keys(), std::forward&lt;_Pair&gt;(__v));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//..</span></span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>函数<code>__unique_keys()</code>的值是<code>std::true_type</code>类型，其值在<code>std::unordered_map</code>初始化时就已确定，是用于区分 <code>std:;unordered_map</code> 和  <code>std::unordered_multimap</code>：</p>
+<ul>
+<li>对于 <code>std::unordered_map</code>，<code>__unique_keys</code> 是<code>std::true_type</code>类型</li>
+<li>对于 <code>std::unordered_multimap</code>，<code>__unique_keys</code> 是<code>std::false_type</code>类型</li>
+</ul>
+<p>因此，<code>__unique_keys()</code>默认构造函数，就能确定当前是哪种类型。 其初始化过程见下四步：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="type">bool</span> _Cache_hash_code, <span class="type">bool</span> _Constant_iterators, <span class="type">bool</span> _Unique_keys&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">_Hashtable_traits</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">using</span> __hash_cached = __bool_constant&lt;_Cache_hash_code&gt;;</span><br><span class="line">    <span class="keyword">using</span> __constant_iterators = __bool_constant&lt;_Constant_iterators&gt;;</span><br><span class="line">    <span class="keyword">using</span> __unique_keys = __bool_constant&lt;_Unique_keys&gt;;	<span class="comment">//1) 在此定义</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="type">bool</span> _Cache&gt;</span><br><span class="line"><span class="keyword">using</span> __umap_traits = __detail::_Hashtable_traits&lt;_Cache, <span class="literal">false</span>, <span class="literal">true</span>&gt;; 	<span class="comment">// 2) 特化为 true</span></span><br><span class="line">	</span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Key,</span><br><span class="line">         <span class="keyword">typename</span> _Tp,</span><br><span class="line">         <span class="keyword">typename</span> _Hash  = hash&lt;_Key&gt;,</span><br><span class="line">         <span class="keyword">typename</span> _Pred  = std::equal_to&lt;_Key&gt;,</span><br><span class="line">         <span class="keyword">typename</span> _Alloc = std::allocator&lt;std::pair&lt;<span class="type">const</span> _Key, _Tp&gt; &gt;,</span><br><span class="line">         <span class="keyword">typename</span> _Tr    = __umap_traits&lt;__cache_default&lt;_Key, _Hash&gt;::value&gt;&gt; <span class="comment">//3) 特化后在此传入</span></span><br><span class="line"><span class="keyword">using</span> __umap_hashtable = _Hashtable&lt;_Key, </span><br><span class="line">                                    std::pair&lt;<span class="type">const</span> _Key, _Tp&gt;,</span><br><span class="line">                                    _Alloc, </span><br><span class="line">                                    __detail::_Select1st,</span><br><span class="line">                                    _Pred, </span><br><span class="line">                                    _Hash,</span><br><span class="line">                                    __detail::_Mod_range_hashing,</span><br><span class="line">                                    __detail::_Default_ranged_hash,</span><br><span class="line">                                    __detail::_Prime_rehash_policy, </span><br><span class="line">                                    _Tr&gt;;  </span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Key, </span><br><span class="line">		<span class="keyword">typename</span> _Tp,</span><br><span class="line">		<span class="keyword">typename</span> _Hash  = hash&lt;_Key&gt;,</span><br><span class="line">		<span class="keyword">typename</span> _Pred  = equal_to&lt;_Key&gt;,</span><br><span class="line">		<span class="keyword">typename</span> _Alloc = allocator&lt;std::pair&lt;<span class="type">const</span> _Key, _Tp&gt;&gt;&gt;</span><br><span class="line"><span class="keyword">class</span> unordered_map</span><br><span class="line">&#123;</span><br><span class="line">  <span class="keyword">typedef</span> __umap_hashtable&lt;_Key, _Tp, _Hash, _Pred, _Alloc&gt;  _Hashtable;</span><br><span class="line">  _Hashtable _M_h;   <span class="comment">// 4) 此时  __unique_keys() 即 std::true_type 类型</span></span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Hashtable-M-emplace"><a href="#Hashtable-M-emplace" class="headerlink" title="_Hashtable::_M_emplace"></a>_Hashtable::_M_emplace</h3><p>因此，<code>insert</code>函数内部将会调用如下实例化版本：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">__h._M_emplace(std::true_type, std::forward&lt;_Pair&gt;(__v));</span><br></pre></td></tr></table></figure>
+
+<p><code>_M_emplace</code>函数的执行步骤如下：</p>
+<ol>
+<li>构造新的节点<code>__node</code>：先为新的节点分配内存，并以传入的参数调用构造函数</li>
+<li>使用<code>__node-&gt;key</code>的来计算hashcode</li>
+<li>根据hashcode计算将要插入的桶索引<code>__bkt</code></li>
+<li>为了确保<code>__node</code>这个节点在<code>_Hashtable</code>中并没有存储过，因此要先在桶的链表中查找<ul>
+<li>如果找到，则不插入</li>
+<li>如果没有找到，则调用 <code>_M_insert_unique_node</code> 函数插入节点。在此过程中可能会发送 Rehash行为</li>
+</ul>
+</li>
+</ol>
+<p>先看整个流程，再分叙各个细节。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">auto</span> _Hashtable&lt;_...&gt;::_M_emplace(std::true_type, _Args &amp;&amp; ...__args) &#123;</span><br><span class="line">    <span class="comment">// 分配节点</span></span><br><span class="line">    __node_type *__node = <span class="keyword">this</span>-&gt;_M_allocate_node(std::forward&lt;_Args&gt;(__args)...);</span><br><span class="line">    <span class="comment">// 取出节点的 key</span></span><br><span class="line">    <span class="type">const</span> key_type &amp;__k = <span class="keyword">this</span>-&gt;_M_extract()(__node-&gt;_M_v()); </span><br><span class="line">    <span class="comment">// 键对应的 hashcode</span></span><br><span class="line">    __hash_code __code;                                         </span><br><span class="line">    __try &#123;</span><br><span class="line">        __code = <span class="keyword">this</span>-&gt;_M_hash_code(__k);</span><br><span class="line">    &#125;</span><br><span class="line">    __catch(...) &#123;</span><br><span class="line">        <span class="keyword">this</span>-&gt;_M_deallocate_node(__node);</span><br><span class="line">        __throw_exception_again;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 节点对应的桶索引</span></span><br><span class="line">    size_type __bkt = _M_bucket_index(__k, __code);    </span><br><span class="line">    <span class="keyword">if</span> (__node_type *__p = _M_find_node(__bkt, __k, __code)) &#123;</span><br><span class="line">        <span class="comment">// 如果在 _M_bucket 中已经有这个 __node， 则不插入</span></span><br><span class="line">        <span class="keyword">this</span>-&gt;_M_deallocate_node(__node);</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_pair</span>(<span class="built_in">iterator</span>(__p), <span class="literal">false</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 插入新节点</span></span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_pair</span>(_M_insert_unique_node(__bkt, __code, __node), <span class="literal">true</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Hashtable-M-find-node"><a href="#Hashtable-M-find-node" class="headerlink" title="_Hashtable::_M_find_node"></a>_Hashtable::_M_find_node</h3><p><code>_M_find_node</code> 函数，在<code>_M_bucket[__btk]</code>指向的链表中查找是否有hashcode是<code>__code</code>的键<code>__k</code> ，时间复杂度是O(N)。其内部是调用<code>_M_find_before_node</code>函数来查找待插入节点<code>__node</code>：</p>
+<ul>
+<li>如果已存在<code>__node</code>，则<code>_M_find_before_node</code> 函数返回<code>__node</code>的前一个位置，</li>
+<li>否则返回<code>nullptr</code></li>
+</ul>
+<p><code>_M_find_node</code> 函数实现如下：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">__node_type* _M_find_node(size_type __bkt, <span class="type">const</span> key_type &amp;__key, __hash_code __c) <span class="type">const</span> &#123;</span><br><span class="line">    __node_base *__before_n = _M_find_before_node(__bkt, __key, __c);</span><br><span class="line">    <span class="keyword">if</span> (__before_n)</span><br><span class="line">        <span class="keyword">return</span> static_cast&lt;__node_type *&gt;(__before_n-&gt;_M_nxt);</span><br><span class="line">    <span class="keyword">return</span> nullptr;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>_M_find_before_node</code> 函数，即在<code>_M_buckets[__btk]</code>中查找是否存在<code>__node</code>，由<code>_M_equals</code>函数判断两个节点是否相同。如果遍历完整个链表也没发现存在<code>__node</code>，则返回<code>nullptr</code>。</p>
+<p>其中，当前节点不存在此链表，有两种可能：</p>
+<ul>
+<li><p><code>_M_bucket_index(__p-&gt;_M_next()) != __n</code>：表示下一个节点的位置不位于当前桶中。</p>
+<p>这是因为，为了能遍历<code>std::unordered_map</code>，每个桶<code>_M_bucket[__btk]</code>指向的链表的最后一个节点，是另一个桶的哨兵节点（这在后面<strong>R</strong>ehash函数中会更加详细的说明），当<code>_M_bucket_index(__p-&gt;_M_next()) != __n</code>时，即当前链表中不存在<code>__node</code>节点。</p>
+</li>
+<li><p><code>__p-&gt;_M_nxt  == nullptr</code>：这个整个<code>_Hashtable</code>的最后一节点</p>
+</li>
+</ul>
+<p>因此，当没有<code>load_factor &lt;= max_load_factor</code>限制，这个链表可能会很长，使得<code>_Hashtable</code>的时间复杂度恶化至<code>O(N)</code>.</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">auto</span> _Hashtable&lt;...&gt;::_M_find_before_node(size_type __n, <span class="type">const</span> key_type&amp; __k, __hash_code __code)&#123;</span><br><span class="line">       __node_base *__prev_p = _M_buckets[__n]; <span class="comment">// 每个桶的哨兵节点</span></span><br><span class="line">       <span class="comment">// 这是个空桶，则直接return</span></span><br><span class="line">       <span class="keyword">if</span> (!__prev_p) <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line"></span><br><span class="line">       <span class="comment">// 从首节点开始遍历</span></span><br><span class="line">       <span class="keyword">for</span> (__node_type *__p = <span class="built_in">static_cast</span>&lt;__node_type *&gt;(__prev_p-&gt;_M_nxt);;__p = __p-&gt;_M_next()) &#123;</span><br><span class="line">           <span class="comment">// 已存在键__k的节点，直接返回前一个节点</span></span><br><span class="line">           <span class="keyword">if</span> (<span class="keyword">this</span>-&gt;_M_equals(__k, __code, __p))</span><br><span class="line">               <span class="keyword">return</span> __prev_p;</span><br><span class="line"></span><br><span class="line">           <span class="comment">// 如果 __p-&gt;_M_next == nullptr，或者不在当前桶了，</span></span><br><span class="line">           <span class="comment">// 直接break，返回 nullptr</span></span><br><span class="line">           <span class="keyword">if</span> (!__p-&gt;_M_nxt || _M_bucket_index(__p-&gt;_M_next()) != __n)</span><br><span class="line">               <span class="keyword">break</span>;</span><br><span class="line">           __prev_p = __p;</span><br><span class="line">       &#125;</span><br><span class="line">       <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>视线再回到<code>_Hashtable&lt;...&gt;::_M_emplace</code>函数：</p>
+<ul>
+<li>如果已经存在待插入节点<code>__node</code>，则直接返回<code>std::make_pair(iterator(__p), false);</code>，<code>iterator(__p)</code>指向<code>__node</code>的位置</li>
+<li>如果不存在，则先调用<code>_M_insert_unique_node</code>函数，将<code>__node</code>插入到<code>_Hashtable</code>中，再返回<code>std::make_pair(iterator(__p), true);</code>，其中<code>iterator(__p)</code>是<code>_M_insert_unique_node</code>函数的返回值。</li>
+</ul>
+<p><code>_M_emplace</code>函数剩余过程如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">auto</span> _Hashtable&lt;_...&gt;::_M_emplace(std::true_type, _Args &amp;&amp; ...__args) &#123;  </span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">// 如果在 _M_bucket 中已经有这个 __node， 则不插入</span></span><br><span class="line">    <span class="keyword">if</span> (__node_type* __p = _M_find_node(__bkt, __k, __code)) &#123;</span><br><span class="line">        <span class="comment">// There is already an equivalent node, no insertion</span></span><br><span class="line">        <span class="keyword">this</span>-&gt;_M_deallocate_node(__node);</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_pair</span>(<span class="built_in">iterator</span>(__p), <span class="literal">false</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 插入节点</span></span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_pair</span>(_M_insert_unique_node(__bkt, __code, __node), <span class="literal">true</span>);   </span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Hashtable-M-insert-unique-node"><a href="#Hashtable-M-insert-unique-node" class="headerlink" title="_Hashtable::_M_insert_unique_node"></a>_Hashtable::_M_insert_unique_node</h3><p>当决定要插入一个节点时，如下步骤：</p>
+<ul>
+<li>先调用<code>_M_need_rehash</code>函数，判断<code>_Hashtable</code>是否要<code>Rehash</code><ul>
+<li>如果需要，则调用<code>_M_rehash</code>函数进行<code>Rehash</code>，然后重新计算要插入的桶索引<code>__btk</code></li>
+<li>如果不需要，则直接使用原来的桶索引<code>__btk</code></li>
+</ul>
+</li>
+<li>将待插入节点<code>__node</code>插入到桶<code>_M_bucket[__btk]</code>的头部</li>
+<li>更新一些参数</li>
+<li>将<code>__node</code>迭代器，返回给 <code>_M_emplace</code> 函数，使其进一步返回<code>std::make_pair(iterator(__node), true);</code></li>
+</ul>
+<p>插入一个节点的流程如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">auto</span> _Hashtable&lt;...&gt;::_M_insert_unique_node(size_type 	 __bkt, </span><br><span class="line">                                            __hash_code	 __code, </span><br><span class="line">                                            __node_type* __node, </span><br><span class="line">                                            size_type 	 __n_elt)</span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">const</span> __rehash_state &amp;__saved_state = _M_rehash_policy._M_state();</span><br><span class="line">    <span class="keyword">auto</span> __do_rehash = _M_rehash_policy._M_need_rehash(_M_bucket_count,</span><br><span class="line">                                                       _M_element_count,</span><br><span class="line">                                                       __n_elt);</span><br><span class="line">    __try &#123;</span><br><span class="line">        <span class="comment">// 如果确实需要rehash</span></span><br><span class="line">        <span class="keyword">if</span> (__do_rehash.first) &#123;</span><br><span class="line">            _M_rehash(__do_rehash.second, __saved_state);</span><br><span class="line">            <span class="comment">// 重新计算当前待插入节点的桶索引</span></span><br><span class="line">            __bkt = _M_bucket_index(<span class="keyword">this</span>-&gt;_M_extract()(__node-&gt;_M_v()), __code); </span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">this</span>-&gt;_M_store_code(__node, __code); <span class="comment">// __node-&gt;_M_hash_code = __code                  </span></span><br><span class="line"></span><br><span class="line">        <span class="comment">// 在 _M_bucket[__bkt] 前面插入</span></span><br><span class="line">        _M_insert_bucket_begin(__bkt, __node);</span><br><span class="line">        ++_M_element_count;</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">iterator</span>(__node);</span><br><span class="line">    &#125;</span><br><span class="line">    __catch(...) &#123;</span><br><span class="line">        <span class="keyword">this</span>-&gt;_M_deallocate_node(__node);</span><br><span class="line">        __throw_exception_again;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Power-rehash-policy-M-need-rehash"><a href="#Power-rehash-policy-M-need-rehash" class="headerlink" title="_Power_rehash_policy::_M_need_rehash"></a>_Power_rehash_policy::_M_need_rehash</h4><p><code>_M_need_rehash</code> 函数，判断是否需要<code>Rehash</code>，其函数的参数含义如下：</p>
+<ul>
+<li><code>__n_bkt</code>：<code>_Hashtable</code>的桶的个数</li>
+<li><code>__n_elt</code>：<code>_Hashtable</code>的元素个数</li>
+<li><code>__n_ins</code>：此次要插入的节点数</li>
+</ul>
+<p><code>__n_elt + __n_ins</code> 则是此次插入完成后<code>_Hashtable</code>的节点数。那么根据最大负载因子<code>max_load_factor</code>，可以计算出存储<code>__n_elt + __n_ins</code> 个节点需要的至少需要的桶数是 <code>__min_btks</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">long</span> <span class="type">double</span> __min_bkts = (__n_elt + __n_ins) / (<span class="type">long</span> <span class="type">double</span>)_M_max_load_factor; <span class="comment">// 新的桶个数</span></span><br></pre></td></tr></table></figure>
+
+<p>进一步，如果这个至少需要的桶数<code>__min_btks &gt;= __n_btks</code>，则表示当前桶容量不够，无法满足<code>load_factor &lt;= max_load_factor</code>的限制条件，就需要对<code>_Hashtable</code>执行<strong>R</strong>ehash，返回<code>std::make_pair(true, count)</code>，<code>count</code>是新的桶数。</p>
+<p>如果以上条件都不满足，不需要<strong>R</strong>ehash，则直接返回<code>std::make_pair(false, 0)</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">auto</span> _M_need_rehash(std::<span class="type">size_t</span> __n_bkt, std::<span class="type">size_t</span> __n_elt, std::<span class="type">size_t</span> __n_ins) <span class="keyword">noexcept</span> &#123;</span><br><span class="line">    <span class="comment">// 需要 rehash</span></span><br><span class="line">    <span class="keyword">if</span> (__n_elt + __n_ins &gt;= _M_next_resize) &#123;</span><br><span class="line">        <span class="type">long</span> <span class="type">double</span> __min_bkts = (__n_elt + __n_ins) / (<span class="type">long</span> <span class="type">double</span>)_M_max_load_factor; </span><br><span class="line">        <span class="keyword">if</span> (__min_bkts &gt;= __n_bkt)</span><br><span class="line">            <span class="keyword">return</span> std::<span class="built_in">make_pair</span>(<span class="literal">true</span>,</span><br><span class="line">                                  _M_next_bkt(std::<span class="built_in">max</span>&lt;std::<span class="type">size_t</span>&gt;(__builtin_floor(__min_bkts) + <span class="number">1</span>,</span><br><span class="line">                                                                    __n_bkt * _S_growth_factor)));</span><br><span class="line"></span><br><span class="line">        _M_next_resize = __builtin_floor(__n_bkt * (<span class="type">long</span> <span class="type">double</span>)_M_max_load_factor);</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_pair</span>(<span class="literal">false</span>, <span class="number">0</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_pair</span>(<span class="literal">false</span>, <span class="number">0</span>);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Hashtable-M-rehash"><a href="#Hashtable-M-rehash" class="headerlink" title="_Hashtable::_M_rehash"></a>_Hashtable::_M_rehash</h4><p><code>_M_rehash</code>函数，内部是调用<code>_M_rehash_aux</code>实现的，<code>__unique_keys()</code>由前面可知，在<code>std::unordered_map</code>中初始化为<code>std::true_type</code>类型。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"> <span class="type">void</span>  _Hashtable&lt;...&gt;::_M_rehash(size_type __n, <span class="type">const</span> __rehash_state &amp;__state) &#123;</span><br><span class="line">    __try &#123;</span><br><span class="line">        _M_rehash_aux(__n, __unique_keys());</span><br><span class="line">    &#125;</span><br><span class="line">    __catch(...)&#123;</span><br><span class="line">        _M_rehash_policy._M_reset(__state);</span><br><span class="line">        __throw_exception_again;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Hashtable-M-rehash-aux"><a href="#Hashtable-M-rehash-aux" class="headerlink" title="_Hashtable::_M_rehash_aux"></a>_Hashtable::_M_rehash_aux</h4><p><code>_M_rehash_aux</code>函数，执行步骤如下：</p>
+<p><strong>1) 分配内存</strong></p>
+<p>为<code>__n</code>个新桶分配内存<code>__new_buckets</code></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> _Hashtable&lt;&gt;::_M_rehash_aux(size_type __n, std::true_type) &#123;</span><br><span class="line">     __bucket_type *__new_buckets = _M_allocate_buckets(__n); <span class="comment">// 分配 n 个新的桶</span></span><br><span class="line">     __node_type *__p = _M_begin();                           <span class="comment">// 旧桶的哨兵节点</span></span><br><span class="line">    	</span><br><span class="line">     _M_before_begin._M_nxt = <span class="literal">nullptr</span>;						<span class="comment">// 初始化			</span></span><br><span class="line">     std::<span class="type">size_t</span> __bbegin_bkt = <span class="number">0</span>;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>2) 数据迁移</strong></p>
+<p>将旧桶<code>__M_bucket</code>中的节点数据重新插入到<code>__new_buckets</code>中，在插入的过程中需要维持<code>__new_buckets</code>各个桶之间的联系，即当前空桶指向的链表的最后一个节要指向前一个空桶的哨兵节点。没明白吗？不急，往下看。</p>
+<p><code>_Hashtable</code>有一个哨兵节点<code>_M_before_begin</code>， 它总是最后一个插入节点的空桶的哨兵节点：当一个节点<code>__p</code>要插入一个空桶<code>__new_buckets[__btk]</code>时，<code>_M_before_begin</code>就会指向变成<code>__new_buckets[__btk]</code>的哨兵节点，即：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">__new_buckets[__btk] = &amp;_M_before_begin; </span><br></pre></td></tr></table></figure>
+
+<p><code>_Hashtable</code>需要借助 <code>_M_before_begin</code> 节点在当前空桶和上一个空桶之间建立联系，那么当数据插入完毕，整个<code>_Hashtable</code>才能变成一条<font color="red">“链表”</font>：<code>_M_before_begin._M_nxt</code>指向的就是最后一个空桶的首届点，从<code>_M_before_begin._M_nxt</code>开始遍历，最后一个节点的<code>__lastNode-&gt;_M_next</code>即<code>nullptr</code>。</p>
+<p><code>begin()</code>和<code>end()</code>迭代器即如此实现：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// _Hashtable::begin()</span></span><br><span class="line"><span class="function">iterator <span class="title">begin</span><span class="params">()</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">iterator</span>(_M_begin());</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">__node_type* _M_begin() <span class="type">const</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;__node_type *&gt;(_M_before_begin._M_nxt);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// _Hashtable::end()</span></span><br><span class="line"> <span class="function">iterator <span class="title">end</span><span class="params">()</span> <span class="keyword">noexcept</span></span></span><br><span class="line"><span class="function"> </span>&#123;</span><br><span class="line">     <span class="keyword">return</span> <span class="built_in">iterator</span>(<span class="literal">nullptr</span>);</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>下面是最精彩的部分！！！</p>
+<p><strong>空桶中插入节点</strong></p>
+<p>当待插入节点<code>__p</code>将要插入到一个空桶时，那么需要在这个空桶和上一个空桶（已经不是空桶了）之间建立联系，建立步骤如下三步：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">__p-&gt;_M_nxt = _M_before_begin._M_nxt;	  <span class="comment">// 1	</span></span><br><span class="line">_M_before_begin._M_nxt = __p;		 	 <span class="comment">// 2</span></span><br><span class="line">_new_buckets[__bkt] = &amp;_M_before_begin;	  <span class="comment">// 3</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><p>由于采用头部插入法在每个链表中插入新节点，因此第一个插入到空桶<code>_new_buckets[__bkt]</code>的节点<code>__p</code>将会成为这个链表的最后一个节点。因此第一步的代码，就实现了让空桶<code>_new_buckets[__bkt]</code>的最后一个节点指向前一个空桶的首节点。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">__p-&gt;_M_nxt = _M_before_begin._M_nxt;	 <span class="comment">// 前一个空桶的哨兵节点是_M_before_begin</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>_M_before_begin</code> 总是作为哨兵节点，当有一个节点<code>__p</code>插入空桶时，<code>_M_before_begin</code>就将作为新空桶的哨兵节点，那么<code>_M_before_begin-&gt;next</code>就应该是此刻空桶<code>__new_buckets[__btk]</code>第一个节点，即<code>__p</code>，因此就有了第2、3步。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">_M_before_begin._M_nxt = __p;			 <span class="comment">// 指向第一个节点</span></span><br><span class="line">_new_buckets[__bkt] = &amp;_M_before_begin;	  <span class="comment">// 将 _M_before_begin 作为哨兵节点</span></span><br></pre></td></tr></table></figure>
+
+<p>那还有什么没有完成？</p>
+<p><code>_M_before_begin</code>已经是当前空桶的哨兵节点，那么前一个空桶的哨兵节点就不能再是<code>_M_before_begin</code>。由于在上面的第一步中，将<code>__p-&gt;next</code>指向了前一个空桶的首节点，则顺理成章地将<code>__p</code>变成前一个空桶的哨兵节点。</p>
+<p>当然，当<code>__p</code>是整个<code>_Hashtable</code>的第一个节点，那么当前空桶就是第一个空桶，此时<code>__p-&gt;_M_next</code>就是<code>nullptr</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"> <span class="keyword">if</span> (__p-&gt;_M_nxt)</span><br><span class="line">    __new_buckets[__bbegin_bkt] = __p;	<span class="comment">// 将 __p 作为前一个桶的哨兵节点</span></span><br><span class="line">__bbegin_bkt = __bkt;				   <span class="comment">// __bbegin_bkt 记录前一个空桶索引			</span></span><br></pre></td></tr></table></figure></li>
+</ul>
+<p><strong>非空桶中插入节点</strong></p>
+<p>如果<code>_new_buckets[__btk]</code> 中已经有节点，则直接在头部插入即可，没有复杂性。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">__p-&gt;_M_nxt = __new_buckets[__bkt]-&gt;_M_nxt;</span><br><span class="line">_new_buckets[__bkt]-&gt;_M_nxt = __p;</span><br></pre></td></tr></table></figure>
+
+<p><strong>3） 数据迁移完成</strong></p>
+<p>当数据迁移完成，即<code>_M_buckets</code>中节点全更新到<code>_new_buckets</code>中，需要释放<code>_M_buckets</code>的内存，并且将<code>_M_buckets</code>指向<code>_new_buckts</code>，再更新其他参数即可。</p>
+<p>完整的代码细节过程如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> _Hashtable&lt;&gt;::_M_rehash_aux(size_type __n, std::true_type) &#123;</span><br><span class="line">     __bucket_type *__new_buckets = _M_allocate_buckets(__n); <span class="comment">// 分配 n 个新的桶</span></span><br><span class="line">     __node_type *__p = _M_begin();                           <span class="comment">// 旧桶的哨兵节点</span></span><br><span class="line">     _M_before_begin._M_nxt = <span class="literal">nullptr</span>;					</span><br><span class="line">     std::<span class="type">size_t</span> __bbegin_bkt = <span class="number">0</span>;</span><br><span class="line">  </span><br><span class="line">    <span class="comment">// 将旧桶中的节点迁移至新桶中</span></span><br><span class="line">     <span class="keyword">while</span> (__p) &#123;</span><br><span class="line">         __node_type* __next = __p-&gt;_M_next();</span><br><span class="line">         <span class="comment">// 节点 p 在新桶中的索引</span></span><br><span class="line">         std::<span class="type">size_t</span> __bkt = __hash_code_base::_M_bucket_index(__p, __n); </span><br><span class="line">         <span class="comment">// __new_buckets[__bkt] 是个空桶插入新节点</span></span><br><span class="line">         <span class="keyword">if</span> (!__new_buckets[__bkt]) &#123;</span><br><span class="line">             __p-&gt;_M_nxt = _M_before_begin._M_nxt;  </span><br><span class="line">             _M_before_begin._M_nxt = __p;</span><br><span class="line">             __new_buckets[__bkt] = &amp;_M_before_begin;</span><br><span class="line"></span><br><span class="line">             <span class="keyword">if</span> (__p-&gt;_M_nxt)</span><br><span class="line">                 __new_buckets[__bbegin_bkt] = __p;</span><br><span class="line">             __bbegin_bkt = __bkt;</span><br><span class="line">         &#125;</span><br><span class="line">         <span class="keyword">else</span>&#123;</span><br><span class="line">             <span class="comment">// 非空桶，则直接在头部插入</span></span><br><span class="line">             __p-&gt;_M_nxt = __new_buckets[__bkt]-&gt;_M_nxt;</span><br><span class="line">             __new_buckets[__bkt]-&gt;_M_nxt = __p;</span><br><span class="line">         &#125;</span><br><span class="line">         __p = __next;  <span class="comment">// 迭代</span></span><br><span class="line">     &#125;</span><br><span class="line">     <span class="comment">// 释放旧桶及更新参数</span></span><br><span class="line">     _M_deallocate_buckets();</span><br><span class="line">     _M_bucket_count = __n;</span><br><span class="line">     _M_buckets = __new_buckets;</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<p>至此，已完全讲解了<code>hash_map</code>是如何插入一个节点。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#insert"><span class="toc-number">1.</span> <span class="toc-text">insert</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hashtable-M-emplace"><span class="toc-number">2.</span> <span class="toc-text">_Hashtable::_M_emplace</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hashtable-M-find-node"><span class="toc-number">3.</span> <span class="toc-text">_Hashtable::_M_find_node</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Hashtable-M-insert-unique-node"><span class="toc-number">4.</span> <span class="toc-text">_Hashtable::_M_insert_unique_node</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Power-rehash-policy-M-need-rehash"><span class="toc-number">4.1.</span> <span class="toc-text">_Power_rehash_policy::_M_need_rehash</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Hashtable-M-rehash"><span class="toc-number">4.2.</span> <span class="toc-text">_Hashtable::_M_rehash</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Hashtable-M-rehash-aux"><span class="toc-number">4.3.</span> <span class="toc-text">_Hashtable::_M_rehash_aux</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&text=剖析 std::unordered_map 插入过程"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&is_video=false&description=剖析 std::unordered_map 插入过程"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 std::unordered_map 插入过程&body=Check out this article: https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&title=剖析 std::unordered_map 插入过程"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&name=剖析 std::unordered_map 插入过程&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/C++/unordered_mpa_2_/&t=剖析 std::unordered_map 插入过程"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

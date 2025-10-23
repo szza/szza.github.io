@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="从 TiKV 到 TiFlash，传递的都是 region 信息，比如 region_id, region_range 等，但是在 TilFlash 内部并不存储 region 信息，需要将 region 信息转化为 StorageDelteMerge 的相关状态，比如，在 region 内部都会有个对应的 mapped_table_id。同时，又需要记录 region 的相关的元数据 meta，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="tiflash: tikv region 与 tiflash 映射关系">
+<meta property="og:url" content="https://szza.github.io/2022/10/21/TiFlash/tiflash_region/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="从 TiKV 到 TiFlash，传递的都是 region 信息，比如 region_id, region_range 等，但是在 TilFlash 内部并不存储 region 信息，需要将 region 信息转化为 StorageDelteMerge 的相关状态，比如，在 region 内部都会有个对应的 mapped_table_id。同时，又需要记录 region 的相关的元数据 meta，">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-1.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-2.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-3.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-4.png?raw=true">
+<meta property="article:published_time" content="2022-10-21T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-03T02:08:52.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="tidb-v6.1">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-1.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>tiflash: tikv region 与 tiflash 映射关系</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/11/01/TiFlash/DeltaTreeIndex-1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/10/15/TiKV/tikv_raft_propose/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&text=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&is_video=false&description=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tiflash: tikv region 与 tiflash 映射关系&body=Check out this article: https://szza.github.io/2022/10/21/TiFlash/tiflash_region/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&name=tiflash: tikv region 与 tiflash 映射关系&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&t=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Region"><span class="toc-number">1.</span> <span class="toc-text">Region</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RegionTable"><span class="toc-number">2.</span> <span class="toc-text">RegionTable</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RegionTable-Table"><span class="toc-number">2.1.</span> <span class="toc-text">RegionTable::Table</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RegionManager"><span class="toc-number">3.</span> <span class="toc-text">RegionManager</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RegionsRangeIndex"><span class="toc-number">4.</span> <span class="toc-text">RegionsRangeIndex</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RegionsRangeIndex-remove"><span class="toc-number">4.1.</span> <span class="toc-text">RegionsRangeIndex::remove</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#handleAdminRaftCmd"><span class="toc-number">5.</span> <span class="toc-text">handleAdminRaftCmd</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#execBatchSplit"><span class="toc-number">5.1.</span> <span class="toc-text">execBatchSplit</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#splitInto"><span class="toc-number">5.2.</span> <span class="toc-text">splitInto</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#handle-batch-split"><span class="toc-number">5.3.</span> <span class="toc-text">handle_batch_split</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E8%A3%82%E6%97%A5%E5%BF%97"><span class="toc-number">5.4.</span> <span class="toc-text">分裂日志</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        tiflash: tikv region 与 tiflash 映射关系
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-10-21T02:00:01.000Z" itemprop="datePublished">2022-10-21</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/tidb-v6-1/" rel="tag">tidb-v6.1</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>从 TiKV 到 TiFlash，传递的都是 region 信息，比如 region_id, region_range 等，但是在 TilFlash 内部并不存储 region 信息，需要将 region 信息转化为 StorageDelteMerge 的相关状态，比如，在 region 内部都会有个对应的 mapped_table_id。同时，又需要记录 region 的相关的元数据 meta，来记录 TiKV、TiFlash 的同步信息。</p>
+<h2 id="Region"><a href="#Region" class="headerlink" title="Region"></a>Region</h2><p>在 TiFLASH 中，每个 Region 都会映射到一个 table_id，里面包含了一些数据（data）状态（region_meta）。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-1.svg?raw=true" alt="tiflash-region-1"></p>
+<h2 id="RegionTable"><a href="#RegionTable" class="headerlink" title="RegionTable"></a>RegionTable</h2><p>RegionTable 是个全局的数据结构，在 Region 和 Table 之间建立映射关系。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-2.svg?raw=true" alt="tiflash-region-2"></p>
+<h3 id="RegionTable-Table"><a href="#RegionTable-Table" class="headerlink" title="RegionTable::Table"></a>RegionTable::Table</h3><p>RegionTable::Table 中记录多个 InternelRegion，表征：</p>
+<ul>
+<li>table_id 出现在哪些 Region 中，</li>
+<li>每个 region 的 range 对应 table 中的哪些 key range</li>
+</ul>
+<p>在RegionTable中插入一个region时，会更新 table_regions 和 regions 两个字段：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">RegionTable::InternalRegion &amp; <span class="title">RegionTable::insertRegion</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    Table &amp; table, </span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> RegionRangeKeys &amp; region_range_keys, </span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> RegionID region_id)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="built_in">LOG_FMT_INFO</span>(log, <span class="string">&quot;[############ insertRegion region &#123;&#125;]&quot;</span>, region_id);</span><br><span class="line">    <span class="keyword">auto</span> &amp; table_regions = table.regions;</span><br><span class="line">    <span class="comment">// Insert table mapping.</span></span><br><span class="line">    <span class="comment">// todo check if region_range_keys.mapped_table_id == table.table_id ??</span></span><br><span class="line">    <span class="keyword">auto</span> [it, ok] = table_regions.<span class="built_in">emplace</span>(</span><br><span class="line">        region_id, <span class="built_in">InternalRegion</span>(region_id, region_range_keys.<span class="built_in">rawKeys</span>()));</span><br><span class="line">    <span class="keyword">if</span> (!ok)</span><br><span class="line">        <span class="keyword">throw</span> <span class="built_in">Exception</span>(</span><br><span class="line">            std::<span class="built_in">string</span>(__PRETTY_FUNCTION__) +</span><br><span class="line">            <span class="string">&quot;: insert duplicate internal region &quot;</span> + </span><br><span class="line">            DB::<span class="built_in">toString</span>(region_id),</span><br><span class="line">            ErrorCodes::LOGICAL_ERROR);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Insert region mapping.</span></span><br><span class="line">    regions[region_id] = table.table_id;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+<p>主要更改 RegionTable 的相关状态时，RegionTable::InternalRegion 在以下三个地方可能会被用到：</p>
+<ul>
+<li>RegionTable::shrinkRegionRange</li>
+<li>RegionTable::updateRegion</li>
+<li>RegionTable::extendRegionRange</li>
+</ul>
+<p>实际上就是 TiKV 发生分裂、合并等行为时。</p>
+<h2 id="RegionManager"><a href="#RegionManager" class="headerlink" title="RegionManager"></a>RegionManager</h2><p>RegionManger 是用于管理 region 的读写行为。</p>
+<ul>
+<li>regions: 记录了当前所有的 region的指针；</li>
+<li>region_range_index：记录的是字段 regions 中的每个 range 的 key 和对应的 region 之间的映射，以及当前range的信息</li>
+</ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-3.svg?raw=true" alt="tiflash-region-3"></p>
+<h2 id="RegionsRangeIndex"><a href="#RegionsRangeIndex" class="headerlink" title="RegionsRangeIndex"></a>RegionsRangeIndex</h2><p>RegionsRangeIndex::add<br>RegionsRangeIndex::root 是基于 {range_key, region_map} 有序建立映射的，即每个 range_key 出现在哪些 region 中。<br>在向 RegionsRangeIndex 中新增一个 new_region 时：</p>
+<ul>
+<li>先基于 new_region 的 new_range 定位到在 RegionsRangeIndex::root 中插入的起始位置，即 [begin_it, end_it) 区间 </li>
+<li>为 [begin_it, end_it) 区间的每个 IndexNode::region_map 都插入一条相同的  {new_region_id, new_region}，表示  root[iter-&gt;first] 又多包含了一个 new_region</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">RegionsRangeIndex::add</span><span class="params">(<span class="type">const</span> RegionPtr &amp; new_region)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> region_range = new_region-&gt;<span class="built_in">getRange</span>();</span><br><span class="line">    <span class="type">const</span> <span class="keyword">auto</span> &amp; new_range = region_range-&gt;<span class="built_in">comparableKeys</span>();</span><br><span class="line">    RootMap::iterator begin_it = <span class="built_in">split</span>(new_range.first);</span><br><span class="line">    RootMap::iterator end_it = <span class="built_in">split</span>(new_range.second);</span><br><span class="line">    <span class="keyword">if</span> (begin_it == end_it)</span><br><span class="line">        <span class="keyword">throw</span> <span class="built_in">Exception</span>(__PRETTY_FUNCTION__ + <span class="string">&quot;: range of region &quot;</span>s </span><br><span class="line">                        + <span class="built_in">toString</span>(new_region-&gt;<span class="built_in">id</span>()) + <span class="string">&quot; is empty&quot;</span>,</span><br><span class="line">                        ErrorCodes::LOGICAL_ERROR);</span><br><span class="line">   </span><br><span class="line">    <span class="comment">// 为 [begin_it, end_it) 区间的所有 IndexNode::region_map </span></span><br><span class="line">    <span class="comment">// 都添加一份 new_region</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> it = begin_it; it != end_it; ++it)</span><br><span class="line">        it-&gt;second.region_map.<span class="built_in">emplace</span>(new_region-&gt;<span class="built_in">id</span>(), new_region);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>由于 root 的数据结构是 std::map，即所有的key都是有序的，那么</p>
+<ul>
+<li>begin_it 表达的即 root 中 &gt;&#x3D; new_range_start （new_range.first）的起始位置</li>
+<li>end_it 表达的即 root 中 &gt;&#x3D; new_range_end（new_range.second） 的起始位置</li>
+</ul>
+<p>那 [begin_it, end_it) 区间即添加 new_range 时需要更新的区间。 </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">RegionsRangeIndex::<span class="function">RootMap::iterator </span></span><br><span class="line"><span class="function"><span class="title">RegionsRangeIndex::split</span><span class="params">(<span class="type">const</span> TiKVRangeKey &amp; new_start)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="keyword">auto</span> do_split = [<span class="keyword">this</span>](RootMap::iterator begin_it, </span><br><span class="line">                                 <span class="type">const</span> TiKVRangeKey &amp; new_start) &#123;</span><br><span class="line">        begin_it--;</span><br><span class="line">        <span class="keyword">auto</span> &amp; ori = begin_it-&gt;second;</span><br><span class="line">        <span class="keyword">auto</span> tar_it = root.<span class="built_in">emplace</span>(new_start.<span class="built_in">copy</span>(), IndexNode&#123;&#125;).first;</span><br><span class="line">        tar_it-&gt;second.region_map = ori.region_map;</span><br><span class="line">        <span class="keyword">return</span> tar_it;</span><br><span class="line">    &#125;;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> begin_it = root.<span class="built_in">lower_bound</span>(new_start); <span class="comment">// &gt;= new_start</span></span><br><span class="line">    <span class="built_in">assert</span>(begin_it != root.<span class="built_in">end</span>());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (begin_it-&gt;first.<span class="built_in">compare</span>(new_start) == <span class="number">0</span>)</span><br><span class="line">        <span class="keyword">return</span> begin_it;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">do_split</span>(begin_it, new_start);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="RegionsRangeIndex-remove"><a href="#RegionsRangeIndex-remove" class="headerlink" title="RegionsRangeIndex::remove"></a>RegionsRangeIndex::remove</h3><p>与add相对的，从 root 中删除一个 region 的remove 函数，去除异常部分简化后如下</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">RegionsRangeIndex::remove</span><span class="params">(<span class="type">const</span> RegionRange &amp; range, RegionID region_id)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> begin_it = root.<span class="built_in">find</span>(range.first);</span><br><span class="line">    <span class="keyword">auto</span> end_it = root.<span class="built_in">find</span>(range.second);</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> it = begin_it; it != end_it; ++it)</span><br><span class="line">       it-&gt;second.region_map.<span class="built_in">erase</span>(region_id);</span><br><span class="line">    <span class="comment">// 合并空的 region</span></span><br><span class="line">    <span class="built_in">tryMergeEmpty</span>(begin_it);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>下面从 分裂、合并的流程来看 Region 的行为。</p>
+<h2 id="handleAdminRaftCmd"><a href="#handleAdminRaftCmd" class="headerlink" title="handleAdminRaftCmd"></a>handleAdminRaftCmd</h2><h3 id="execBatchSplit"><a href="#execBatchSplit" class="headerlink" title="execBatchSplit"></a>execBatchSplit</h3><p>execBatchSplit  主要是根据 tikv response 生成新的 region 分裂信息 split_regions，代码去除异常部分简化后如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Regions <span class="title">RegionRaftCommandDelegate::execBatchSplit</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> raft_cmdpb::AdminRequest &amp;,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> raft_cmdpb::AdminResponse &amp; response,</span></span></span><br><span class="line"><span class="params"><span class="function">    UInt64 index, UInt64 term)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="keyword">auto</span> &amp; new_region_infos = response.<span class="built_in">splits</span>().<span class="built_in">regions</span>();</span><br><span class="line"></span><br><span class="line">    std::vector&lt;RegionPtr&gt; split_regions;</span><br><span class="line">    split_regions.<span class="built_in">reserve</span>(new_region_infos.<span class="built_in">size</span>());</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="function">std::unique_lock&lt;std::shared_mutex&gt; <span class="title">lock</span><span class="params">(mutex)</span></span>;</span><br><span class="line"></span><br><span class="line">        <span class="type">int</span> new_region_index = <span class="number">-1</span>; <span class="comment">// 当前 region 在 new_region_infos 中的位置</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; new_region_infos.<span class="built_in">size</span>(); ++i)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="type">const</span> <span class="keyword">auto</span> &amp; region_info = new_region_infos[i];</span><br><span class="line">            <span class="keyword">if</span> (region_info.<span class="built_in">id</span>() != meta.<span class="built_in">regionId</span>())</span><br><span class="line">            &#123;</span><br><span class="line">                <span class="type">const</span> <span class="keyword">auto</span> &amp; peer = <span class="built_in">findPeerByStore</span>(region_info, meta.<span class="built_in">storeId</span>());</span><br><span class="line">                <span class="function">RegionMeta <span class="title">new_meta</span><span class="params">(peer, region_info, initialApplyState())</span></span>;</span><br><span class="line">                <span class="comment">// 当前 range 按照 new_meta 进行分类，并返回新的 region</span></span><br><span class="line">                <span class="keyword">auto</span> split_region = <span class="built_in">splitInto</span>(std::<span class="built_in">move</span>(new_meta));</span><br><span class="line">                split_regions.<span class="built_in">emplace_back</span>(split_region);</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">else</span></span><br><span class="line">            &#123;</span><br><span class="line">                <span class="keyword">if</span> (new_region_index == <span class="number">-1</span>)</span><br><span class="line">                    new_region_index = i;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 当前 region 分裂后的元数据信息</span></span><br><span class="line">        <span class="function">RegionMeta <span class="title">new_meta</span><span class="params">(meta.getPeer(), new_region_infos[new_region_index], meta.getApplyState())</span></span>;</span><br><span class="line">        new_meta.<span class="built_in">setApplied</span>(index, term);</span><br><span class="line">        meta.<span class="built_in">assignRegionMeta</span>(std::<span class="built_in">move</span>(new_meta));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> split_regions;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="splitInto"><a href="#splitInto" class="headerlink" title="splitInto"></a>splitInto</h3><p>execBatchSplit 中的 splitInto 函数，是根据 new_meta 将当前 region 的 data、range 分裂到 new_range 中。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">RegionPtr <span class="title">Region::splitInto</span><span class="params">(RegionMeta &amp;&amp; new_meta)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    RegionPtr new_region = std::<span class="built_in">make_shared</span>&lt;Region&gt;(std::<span class="built_in">move</span>(new_meta), </span><br><span class="line">                                                    proxy_helper);</span><br><span class="line">    data.<span class="built_in">splitInto</span>(new_region-&gt;<span class="built_in">getRange</span>()-&gt;<span class="built_in">comparableKeys</span>(), </span><br><span class="line">                   new_region-&gt;data);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> new_region;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="handle-batch-split"><a href="#handle-batch-split" class="headerlink" title="handle_batch_split"></a>handle_batch_split</h3><p>下面是基于 execBatchSplit 返回的信息来执行，主要分为三个部分：</p>
+<ol>
+<li>RegionManager::region_range_index 添加新分裂生成的  region 信息，更新当前region的信息（即删除 + 重新插入）</li>
+<li>RegionTable 新增新生成的 region 信息，在region 和 table 间建立映射关系。并且由于分裂，可能导致当前 region 的 range 发生更改，RegionTable 中当前 region 的 range 信息需要更改。</li>
+<li>try_to_flush_region 函数：将 region  中缓存的的数据（Region::date）通过 writeRegionDataToStorage 接口写入到 dm_storage 。</li>
+<li>persist_and_sync 函数：将 region 对应 Storage 中的部分，调用 IStorage::flushCache 接口对该region_range 进行持久化。</li>
+</ol>
+<p>代码简化后如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">const</span> <span class="keyword">auto</span> handle_batch_split = [&amp;](Regions &amp; split_regions) &#123;</span><br><span class="line">    <span class="comment">// 1. </span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">auto</span> manage_lock = <span class="built_in">genRegionWriteLock</span>(task_lock);</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span> &amp; new_region : split_regions)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">auto</span> [it, ok] = manage_lock.regions.<span class="built_in">emplace</span>(new_region-&gt;<span class="built_in">id</span>(),</span><br><span class="line">                                                        new_region);</span><br><span class="line">            <span class="keyword">if</span> (!ok)</span><br><span class="line">                new_region = it-&gt;second;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        manage_lock.index.<span class="built_in">remove</span>(result.ori_region_range-&gt;<span class="built_in">comparableKeys</span>(), </span><br><span class="line">                                 curr_region_id);</span><br><span class="line">        manage_lock.index.<span class="built_in">add</span>(curr_region_ptr);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span> &amp; new_region : split_regions)</span><br><span class="line">            manage_lock.index.<span class="built_in">add</span>(new_region);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 2. </span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span> &amp; new_region : split_regions)</span><br><span class="line">            region_table.<span class="built_in">updateRegion</span>(*new_region);</span><br><span class="line">        region_table.<span class="built_in">shrinkRegionRange</span>(curr_region);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 3.</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span> &amp; new_region : split_regions)</span><br><span class="line">            <span class="built_in">try_to_flush_region</span>(new_region);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 4.</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span> &amp; new_region : split_regions)</span><br><span class="line">            <span class="built_in">persist_and_sync</span>(*new_region);</span><br><span class="line">        <span class="built_in">persist_and_sync</span>(curr_region);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<h3 id="分裂日志"><a href="#分裂日志" class="headerlink" title="分裂日志"></a>分裂日志</h3><p>附上分裂时的日志</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/TiFlash/tiflash-region-4.png?raw=true" alt="tiflash-region-4"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Region"><span class="toc-number">1.</span> <span class="toc-text">Region</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RegionTable"><span class="toc-number">2.</span> <span class="toc-text">RegionTable</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RegionTable-Table"><span class="toc-number">2.1.</span> <span class="toc-text">RegionTable::Table</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RegionManager"><span class="toc-number">3.</span> <span class="toc-text">RegionManager</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#RegionsRangeIndex"><span class="toc-number">4.</span> <span class="toc-text">RegionsRangeIndex</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#RegionsRangeIndex-remove"><span class="toc-number">4.1.</span> <span class="toc-text">RegionsRangeIndex::remove</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#handleAdminRaftCmd"><span class="toc-number">5.</span> <span class="toc-text">handleAdminRaftCmd</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#execBatchSplit"><span class="toc-number">5.1.</span> <span class="toc-text">execBatchSplit</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#splitInto"><span class="toc-number">5.2.</span> <span class="toc-text">splitInto</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#handle-batch-split"><span class="toc-number">5.3.</span> <span class="toc-text">handle_batch_split</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%86%E8%A3%82%E6%97%A5%E5%BF%97"><span class="toc-number">5.4.</span> <span class="toc-text">分裂日志</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&text=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&is_video=false&description=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tiflash: tikv region 与 tiflash 映射关系&body=Check out this article: https://szza.github.io/2022/10/21/TiFlash/tiflash_region/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&title=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&name=tiflash: tikv region 与 tiflash 映射关系&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/10/21/TiFlash/tiflash_region/&t=tiflash: tikv region 与 tiflash 映射关系"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

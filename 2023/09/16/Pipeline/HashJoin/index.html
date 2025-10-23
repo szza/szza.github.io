@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="HashJOIN 经过优化器后，生成的执行计划一般是右表是小表，用于 Build HashTable，左表是大表，用于 Probe HashTable。而左表必须等右表构建完 HashTable 才能执行 Probe 过程，因此 Build 和 Probe 之间存在一个依赖关系。 因此，在将 HashJoinNode 拆分为 Pipeline 时，会生成两条 Pipelines：  Build P">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HashJoin: HashBuildOperator、HashProbeOperator 流程剖析">
+<meta property="og:url" content="https://szza.github.io/2023/09/16/Pipeline/HashJoin/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="HashJOIN 经过优化器后，生成的执行计划一般是右表是小表，用于 Build HashTable，左表是大表，用于 Probe HashTable。而左表必须等右表构建完 HashTable 才能执行 Probe 过程，因此 Build 和 Probe 之间存在一个依赖关系。 因此，在将 HashJoinNode 拆分为 Pipeline 时，会生成两条 Pipelines：  Build P">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/Pipeline-HashJoin-1.svg?raw=true">
+<meta property="article:published_time" content="2023-09-16T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-26T06:33:10.211Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/Pipeline-HashJoin-1.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>HashJoin: HashBuildOperator、HashProbeOperator 流程剖析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" href="/2023/08/06/Pipeline/Pipeline-profile/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/09/16/Pipeline/HashJoin/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&text=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&is_video=false&description=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析&body=Check out this article: https://szza.github.io/2023/09/16/Pipeline/HashJoin/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&name=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&t=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#HashJoinBuildOperator"><span class="toc-number">1.</span> <span class="toc-text">HashJoinBuildOperator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#HashJoiner"><span class="toc-number">1.1.</span> <span class="toc-text">HashJoiner</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#append-chunk-to-ht"><span class="toc-number">1.2.</span> <span class="toc-text">append_chunk_to_ht</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#prepare-key-columns"><span class="toc-number">1.2.1.</span> <span class="toc-text">_prepare_key_columns</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#JoinHashTable-append-chunk"><span class="toc-number">1.2.2.</span> <span class="toc-text">JoinHashTable::append_chunk</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#build-ht"><span class="toc-number">1.3.</span> <span class="toc-text">build_ht</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#JoinHashTable-build"><span class="toc-number">1.3.1.</span> <span class="toc-text">JoinHashTable::build</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HashJoinProbeOperator"><span class="toc-number">2.</span> <span class="toc-text">HashJoinProbeOperator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#push-chunk"><span class="toc-number">2.1.</span> <span class="toc-text">push_chunk</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pull-chunk"><span class="toc-number">2.2.</span> <span class="toc-text">pull_chunk</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Questtion"><span class="toc-number">3.</span> <span class="toc-text">Questtion</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        HashJoin: HashBuildOperator、HashProbeOperator 流程剖析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-09-16T02:00:01.000Z" itemprop="datePublished">2023-09-16</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>HashJOIN 经过优化器后，生成的执行计划一般是右表是小表，用于 Build HashTable，左表是大表，用于 Probe HashTable。而左表必须等右表构建完 HashTable 才能执行 Probe 过程，因此 Build 和 Probe 之间存在一个依赖关系。</p>
+<p>因此，在将 HashJoinNode 拆分为 Pipeline 时，会生成两条 Pipelines：</p>
+<ul>
+<li><p>Build Pipeline</p>
+<p>  Build Pipeline 从表 t1 中读取所有符合条件的数据，并构建 HashTable。构建完成，则使 Probe Pipeline 解除阻塞，则从 blocked_driver_poller 中移除并添加到 ready_driver_queue 中，让 DriverExecutor 去执行 Probe。</p>
+</li>
+<li><p>Probe Pipeline  </p>
+<p>  Probe Pipeline 则从表 t2 中不断获取数据，然后执行 probe。由于 Build 过程完成，HashTable 就可以确定了，那么 Probe 的过程是可以逐 chunk 执行，即从表 t2 每次读取一个 chunk 就可以执行一次 probe，因此 PipelineJob 是不会阻塞的。</p>
+</li>
+</ul>
+<h2 id="HashJoinBuildOperator"><a href="#HashJoinBuildOperator" class="headerlink" title="HashJoinBuildOperator"></a>HashJoinBuildOperator</h2><h3 id="HashJoiner"><a href="#HashJoiner" class="headerlink" title="HashJoiner"></a>HashJoiner</h3><p>HashJOIN 是通过 HashJoiner 来实现的，HashJoinBuildOperator 和 HashJoinProbeOperator 共享一个 HashJoiner，通过 HashJoiner::_phase 来判断当时是 Build 还是 Probe 阶段，HashJoinProbeOperator 也是基于这个字段来解除阻塞。示意图如下：</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/Pipeline-HashJoin-1.svg?raw=true" alt="Pipeline-HashJoin-1"></p>
+<h3 id="append-chunk-to-ht"><a href="#append-chunk-to-ht" class="headerlink" title="append_chunk_to_ht"></a>append_chunk_to_ht</h3><p>BuildOperator 通过 push_chunk 接口接收表 t1 数据，内部调用 HashJoiner::append_chunk_to_ht 函数来构建 hashTable，</p>
+<p>注意：BuildOperator 的前一个 Operator 不一定就是 OlapScanOperator，也可能是 ExchangeSourceOperator。因为当 t1 数据量很大，无法在一个节点上构建完整的 HashTable 时，需要将 t1 的数据正交划分，再 ExchangeSink 发到多个节点上执行 HashJOIN，最后组合多个节点上 HashJOIN 的执行结果即可。</p>
+<p>目前，一个 BuildOperator 最大行数不能超过 UINT32_MAX。push_chunk 的过程如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">HashJoinBuildOperator::push_chunk</span><span class="params">(RuntimeState* state, </span></span></span><br><span class="line"><span class="params"><span class="function">                                         <span class="type">const</span> vectorized::ChunkPtr&amp; chunk)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _join_builder-&gt;<span class="built_in">append_chunk_to_ht</span>(state, chunk);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">Status <span class="title">HashJoiner::append_chunk_to_ht</span><span class="params">(RuntimeState* state, <span class="type">const</span> ChunkPtr&amp; chunk)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (_phase != HashJoinPhase::BUILD) &#123;</span><br><span class="line">        <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!chunk || chunk-&gt;<span class="built_in">is_empty</span>()) &#123;</span><br><span class="line">        <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">UNLIKELY</span>(_ht.<span class="built_in">get_row_count</span>() + chunk-&gt;<span class="built_in">num_rows</span>() &gt;= UINT32_MAX)) &#123;</span><br><span class="line">        <span class="keyword">return</span> Status::<span class="built_in">NotSupported</span>(strings::<span class="built_in">Substitute</span>(</span><br><span class="line">            <span class="string">&quot;row count of right table in hash join &gt; $0&quot;</span>, UINT32_MAX));</span><br><span class="line">    &#125;</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">// 获取 key_columns</span></span><br><span class="line">        <span class="built_in">SCOPED_TIMER</span>(_build_conjunct_evaluate_timer);</span><br><span class="line">        _prepare_key_columns(_key_columns, chunk, _build_expr_ctxs);</span><br><span class="line">    &#125;</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">// copy chunk of right table</span></span><br><span class="line">        <span class="built_in">SCOPED_TIMER</span>(_copy_right_table_chunk_timer);</span><br><span class="line">        <span class="built_in">TRY_CATCH_BAD_ALLOC</span>(</span><br><span class="line">            _ht.<span class="built_in">append_chunk</span>(state, chunk, _key_columns));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="prepare-key-columns"><a href="#prepare-key-columns" class="headerlink" title="_prepare_key_columns"></a>_prepare_key_columns</h4><p>_prepare_key_columns 函数是基于 expr_ctxs 从 chunk 中提取出 join-key 对应的列，将结果保存到 key_columns。</p>
+<p>只不过对于 only_null、const_column 两种类型的列有优化，因此特殊判断下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> HashJoiner::_prepare_key_columns(Columns&amp; key_columns, </span><br><span class="line">                                      <span class="type">const</span> ChunkPtr&amp; chunk,</span><br><span class="line">                                      <span class="type">const</span> std::vector&lt;ExprContext*&gt;&amp; expr_ctxs) &#123;</span><br><span class="line">    key_columns.<span class="built_in">resize</span>(<span class="number">0</span>);</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; expr_ctx : expr_ctxs) &#123;</span><br><span class="line">        <span class="comment">// 从 chunk 中提取出 column</span></span><br><span class="line">        <span class="keyword">auto</span> column_ptr = </span><br><span class="line">            <span class="built_in">EVALUATE_NULL_IF_ERROR</span>(expr_ctx, expr_ctx-&gt;<span class="built_in">root</span>(), chunk.<span class="built_in">get</span>());</span><br><span class="line">        <span class="keyword">if</span> (column_ptr-&gt;<span class="built_in">only_null</span>()) &#123;</span><br><span class="line">            <span class="keyword">auto</span> column = </span><br><span class="line">                ColumnHelper::<span class="built_in">create_column</span>(expr_ctx-&gt;<span class="built_in">root</span>()-&gt;<span class="built_in">type</span>(), <span class="literal">true</span>);</span><br><span class="line">            column-&gt;<span class="built_in">append_nulls</span>(chunk-&gt;<span class="built_in">num_rows</span>());</span><br><span class="line">            key_columns.<span class="built_in">emplace_back</span>(column);</span><br><span class="line">        &#125; <span class="keyword">else</span> <span class="keyword">if</span> (column_ptr-&gt;<span class="built_in">is_constant</span>()) &#123;</span><br><span class="line">            <span class="keyword">auto</span> const_column = </span><br><span class="line">                ColumnHelper::<span class="built_in">as_raw_column</span>&lt;ConstColumn&gt;(column_ptr);</span><br><span class="line">            const_column-&gt;<span class="built_in">data_column</span>()-&gt;<span class="built_in">assign</span>(chunk-&gt;<span class="built_in">num_rows</span>(), <span class="number">0</span>);</span><br><span class="line">            key_columns.<span class="built_in">emplace_back</span>(const_column-&gt;<span class="built_in">data_column</span>());</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            key_columns.<span class="built_in">emplace_back</span>(column_ptr);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="JoinHashTable-append-chunk"><a href="#JoinHashTable-append-chunk" class="headerlink" title="JoinHashTable::append_chunk"></a>JoinHashTable::append_chunk</h4><p>在 HashJoiner::_ht 中有个内存数据结构 _table_items 记录着 BuildOperator::push_chunk 的所有数据：当调用 JoinHashTable::append_chunk 函数时，即将 chunk 中的参与构建 HashTable 的列添加到 _table_items-&gt;key_columns 和 _table_items-&gt;build_chunk 中。</p>
+<p>注意：当 join-keys 中还包含 value columns 时，该 join-keys[i] 不会再单独赋值数据，在构建 HashTable 时会直接从 build_chunk 中获取，不会单独分配内存</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">JoinHashTable::append_chunk</span><span class="params">(RuntimeState* state, <span class="type">const</span> ChunkPtr&amp; chunk, </span></span></span><br><span class="line"><span class="params"><span class="function">                                 <span class="type">const</span> Columns&amp; key_columns)</span> </span>&#123;</span><br><span class="line">    Columns&amp; columns = _table_items-&gt;build_chunk-&gt;<span class="built_in">columns</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将 chunk 中参与构建 HashTable 的 value 列数据添加到 build_chunk 中</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; _table_items-&gt;build_column_count; i++) &#123;</span><br><span class="line">        SlotDescriptor* slot = _table_items-&gt;build_slots[i].slot;</span><br><span class="line">        ColumnPtr&amp; column = chunk-&gt;<span class="built_in">get_column_by_slot_id</span>(slot-&gt;<span class="built_in">id</span>());</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!columns[i]-&gt;<span class="built_in">is_nullable</span>() &amp;&amp; column-&gt;<span class="built_in">is_nullable</span>()) &#123;</span><br><span class="line">            <span class="comment">// upgrade to nullable column</span></span><br><span class="line">            columns[i] = NullableColumn::<span class="built_in">create</span>(</span><br><span class="line">                columns[i], NullColumn::<span class="built_in">create</span>(columns[i]-&gt;<span class="built_in">size</span>(), <span class="number">0</span>));</span><br><span class="line">        &#125;</span><br><span class="line">        columns[i]-&gt;<span class="built_in">append</span>(*column);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 将参与构建 HashTable 的 key 列数据添加到 key_columns 中</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; _table_items-&gt;key_columns.<span class="built_in">size</span>(); i++) &#123;</span><br><span class="line">        <span class="comment">// 如果 join-key 不在 build_chunk 中</span></span><br><span class="line">        <span class="keyword">if</span> (_table_items-&gt;join_keys[i].col_ref == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">            <span class="comment">// upgrade to nullable column</span></span><br><span class="line">            <span class="keyword">if</span> (!_table_items-&gt;key_columns[i]-&gt;<span class="built_in">is_nullable</span>() </span><br><span class="line">                &amp;&amp; key_columns[i]-&gt;<span class="built_in">is_nullable</span>()) &#123;</span><br><span class="line">                <span class="type">size_t</span> row_count = _table_items-&gt;key_columns[i]-&gt;<span class="built_in">size</span>();</span><br><span class="line">                _table_items-&gt;key_columns[i] = NullableColumn::<span class="built_in">create</span>(</span><br><span class="line">                  _table_items-&gt;key_columns[i], NullColumn::<span class="built_in">create</span>(row_count, <span class="number">0</span>));</span><br><span class="line">            &#125;</span><br><span class="line">            _table_items-&gt;key_columns[i]-&gt;<span class="built_in">append</span>(*key_columns[i]);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="build-ht"><a href="#build-ht" class="headerlink" title="build_ht"></a>build_ht</h3><p>当 BuildOperator 的前一个 SourceOperator 数据已经全部 pulled，则会调用 HashJoinBuildOperator::set_finishing，在 set_finishing 函数中开始构建 HashTable。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">HashJoinBuildOperator::set_finishing</span><span class="params">(RuntimeState* state)</span> </span>&#123;</span><br><span class="line">    _is_finished = <span class="literal">true</span>;</span><br><span class="line">    <span class="built_in">RETURN_IF_ERROR</span>(_join_builder-&gt;<span class="built_in">build_ht</span>(state));</span><br><span class="line">    <span class="comment">// build runtime bloomfilter ...</span></span><br><span class="line">    _join_builder-&gt;<span class="built_in">enter_probe_phase</span>();</span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">Status <span class="title">HashJoiner::build_ht</span><span class="params">(RuntimeState* state)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (_phase == HashJoinPhase::BUILD) &#123;</span><br><span class="line">        <span class="built_in">RETURN_IF_ERROR</span>(_build(state));</span><br><span class="line">        <span class="built_in">COUNTER_SET</span>(_build_buckets_counter,</span><br><span class="line">           <span class="built_in">static_cast</span>&lt;<span class="type">int64_t</span>&gt;(_ht.<span class="built_in">get_bucket_size</span>()));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="JoinHashTable-build"><a href="#JoinHashTable-build" class="headerlink" title="JoinHashTable::build"></a>JoinHashTable::build</h4><p>JoinHashTable::build 函数则是基于内存中的 {key_columns, build_chunk} 开始构建 HashTable。这个构建 HashTable 的算法也不难，可以参考 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/593611907">StarRocks Hash Join 源码解析</a></p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">JoinHashTable::build</span><span class="params">(RuntimeState* state)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">RETURN_IF_ERROR</span>(_table_items-&gt;build_chunk-&gt;<span class="built_in">upgrade_if_overflow</span>());</span><br><span class="line">    _table_items-&gt;has_large_column = _table_items-&gt;build_chunk-&gt;<span class="built_in">has_large_column</span>();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 如果 join-key 包含在 build_chunk 中，则直接从 build_chunk 中获取</span></span><br><span class="line">    <span class="type">size_t</span> join_key_count = _table_items-&gt;join_keys.<span class="built_in">size</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; join_key_count; i++) &#123;</span><br><span class="line">        <span class="keyword">if</span> (_table_items-&gt;join_keys[i].col_ref != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">            SlotId slot_id = _table_items-&gt;join_keys[i].col_ref-&gt;<span class="built_in">slot_id</span>();</span><br><span class="line">            _table_items-&gt;key_columns[i] = </span><br><span class="line">                _table_items-&gt;build_chunk-&gt;<span class="built_in">get_column_by_slot_id</span>(slot_id);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">RETURN_IF_ERROR</span>(_upgrade_key_columns_if_overflow());</span><br><span class="line"></span><br><span class="line">    _hash_map_type = _choose_join_hash_map();</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 开始构建 HashTable</span></span><br><span class="line">    <span class="keyword">switch</span> (_hash_map_type) &#123;</span><br><span class="line"><span class="meta">#<span class="keyword">define</span> M(NAME)                                                                                                       \</span></span><br><span class="line"><span class="meta">    case JoinHashMapType::NAME:                                                                                       \</span></span><br><span class="line"><span class="meta">        _##NAME = std::make_unique<span class="string">&lt;typename decltype(_##NAME)::element_type&gt;</span>(_table_items.get(), _probe_state.get()); \</span></span><br><span class="line"><span class="meta">        _##NAME-&gt;build_prepare(state);                                                                                \</span></span><br><span class="line"><span class="meta">        _##NAME-&gt;probe_prepare(state);                                                                                \</span></span><br><span class="line"><span class="meta">        _##NAME-&gt;build(state);                                                                                        \</span></span><br><span class="line"><span class="meta">        break;</span></span><br><span class="line">        <span class="built_in">APPLY_FOR_JOIN_VARIANTS</span>(M)</span><br><span class="line"><span class="meta">#<span class="keyword">undef</span> M</span></span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">        <span class="built_in">assert</span>(<span class="literal">false</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="HashJoinProbeOperator"><a href="#HashJoinProbeOperator" class="headerlink" title="HashJoinProbeOperator"></a>HashJoinProbeOperator</h2><p>当 HashJoiner::build_ht 函数构建完 HashTable，会通过 HashJoiner::enter_probe_phase 函数主动进入 HashJoinPhase::PROBE 阶段。HashJoinProbeOperator::need_input 返回 true，解除阻塞，则会从 blocked_driver_poller 中剔除进入 ready poller 开始执行。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">HashJoiner::enter_probe_phase</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    _short_circuit_break();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> old_phase = HashJoinPhase::BUILD;</span><br><span class="line">    _phase.<span class="built_in">compare_exchange_strong</span>(old_phase, HashJoinPhase::PROBE);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">HashJoinProbeOperator::need_input</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _join_prober-&gt;<span class="built_in">need_input</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">bool</span> <span class="title">HashJoiner::need_input</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _phase == HashJoinPhase::PROBE &amp;&amp; _probe_input_chunk == <span class="literal">nullptr</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="push-chunk"><a href="#push-chunk" class="headerlink" title="push_chunk"></a>push_chunk</h3><p>进入 HashJoinPhase::Probe 阶段后，Probe Pipeline 阻塞点就在 t2 的 pull_chunk。</p>
+<p>一旦 SourceOperator::pull_chunk 返回一个chunk，DriverExecutor 就会推动 Probe Pipeline 状态机前进: SourceOperator:::pull_chunk –&gt; HashJoinProbeOperator::push_chunk –&gt; HashJoinProbeOperator::pull_chunk </p>
+<p>Probe HashTable 的过程就发生在 HashJoinProbeOperator::pull_chunk 过程中。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">HashJoinProbeOperator::push_chunk</span><span class="params">(RuntimeState* state, <span class="type">const</span> vectorized::ChunkPtr&amp; chunk)</span> </span>&#123;</span><br><span class="line">    _join_prober-&gt;<span class="built_in">push_chunk</span>(state, chunk);</span><br><span class="line">    <span class="keyword">return</span> Status::<span class="built_in">OK</span>();</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">HashJoiner::push_chunk</span><span class="params">(RuntimeState* state, ChunkPtr chunk)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">DCHECK</span>(chunk &amp;&amp; !chunk-&gt;<span class="built_in">is_empty</span>());</span><br><span class="line">    <span class="built_in">DCHECK</span>(!_probe_input_chunk);</span><br><span class="line"></span><br><span class="line">    _probe_input_chunk = std::<span class="built_in">move</span>(chunk);</span><br><span class="line">    _ht_has_remain = <span class="literal">true</span>;</span><br><span class="line">    <span class="comment">// 获取 probe 对应的 key-columns</span></span><br><span class="line">    _prepare_probe_key_columns();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="pull-chunk"><a href="#pull-chunk" class="headerlink" title="pull_chunk"></a>pull_chunk</h3><p>pull_chunk 函数就是一个 Probe HashTable 的过程，过程详解 <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/593611907">StarRocks Hash Join 源码解析</a>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">StatusOr&lt;vectorized::ChunkPtr&gt; <span class="title">HashJoinProbeOperator::pull_chunk</span><span class="params">(RuntimeState* state)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> _join_prober-&gt;<span class="built_in">pull_chunk</span>(state);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">StatusOr&lt;ChunkPtr&gt; <span class="title">HashJoiner::pull_chunk</span><span class="params">(RuntimeState* state)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">DCHECK</span>(_phase != HashJoinPhase::BUILD);</span><br><span class="line">    <span class="keyword">return</span> _pull_probe_output_chunk(state);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">StatusOr&lt;ChunkPtr&gt; HashJoiner::_pull_probe_output_chunk(RuntimeState* state) &#123;</span><br><span class="line">    <span class="built_in">DCHECK</span>(_phase != HashJoinPhase::BUILD);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> chunk = std::<span class="built_in">make_shared</span>&lt;Chunk&gt;();</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (_phase == HashJoinPhase::PROBE || _probe_input_chunk != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">        <span class="built_in">DCHECK</span>(_ht_has_remain &amp;&amp; _probe_input_chunk);</span><br><span class="line"></span><br><span class="line">        <span class="built_in">TRY_CATCH_BAD_ALLOC</span>(</span><br><span class="line">                <span class="built_in">RETURN_IF_ERROR</span>(_ht.<span class="built_in">probe</span>(state, _key_columns, &amp;_probe_input_chunk, &amp;chunk, &amp;_ht_has_remain)));</span><br><span class="line">        <span class="keyword">if</span> (!_ht_has_remain) &#123;</span><br><span class="line">            _probe_input_chunk = <span class="literal">nullptr</span>;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="built_in">RETURN_IF_ERROR</span>(_filter_probe_output_chunk(chunk));</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> chunk;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (_phase == HashJoinPhase::POST_PROBE) &#123;</span><br><span class="line">        <span class="keyword">if</span> (!_need_post_probe()) &#123;</span><br><span class="line">            <span class="built_in">enter_eos_phase</span>();</span><br><span class="line">            <span class="keyword">return</span> chunk;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="built_in">TRY_CATCH_BAD_ALLOC</span>(<span class="built_in">RETURN_IF_ERROR</span>(_ht.<span class="built_in">probe_remain</span>(state, &amp;chunk, &amp;_ht_has_remain)));</span><br><span class="line">        <span class="keyword">if</span> (!_ht_has_remain) &#123;</span><br><span class="line">            <span class="built_in">enter_eos_phase</span>();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="built_in">RETURN_IF_ERROR</span>(_filter_post_probe_output_chunk(chunk));</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> chunk;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> chunk;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="Questtion"><a href="#Questtion" class="headerlink" title="Questtion"></a>Questtion</h2><p>StarRocks 中的 HashTable cache miss 比较高，效率没那么好？一个 cache-friendly HashTable 设计考量可以参考这篇论文 <a target="_blank" rel="noopener" href="https://dl.acm.org/doi/10.14778/2850583.2850585">A Seven-Dimensional Analysis of Hashing Methods and its Implications on Query Processing</a></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#HashJoinBuildOperator"><span class="toc-number">1.</span> <span class="toc-text">HashJoinBuildOperator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#HashJoiner"><span class="toc-number">1.1.</span> <span class="toc-text">HashJoiner</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#append-chunk-to-ht"><span class="toc-number">1.2.</span> <span class="toc-text">append_chunk_to_ht</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#prepare-key-columns"><span class="toc-number">1.2.1.</span> <span class="toc-text">_prepare_key_columns</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#JoinHashTable-append-chunk"><span class="toc-number">1.2.2.</span> <span class="toc-text">JoinHashTable::append_chunk</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#build-ht"><span class="toc-number">1.3.</span> <span class="toc-text">build_ht</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#JoinHashTable-build"><span class="toc-number">1.3.1.</span> <span class="toc-text">JoinHashTable::build</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HashJoinProbeOperator"><span class="toc-number">2.</span> <span class="toc-text">HashJoinProbeOperator</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#push-chunk"><span class="toc-number">2.1.</span> <span class="toc-text">push_chunk</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#pull-chunk"><span class="toc-number">2.2.</span> <span class="toc-text">pull_chunk</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Questtion"><span class="toc-number">3.</span> <span class="toc-text">Questtion</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/09/16/Pipeline/HashJoin/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&text=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&is_video=false&description=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析&body=Check out this article: https://szza.github.io/2023/09/16/Pipeline/HashJoin/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&title=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&name=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/09/16/Pipeline/HashJoin/&t=HashJoin: HashBuildOperator、HashProbeOperator 流程剖析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

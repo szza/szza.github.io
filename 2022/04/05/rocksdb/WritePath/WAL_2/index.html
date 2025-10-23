@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本文简要讲下在 Flush  MemTable 之前，WAL 需要进行 SYNC 的原因。更多设计思考可以阅读 Track-WAL-in-MANIFEST WHY NEED to SYNC WAL出于性能考虑，默认情况下 RocksDB 不会每写入一次数据就进行一次 SYNC WAL 操作。但没有 SYNC WAL 会带来两个影响：  在 recovery 时，就无法检查 WAL 是否存在磁盘上，">
+<meta property="og:type" content="article">
+<meta property="og:title" content="WAL、MemTable 的生命周期管理(2)">
+<meta property="og:url" content="https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本文简要讲下在 Flush  MemTable 之前，WAL 需要进行 SYNC 的原因。更多设计思考可以阅读 Track-WAL-in-MANIFEST WHY NEED to SYNC WAL出于性能考虑，默认情况下 RocksDB 不会每写入一次数据就进行一次 SYNC WAL 操作。但没有 SYNC WAL 会带来两个影响：  在 recovery 时，就无法检查 WAL 是否存在磁盘上，">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-04-05T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="RocksDb">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>WAL、MemTable 的生命周期管理(2)</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/04/16/rocksdb/WritePath/WAL_3/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/03/01/rocksdb/WritePath/WAL_1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&text=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&is_video=false&description=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WAL、MemTable 的生命周期管理(2)&body=Check out this article: https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&name=WAL、MemTable 的生命周期管理(2)&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&t=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#WHY-NEED-to-SYNC-WAL"><span class="toc-number">1.</span> <span class="toc-text">WHY NEED to SYNC WAL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SyncClosedLogs"><span class="toc-number">2.</span> <span class="toc-text">SyncClosedLogs</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#MarkLogsSynced"><span class="toc-number">2.1.</span> <span class="toc-text">MarkLogsSynced</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ApplyWALToManifest"><span class="toc-number">3.</span> <span class="toc-text">ApplyWALToManifest</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recovery"><span class="toc-number">4.</span> <span class="toc-text">Recovery</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CheckWals"><span class="toc-number">4.1.</span> <span class="toc-text">CheckWals</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        WAL、MemTable 的生命周期管理(2)
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-04-05T06:15:35.000Z" itemprop="datePublished">2022-04-05</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文简要讲下在 Flush  MemTable 之前，WAL 需要进行 SYNC 的原因。更多设计思考可以阅读 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/wiki/Track-WAL-in-MANIFEST">Track-WAL-in-MANIFEST</a></p>
+<h3 id="WHY-NEED-to-SYNC-WAL"><a href="#WHY-NEED-to-SYNC-WAL" class="headerlink" title="WHY NEED to SYNC WAL"></a>WHY NEED to SYNC WAL</h3><p>出于性能考虑，默认情况下 RocksDB 不会每写入一次数据就进行一次 SYNC WAL 操作。但没有 SYNC WAL 会带来两个影响：</p>
+<ol>
+<li><p>在 recovery 时，就无法检查 WAL 是否存在磁盘上，这是因为当机器挂了，WAL 的 innode 元数据可能尚未持久化到磁盘。</p>
+<p>除此之外，默认情况下误删 WAL 目录下的 log 文件，也没有机制来检测是否有 WAL 丢失以及哪个文件丢失。此时 DB::Open 是会成功，但是 log 中对应的数据 <em>“悄悄地”</em> 丢失了。</p>
+</li>
+<li><p>在 recovery 期间也无法判断 WAL 的大小是否正常，因为如果不主动 SYNC，则 SYNC WAL 操作则由操作系统来完成的，这对 RocksDB 并不透明：无法知道在 RocksDB 退出前， WAL 持久化到磁盘的大小。</p>
+</li>
+</ol>
+<p>目前 SYNC WAL 有四种场景：</p>
+<ol>
+<li>上层应用调用 <code>DB::SyncWAL</code> 函数，会主动 SYNC 所有生命周期还没结束的 WALs</li>
+<li>上层应用调用 <code>DB::FlushWAL(true)</code> 函数，内部也是调用 SyncWAL 函数</li>
+<li>写入数据时，设置 <code>WriteOption::sync</code> 为 <em>true</em>，即每写入一次数据，就会进行一次 SYNC WAL</li>
+<li>在 Flush MemTable 前，如果不止一个 ColumnFamily ，会 SYNC 所有 <em>closed_wals</em>，即除了当前WAL之外的所有生命周期尚未结束的 WALs</li>
+</ol>
+<p>case(1,2) 交给应用层调用，case(3) 虽然安全但是效率太低，一般不会开启。因此，交给 RocksDB 自己需要 SYNC WAL 的场景就剩下case(4)。 SYNC WAL 主要是为了防止机器宕机，而不是进程crash。虽然 case(4) 还是有丢数据的风险，但是在生产环境中，一般都会配备多副本来冗余。除非是一个副本的数据在一个机房，一个机房的数据又全部挂了，为了防止这种情况，又搞出来了跨机房部署。</p>
+<blockquote>
+<p>BUT, 该挂的还是会挂。</p>
+</blockquote>
+<p>因此，在执行 FlushJob 前，会将本次 <em>synced_wals</em> 大小信息记录到 <code>VersionEdit</code> 中，再序列化到 MANIFEST 中，在 recovery 期间可以对 WALs 进行强制检查：1）MANIFEST 中记录的 WAL 也应该存在磁盘上；2）磁盘上 WAL 的大小不应该小于 MANIFEST 中记录的 WAL 大小。</p>
+<p>case(4) 是否需要 SYNC 的判断条件如下: </p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 判断本次 Flush 前是否需要 sync closed_wals</span></span><br><span class="line"><span class="type">const</span> <span class="type">bool</span> needs_to_sync_closed_wals =</span><br><span class="line">    logfile_number_ &gt; <span class="number">0</span> &amp;&amp;</span><br><span class="line">    versions_-&gt;<span class="built_in">GetColumnFamilySet</span>()-&gt;<span class="built_in">NumberOfColumnFamilies</span>() &gt; <span class="number">1</span>;</span><br></pre></td></tr></table></figure>
+<ul>
+<li><p><em>needs_to_sync_closed_wals</em> 为 true 时，需要记录当前 CF 的 <em>max_memtable_id</em>，这样后续 FlushJob::PickMemTable 函数选择待 Flush 的MemTable时，会过滤掉满足 MemTable::id_ &gt; max_memtable_id 的 memtable。</p>
+<p>这是因为在执行 <code>SyncClosedLogs</code> 函数会 DBImpl::mutex_.Unlock，而当前 CF 的 SwitchMemTable 函数可能会在这个期间执行，新增 new_mem，通过 max_memtable_id 来过滤掉这个期间新增的 new_mm。</p>
+</li>
+<li><p><em>needs_to_sync_closed_wals</em> 为 false，会使得 max_memtable_id 为 UINT64_MAX，表示要 Flush 所有的 ImmutableMemtables</p>
+</li>
+</ul>
+<p>这部分代码上下文逻辑如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 2. 设置 max_memtable_id</span></span><br><span class="line"><span class="type">uint64_t</span> max_memtable_id = needs_to_sync_closed_wals</span><br><span class="line">    ? cfd-&gt;<span class="built_in">imm</span>()-&gt;<span class="built_in">GetLatestMemTableID</span>()</span><br><span class="line">    : std::numeric_limits&lt;<span class="type">uint64_t</span>&gt;::<span class="built_in">max</span>();</span><br><span class="line"></span><br><span class="line"><span class="comment">//... other middle codes</span></span><br><span class="line">IOStatus log_io_s = IOStatus::<span class="built_in">OK</span>();</span><br><span class="line"><span class="keyword">if</span> (needs_to_sync_closed_wals) &#123;</span><br><span class="line">  mutex_.<span class="built_in">Unlock</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 3. 释放 mutex_, 再进行 sync</span></span><br><span class="line">  VersionEdit synced_wals;</span><br><span class="line">  log_io_s = <span class="built_in">SyncClosedLogs</span>(job_context, &amp;synced_wals);</span><br><span class="line">  </span><br><span class="line">  mutex_.<span class="built_in">Lock</span>();</span><br><span class="line">  <span class="comment">// 4. write to MANIFEST</span></span><br><span class="line">  <span class="keyword">if</span> (log_io_s.<span class="built_in">ok</span>() &amp;&amp; synced_wals.<span class="built_in">IsWalAddition</span>()) &#123;</span><br><span class="line">    log_io_s = <span class="built_in">status_to_io_status</span>(<span class="built_in">ApplyWALToManifest</span>(</span><br><span class="line">          <span class="built_in">ReadOptions</span>(Env::IOActivity::kFlush), &amp;synced_wals));</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="SyncClosedLogs"><a href="#SyncClosedLogs" class="headerlink" title="SyncClosedLogs"></a>SyncClosedLogs</h3><p>SyncClosedLogs 函数需要在 <em>log_write_mutex_</em> 保护下。如果此时仍持有 <code>DBImpl::mutex_</code> 会影响增加其他其线程阻塞时间，比如写路径过程中的 <code>PreprocessWrite</code>，因此在进入 SyncClosedLogs 函数前会释放 <code>DBImpl::mutex_</code>，让其他的线程可以执行。</p>
+<p>SyncClosedLogs 函数的目标是 [logs_.front().number, logfile_number_) 区间的 WALs，其中 logfile_number_ 指向当前最新的 WAL。由于在后台线程池中可能会同时执行多个 FlushMemTable 任务，只要一个 WAL 的生命周期还没结束，那么每次 FlushMemTables 前都会 SYNC WAL 一次，并使用 VersionEdit 记录该 WAL 的元信息再写入 MANIFEST。 因此在 SyncClosedLogs 函数开始，会先尝试阻塞等待其他线程完成对该 WAL 的 SYNC 操作。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">IOStatus <span class="title">DBImpl::SyncClosedLogs</span><span class="params">(JobContext* job_context,</span></span></span><br><span class="line"><span class="params"><span class="function">                                VersionEdit* synced_wals)</span> </span>&#123;</span><br><span class="line">  <span class="function">InstrumentedMutexLock <span class="title">l</span><span class="params">(&amp;log_write_mutex_)</span></span>;</span><br><span class="line">  autovector&lt;log::Writer*, <span class="number">1</span>&gt; logs_to_sync;</span><br><span class="line">  <span class="type">uint64_t</span> current_log_number = logfile_number_;</span><br><span class="line">  <span class="comment">// 1. 阻塞等待其他线程完成 SYNC</span></span><br><span class="line">  <span class="keyword">while</span> (logs_.<span class="built_in">front</span>().number &lt; current_log_number &amp;&amp;</span><br><span class="line">         logs_.<span class="built_in">front</span>().<span class="built_in">IsSyncing</span>()) &#123;</span><br><span class="line">    log_sync_cv_.<span class="built_in">Wait</span>();</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//2. 获取所有待 SYNC 的对象: logs_to_sync</span></span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span> it = logs_.<span class="built_in">begin</span>();</span><br><span class="line">       it != logs_.<span class="built_in">end</span>() &amp;&amp; it-&gt;number &lt; current_log_number; ++it) &#123;</span><br><span class="line">    <span class="keyword">auto</span>&amp; log = *it;</span><br><span class="line">    log.<span class="built_in">PrepareForSync</span>();</span><br><span class="line">    logs_to_sync.<span class="built_in">push_back</span>(log.writer);</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  IOStatus io_s;</span><br><span class="line">   <span class="comment">// 3. SYNC</span></span><br><span class="line">  <span class="keyword">if</span> (!logs_to_sync.<span class="built_in">empty</span>()) &#123;</span><br><span class="line">    <span class="comment">// 操作局部变量 logs_to_sync 不需要 log_write_mutex_</span></span><br><span class="line">    log_write_mutex_.<span class="built_in">Unlock</span>();</span><br><span class="line">    <span class="keyword">for</span> (log::Writer* log : logs_to_sync) &#123;</span><br><span class="line">      <span class="comment">// 每个文件进行 SYNC</span></span><br><span class="line">      io_s = log-&gt;<span class="built_in">file</span>()-&gt;<span class="built_in">Sync</span>(immutable_db_options_.use_fsync);</span><br><span class="line">      <span class="keyword">if</span> (!io_s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="comment">// 关闭</span></span><br><span class="line">      <span class="keyword">if</span> (immutable_db_options_.recycle_log_file_num &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        io_s = log-&gt;<span class="built_in">Close</span>();</span><br><span class="line">        <span class="keyword">if</span> (!io_s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">          <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 只要有一个 WAL 需要 SYNC ，整个目录都需要 SYNC</span></span><br><span class="line">    <span class="keyword">if</span> (io_s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">      io_s = directories_.<span class="built_in">GetWalDir</span>()-&gt;<span class="built_in">FsyncWithDirOptions</span>(</span><br><span class="line">          <span class="built_in">IOOptions</span>(), <span class="literal">nullptr</span>,</span><br><span class="line">          <span class="built_in">DirFsyncOptions</span>(DirFsyncOptions::FsyncReason::kNewFileSynced));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 要操作 active_logs_, logs_ 因此需要 log_write_mutex_</span></span><br><span class="line">    log_write_mutex_.<span class="built_in">Lock</span>();</span><br><span class="line">     </span><br><span class="line">     <span class="comment">// 标记是否完成</span></span><br><span class="line">    <span class="keyword">if</span> (io_s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">      <span class="built_in">MarkLogsSynced</span>(current_log_number - <span class="number">1</span>, <span class="literal">true</span>, synced_wals);</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="built_in">MarkLogsNotSynced</span>(current_log_number - <span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> (!io_s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">      <span class="keyword">return</span> io_s;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> io_s;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h4 id="MarkLogsSynced"><a href="#MarkLogsSynced" class="headerlink" title="MarkLogsSynced"></a>MarkLogsSynced</h4><p><code>MarkLogsSynced</code> 函数记录 SYNCed WALs 信息:</p>
+<p>选项 <em>DBOptions.track_and_verify_wals_in_manifest</em> 用于追踪 WAL 大小信息便于在 Recovery 期间进行校验。默认值为 false，但是 RocksDB 建议在生产环境设置为 true，防止误删或者损坏 WAL 目录下的文件而无法察觉。因此每次 Flush MemTable 前会记录 WAL 的 <code>&#123;wal.number, prev_synced_szie&#125;</code> 信息，那么当 recovery 时，存放 WAL 的目录下必须存在 <code>wal.number</code> 文件，且文件大小至少是 <code>prev_synced_szie</code>。</p>
+<p>此外，还会更新 <code>logs_</code>：</p>
+<ul>
+<li>由于 WAL 在 SyncClosedLogs 函数中再次 SYNC。如果最新一次 SYNC 完成后 WAL 大小和上次 SYNC 的大小 prev_sync_size 相同，表示该 WAL 已完成持久化，则可以从 <code>logs_</code> 中删除，加入 <code>logs_to_free_</code> 队列，在 FlushJob 完成后，在 <code>FindObsoleteFiles</code> 函数中删除。</li>
+<li>否则，还需要进行下一次 SYNC，将本次 SYNC 操作标记为完成，等待下一次 Flush 后台任务；</li>
+</ul>
+<p>由于 <code>MarkLogsSynced</code> 函数会对 <code>logs_</code> 和 <code>logs_to_free_</code> 进行操作，因此需要在 <code>log_write_mutex_</code> 保护下执行，执行完再阻塞唤醒所有阻塞等待在 <code>log_sync_cv_</code> 的地方。</p>
+<p>代码如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">DBImpl::MarkLogsSynced</span><span class="params">(<span class="type">uint64_t</span> up_to, <span class="type">bool</span> synced_dir,</span></span></span><br><span class="line"><span class="params"><span class="function">                            VersionEdit* synced_wals)</span> </span>&#123;</span><br><span class="line">  log_write_mutex_.<span class="built_in">AssertHeld</span>();</span><br><span class="line">  <span class="keyword">for</span> (<span class="keyword">auto</span> it = logs_.<span class="built_in">begin</span>(); it != logs_.<span class="built_in">end</span>() &amp;&amp; it-&gt;number &lt;= up_to;) &#123;</span><br><span class="line">    <span class="keyword">auto</span>&amp; wal = *it;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (wal.number &lt; logs_.<span class="built_in">back</span>().number) &#123;</span><br><span class="line">      <span class="comment">// Inactive WAL</span></span><br><span class="line">      <span class="keyword">if</span> (immutable_db_options_.track_and_verify_wals_in_manifest &amp;&amp;</span><br><span class="line">          wal.<span class="built_in">GetPreSyncSize</span>() &gt; <span class="number">0</span>) &#123;</span><br><span class="line">        synced_wals-&gt;<span class="built_in">AddWal</span>(wal.number, <span class="built_in">WalMetadata</span>(wal.<span class="built_in">GetPreSyncSize</span>()));</span><br><span class="line">      &#125;</span><br><span class="line">      <span class="keyword">if</span> (wal.<span class="built_in">GetPreSyncSize</span>() == wal.writer-&gt;<span class="built_in">file</span>()-&gt;<span class="built_in">GetFlushedSize</span>()) &#123;</span><br><span class="line">        <span class="comment">// Fully synced</span></span><br><span class="line">        logs_to_free_.<span class="built_in">push_back</span>(wal.<span class="built_in">ReleaseWriter</span>());</span><br><span class="line">        it = logs_.<span class="built_in">erase</span>(it);</span><br><span class="line">      &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="built_in">assert</span>(wal.<span class="built_in">GetPreSyncSize</span>() &lt; wal.writer-&gt;<span class="built_in">file</span>()-&gt;<span class="built_in">GetFlushedSize</span>());</span><br><span class="line">        wal.<span class="built_in">FinishSync</span>();</span><br><span class="line">        ++it;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">      <span class="comment">// Active WAL</span></span><br><span class="line">      <span class="built_in">assert</span>(wal.number == logs_.<span class="built_in">back</span>().number);</span><br><span class="line">      wal.<span class="built_in">FinishSync</span>();</span><br><span class="line">      ++it;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  log_sync_cv_.<span class="built_in">SignalAll</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="ApplyWALToManifest"><a href="#ApplyWALToManifest" class="headerlink" title="ApplyWALToManifest"></a>ApplyWALToManifest</h3><p><code>ApplyWALToManifest</code> 函数是将 <code>MarkLogsSynced</code> 函数中获得 synced_wals 序列化写入到 MANIFEST，写入 MANIFEST 的数据都需要指定一个所属 CF，由于 WAL 是RocksDB 中所有 CFs 共享的，而 DefaultCF 是第一个 ColumnFamily，因此将 WAL 的数据归属给 default_cf。</p>
+<p>至于 <code>LogAndApplyToDefaultColumnFamily</code> 内部怎么 MANIFEST 交互，后面会讲解。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">DBImpl::ApplyWALToManifest</span><span class="params">(<span class="type">const</span> ReadOptions&amp; read_options,</span></span></span><br><span class="line"><span class="params"><span class="function">                                  VersionEdit* synced_wals)</span> </span>&#123;</span><br><span class="line">  <span class="comment">// not empty, write to MANIFEST.</span></span><br><span class="line">  mutex_.<span class="built_in">AssertHeld</span>();</span><br><span class="line"></span><br><span class="line">  Status status = versions_-&gt;<span class="built_in">LogAndApplyToDefaultColumnFamily</span>(</span><br><span class="line">      read_options, synced_wals, &amp;mutex_, directories_.<span class="built_in">GetDbDir</span>());</span><br><span class="line">  <span class="keyword">if</span> (!status.<span class="built_in">ok</span>() &amp;&amp; versions_-&gt;<span class="built_in">io_status</span>().<span class="built_in">IsIOError</span>()) &#123;</span><br><span class="line">    status = error_handler_.<span class="built_in">SetBGError</span>(versions_-&gt;<span class="built_in">io_status</span>(),</span><br><span class="line">                                       BackgroundErrorReason::kManifestWrite);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> status;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Recovery"><a href="#Recovery" class="headerlink" title="Recovery"></a>Recovery</h3><p>在开启了 <em>track_and_verify_wals_in_manifest</em> 后，在 <code>DBImpl::Recover</code> 中，VersionSet 从 MANIFEST 恢复过来后，会将 MANIFEST 中记录的 WAL 元信息和 WAL 目录下的文件进行对比校验。如果该标志没有开启，则需要删除 MANIFEST 中记录的 WAL 信息，防止后续开启后，MANIFEST 中的记录的 WAL 文件已经被删除了，导致校验失败，无法恢复 RocksDB 实例。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (immutable_db_options_.track_and_verify_wals_in_manifest) &#123;</span><br><span class="line">  <span class="keyword">if</span> (!immutable_db_options_.best_efforts_recovery) &#123;</span><br><span class="line">    <span class="comment">// Verify WALs in MANIFEST.</span></span><br><span class="line">    s = versions_-&gt;<span class="built_in">GetWalSet</span>().<span class="built_in">CheckWals</span>(env_, wal_files);</span><br><span class="line">  &#125; <span class="comment">// else since best effort recovery does not recover from WALs, no need</span></span><br><span class="line">    <span class="comment">// to check WALs.</span></span><br><span class="line">&#125; <span class="keyword">else</span> <span class="keyword">if</span> (!versions_-&gt;<span class="built_in">GetWalSet</span>().<span class="built_in">GetWals</span>().<span class="built_in">empty</span>()) &#123;</span><br><span class="line">  VersionEdit edit;</span><br><span class="line">  WalNumber max_wal_number =</span><br><span class="line">      versions_-&gt;<span class="built_in">GetWalSet</span>().<span class="built_in">GetWals</span>().<span class="built_in">rbegin</span>()-&gt;first;</span><br><span class="line">  edit.<span class="built_in">DeleteWalsBefore</span>(max_wal_number + <span class="number">1</span>);</span><br><span class="line">  recovery_ctx-&gt;<span class="built_in">UpdateVersionEdits</span>(</span><br><span class="line">      versions_-&gt;<span class="built_in">GetColumnFamilySet</span>()-&gt;<span class="built_in">GetDefault</span>(), edit);</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">if</span> (!s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">  <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="CheckWals"><a href="#CheckWals" class="headerlink" title="CheckWals"></a>CheckWals</h4><p><code>CheckWals</code> 函数是将从 MANIFEST 中获得的 WAL 最后一次 SYNC 大小 <code>synced_size</code> 和实际磁盘上的 WAL 文件大小 <code>log_file_size</code> 进行对比校验，起码要满足 <code>synced_size &lt;= log_file_size</code>，校验才能通过。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">Status <span class="title">WalSet::CheckWals</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    Env* env,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> std::unordered_map&lt;WalNumber, std::string&gt;&amp; logs_on_disk)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">  Status s;</span><br><span class="line">  <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; [log_number, wal_meta] : wals_) &#123;</span><br><span class="line">    <span class="keyword">if</span> (!wal_meta.<span class="built_in">HasSyncedSize</span>()) &#123;</span><br><span class="line">      <span class="keyword">continue</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. MANIFEST 中有存在的 WALs，磁盘上也必须存在</span></span><br><span class="line">    <span class="keyword">if</span> (logs_on_disk.<span class="built_in">find</span>(log_number) == logs_on_disk.<span class="built_in">end</span>()) &#123;</span><br><span class="line">      s = Status::<span class="built_in">Corruption</span>(fmt::format(</span><br><span class="line">        <span class="string">&quot;Missing WAL with log number: &#123;&#125;&quot;</span>, log_number));</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">//2. 磁盘上的 WAL 文件大小 &gt;= 最后一次 SYNC 大小</span></span><br><span class="line">    <span class="type">uint64_t</span> log_file_size = <span class="number">0</span>;</span><br><span class="line">    s = env-&gt;<span class="built_in">GetFileSize</span>(logs_on_disk.<span class="built_in">at</span>(log_number), &amp;log_file_size);</span><br><span class="line">    <span class="keyword">if</span> (!s.<span class="built_in">ok</span>()) &#123;</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (log_file_size &lt; wal_meta.<span class="built_in">GetSyncedSizeInBytes</span>()) &#123;</span><br><span class="line">      s = Status::<span class="built_in">Corruption</span>(fmt::format(</span><br><span class="line">        <span class="string">&quot;Size mismatch: WAL (log number: &#123;&#125; ) in MANIFEST is &#123;&#125; bytes, &quot;</span></span><br><span class="line">        <span class="string">&quot;but actually is  &#123;&#125; bytes on disk.&quot;</span>,</span><br><span class="line">        log_number, wal_meta.<span class="built_in">GetSyncedSizeInBytes</span>(), log_file_size));</span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#WHY-NEED-to-SYNC-WAL"><span class="toc-number">1.</span> <span class="toc-text">WHY NEED to SYNC WAL</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SyncClosedLogs"><span class="toc-number">2.</span> <span class="toc-text">SyncClosedLogs</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#MarkLogsSynced"><span class="toc-number">2.1.</span> <span class="toc-text">MarkLogsSynced</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ApplyWALToManifest"><span class="toc-number">3.</span> <span class="toc-text">ApplyWALToManifest</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Recovery"><span class="toc-number">4.</span> <span class="toc-text">Recovery</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CheckWals"><span class="toc-number">4.1.</span> <span class="toc-text">CheckWals</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&text=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&is_video=false&description=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WAL、MemTable 的生命周期管理(2)&body=Check out this article: https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&title=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&name=WAL、MemTable 的生命周期管理(2)&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/04/05/rocksdb/WritePath/WAL_2/&t=WAL、MemTable 的生命周期管理(2)"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

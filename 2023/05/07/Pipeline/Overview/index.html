@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="如图-1是 StarRocks Pipeline 的整体执行结构:  对比论文中 Morsel-Driven Parallelism[1] 第三节中的 figure-5 与 StarRocks Pipeline 实现中，概念映射关系大致如下：  QEPObject 即 PipelineDriverPoller，负责将前置依赖都已经 Ready 的 Pipeline 传递给 Dispatcher T">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Overview: StarRocks Pipeline Query Executor">
+<meta property="og:url" content="https://szza.github.io/2023/05/07/Pipeline/Overview/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="如图-1是 StarRocks Pipeline 的整体执行结构:  对比论文中 Morsel-Driven Parallelism[1] 第三节中的 figure-5 与 StarRocks Pipeline 实现中，概念映射关系大致如下：  QEPObject 即 PipelineDriverPoller，负责将前置依赖都已经 Ready 的 Pipeline 传递给 Dispatcher T">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-1.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/morsel-driven-5.jpg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-1.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-2.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-3.svg?raw=true">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-driver-queue-1.svg?raw=true">
+<meta property="article:published_time" content="2023-05-07T08:00:02.000Z">
+<meta property="article:modified_time" content="2023-09-26T02:32:28.794Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="StarRocks">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-1.svg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Overview: StarRocks Pipeline Query Executor</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/06/15/Paper/Columbia-Query-Optimizer-1/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/07/Pipeline/Overview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&text=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&is_video=false&description=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Overview: StarRocks Pipeline Query Executor&body=Check out this article: https://szza.github.io/2023/05/07/Pipeline/Overview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&name=Overview: StarRocks Pipeline Query Executor&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/07/Pipeline/Overview/&t=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#GlobalDriverExecutor"><span class="toc-number">1.</span> <span class="toc-text">GlobalDriverExecutor</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Morsel"><span class="toc-number">2.</span> <span class="toc-text">Morsel</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#OlapScanNode-convert-scan-range-to-morsel-queue"><span class="toc-number">2.1.</span> <span class="toc-text">OlapScanNode::convert_scan_range_to_morsel_queue</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MorselQueueFactory"><span class="toc-number">2.2.</span> <span class="toc-text">MorselQueueFactory</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MorselQueue"><span class="toc-number">2.3.</span> <span class="toc-text">MorselQueue</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DriverQueue"><span class="toc-number">3.</span> <span class="toc-text">DriverQueue</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PipelineDriverPoller"><span class="toc-number">4.</span> <span class="toc-text">PipelineDriverPoller</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PipelineDriver"><span class="toc-number">5.</span> <span class="toc-text">PipelineDriver</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">6.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Overview: StarRocks Pipeline Query Executor
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-05-07T08:00:02.000Z" itemprop="datePublished">2023-05-07</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/Pipeline/">Pipeline</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/StarRocks/" rel="tag">StarRocks</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>如图-1是 StarRocks Pipeline 的整体执行结构:</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-1.svg?raw=true" alt="pipeline-1"></p>
+<p>对比论文中 Morsel-Driven Parallelism[1] 第三节中的 figure-5 与 StarRocks Pipeline 实现中，概念映射关系大致如下：</p>
+<ul>
+<li>QEPObject 即 PipelineDriverPoller，负责将前置依赖都已经 Ready 的 Pipeline 传递给 Dispatcher</li>
+<li>Task 即 PipelineDriver，是可执行任务单元，由两部分组成：输入（Morsel） + 处理流（PipelineJob）。</li>
+<li>Dispatcher 即 DriverQueue，是存储 PipelineDriver 的任务队列，可以根据优先级（Resource Group）或者 FIFO 方式任务分发</li>
+<li><em>Morsel List</em> 即 MorselQueue，根据优化器，自动选择不同的 MorselQueue</li>
+</ul>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/morsel-driven-5.jpg?raw=true" alt="figure-5"> </p>
+<h2 id="GlobalDriverExecutor"><a href="#GlobalDriverExecutor" class="headerlink" title="GlobalDriverExecutor"></a>GlobalDriverExecutor</h2><p>所有的任务都是在一组固定的线程池 <code>GlobalDriverExecutor::_thread_pool</code> 中执行。默认是使用当前CPU的核数 <em>CpuInfo::num_cores()<em>，也可以设置参数</em>config::pipeline_exec_thread_pool_thread_num</em> 指定线程池数目。 在 <code>GlobalDriverExecutor::initialize</code> 函数中启动 _max_executor_threads 个线程，函数入口 是 <code>GlobalDriverExecutor::work_thread</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// in ExecEnv::_init(const std::vector&lt;StorePath&gt;&amp; store_paths)</span></span><br><span class="line">std::unique_ptr&lt;ThreadPool&gt; driver_executor_thread_pool;</span><br><span class="line">_max_executor_threads = CpuInfo::<span class="built_in">num_cores</span>();</span><br><span class="line"><span class="keyword">if</span> (config::pipeline_exec_thread_pool_thread_num &gt; <span class="number">0</span>) &#123;</span><br><span class="line">    _max_executor_threads = config::pipeline_exec_thread_pool_thread_num;</span><br><span class="line">&#125;</span><br><span class="line">_max_executor_threads = std::<span class="built_in">max</span>&lt;<span class="type">int64_t</span>&gt;(<span class="number">1</span>, _max_executor_threads);</span><br><span class="line"><span class="built_in">RETURN_IF_ERROR</span>(<span class="built_in">ThreadPoolBuilder</span>(<span class="string">&quot;pip_executor&quot;</span>) <span class="comment">// pipeline executor</span></span><br><span class="line">                        .<span class="built_in">set_min_threads</span>(<span class="number">0</span>)</span><br><span class="line">                        .<span class="built_in">set_max_threads</span>(_max_executor_threads)</span><br><span class="line">                        .<span class="built_in">set_max_queue_size</span>(<span class="number">1000</span>)</span><br><span class="line">                        .<span class="built_in">set_idle_timeout</span>(MonoDelta::<span class="built_in">FromMilliseconds</span>(<span class="number">2000</span>))</span><br><span class="line">                        .<span class="built_in">build</span>(&amp;driver_executor_thread_pool));</span><br><span class="line">_driver_executor = <span class="keyword">new</span> pipeline::<span class="built_in">GlobalDriverExecutor</span>(<span class="string">&quot;pip_exe&quot;</span>, std::<span class="built_in">move</span>(driver_executor_thread_pool), <span class="literal">false</span>);</span><br><span class="line">_driver_executor-&gt;<span class="built_in">initialize</span>(_max_executor_threads);</span><br></pre></td></tr></table></figure>
+<h2 id="Morsel"><a href="#Morsel" class="headerlink" title="Morsel"></a>Morsel</h2><p>Morsel 是 PipelineDriver 的输入。StarRocks 中一个 Morsel 的结构如下：</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-1.svg?raw=true" alt="pipeline-morsel-1"></p>
+<p>顶层基类 <em>Morsel</em> 中的 <code>_from_version</code> 是为了实现 Query Cache，只需要从文件系统中增量读取 <code>[_from_version, version]</code> 部分的数据，而 <code>[0, _from_version)</code> 部分的数据就可以从 Lrucache 中读取，其中<code>_version</code> 存储在子类 ScanMorsel 中。</p>
+<p>基类 <em>ScanMorsel</em> 更加具体化地存储了本次要读取的数据元信息 <code>&#123;_tablet_id, _version&#125;</code>。如果 Morsel 可以进一步在划分，根据划分方式派生了两个子类。</p>
+<h3 id="OlapScanNode-convert-scan-range-to-morsel-queue"><a href="#OlapScanNode-convert-scan-range-to-morsel-queue" class="headerlink" title="OlapScanNode::convert_scan_range_to_morsel_queue"></a>OlapScanNode::convert_scan_range_to_morsel_queue</h3><p>如下代码，是将本次待查询的 <code>scan_ranges</code> 根据 Pipeline 并行度 <code>pipeline_dop</code> 转化为 OlapScanOperator 中待查询数据的元信息，即 <code>Morsel</code>对象。流程如下：</p>
+<ol>
+<li><p>先将 <em>scan_ranges</em> 一一对应的方式转化为 ScanMorsel</p>
+</li>
+<li><p>如果不开启 tablet 内并行，则使用 FixedMorselQueue 数据结构来存储本次 query 待处理的数据源 <code>Morsels</code></p>
+<p> <code>enable_tablet_internal_parallel</code> 默认值是 true，是个 SessionVariable，用户在每次查询中都可以更改该值。即便该值为 true，也不一定真会进行子划分， 由 Morsel-Driven Parallelism[1] 论文可知，Morsel Size 不建议太小，否则会带因为多线程竞争导致性能惩罚。因此 <code>_could_tablet_internal_parallel</code> 函数会基于本次查询的数据量进行估计，判断是否真需要开启。</p>
+</li>
+<li><p>如果开启，则每个 Morsel Size 估计在 <code>splitted_scan_rows</code> 左右。</p>
+<p> 具体的划分方式由 <code>_could_split_tablet_physically</code> 函数来确定。</p>
+</li>
+</ol>
+<p>这个函数是在构建 Pipelines 的过程中：数据源划分好后，一个 MorselQueue 和一个 Pipeline 构成一个 PipelineDriver。一个完整的 Scan 任务被划分为 pipline_dop 个 OlapScanOperator 并行执行。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">StatusOr&lt;pipeline::MorselQueuePtr&gt; <span class="title">OlapScanNode::convert_scan_range_to_morsel_queue</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> std::vector&lt;TScanRangeParams&gt;&amp; scan_ranges, <span class="type">int</span> node_id, <span class="type">int32_t</span> pipeline_dop,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">bool</span> enable_tablet_internal_parallel, TTabletInternalParallelMode::type tablet_internal_parallel_mode,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">size_t</span> num_total_scan_ranges)</span> </span>&#123;</span><br><span class="line">    pipeline::Morsels morsels;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; scan_range : scan_ranges) &#123;</span><br><span class="line">        morsels.<span class="built_in">emplace_back</span>(std::<span class="built_in">make_unique</span>&lt;pipeline::ScanMorsel&gt;(node_id, scan_range));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// None tablet to read shouldn&#x27;t use tablet internal parallel.</span></span><br><span class="line">    <span class="keyword">if</span> (morsels.<span class="built_in">empty</span>()) &#123;</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::FixedMorselQueue&gt;(std::<span class="built_in">move</span>(morsels));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Disable by the session variable shouldn&#x27;t use tablet internal parallel.</span></span><br><span class="line">    <span class="keyword">if</span> (!enable_tablet_internal_parallel) &#123;</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::FixedMorselQueue&gt;(std::<span class="built_in">move</span>(morsels));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="type">int64_t</span> scan_dop;</span><br><span class="line">    <span class="type">int64_t</span> splitted_scan_rows;</span><br><span class="line">    <span class="built_in">ASSIGN_OR_RETURN</span>(<span class="keyword">auto</span> could,</span><br><span class="line">                     _could_tablet_internal_parallel(scan_ranges, pipeline_dop, num_total_scan_ranges,</span><br><span class="line">                                                     tablet_internal_parallel_mode, &amp;scan_dop, &amp;splitted_scan_rows));</span><br><span class="line">    <span class="keyword">if</span> (!could) &#123;</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::FixedMorselQueue&gt;(std::<span class="built_in">move</span>(morsels));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// Split tablet physically.</span></span><br><span class="line">    <span class="built_in">ASSIGN_OR_RETURN</span>(<span class="type">bool</span> ok, _could_split_tablet_physically(scan_ranges));</span><br><span class="line">    <span class="keyword">if</span> (ok) &#123;</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::PhysicalSplitMorselQueue&gt;(std::<span class="built_in">move</span>(morsels), scan_dop, splitted_scan_rows);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::LogicalSplitMorselQueue&gt;(std::<span class="built_in">move</span>(morsels), scan_dop, splitted_scan_rows);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="MorselQueueFactory"><a href="#MorselQueueFactory" class="headerlink" title="MorselQueueFactory"></a>MorselQueueFactory</h3><p>MorselQueueFactory 的集成关系如下：<br><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-2.svg?raw=true" alt="pipeline-morsel-2"></p>
+<p><code>IndividualMorselQueueFactory</code> 是针对每个 pipeline 都创建一个 MorselQueue。而 <code>SharedMorselQueueFactory</code> 即在多个 pipeline 之间共享一个 MorselQueue。</p>
+<p><code>convert_scan_range_to_morsel_queue_factory</code> 函数是为 Pipeline 创建数据源 MorselQueue。<code>scan_ranges_per_driver_seq</code> 参数是由 front-end（fe）优化器生成的。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">StatusOr&lt;pipeline::MorselQueueFactoryPtr&gt; <span class="title">ScanNode::convert_scan_range_to_morsel_queue_factory</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> std::vector&lt;TScanRangeParams&gt;&amp; global_scan_ranges,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">const</span> std::map&lt;<span class="type">int32_t</span>, std::vector&lt;TScanRangeParams&gt;&gt;&amp; scan_ranges_per_driver_seq, <span class="type">int</span> node_id,</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">int</span> pipeline_dop, <span class="type">bool</span> enable_tablet_internal_parallel,</span></span></span><br><span class="line"><span class="params"><span class="function">        TTabletInternalParallelMode::type tablet_internal_parallel_mode)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (scan_ranges_per_driver_seq.<span class="built_in">empty</span>()) &#123;</span><br><span class="line">        <span class="built_in">ASSIGN_OR_RETURN</span>(<span class="keyword">auto</span> morsel_queue,</span><br><span class="line">                         <span class="built_in">convert_scan_range_to_morsel_queue</span>(global_scan_ranges, node_id, pipeline_dop,</span><br><span class="line">                                                            enable_tablet_internal_parallel,</span><br><span class="line">                                                            tablet_internal_parallel_mode, global_scan_ranges.<span class="built_in">size</span>()));</span><br><span class="line">        <span class="type">int</span> scan_dop = std::<span class="built_in">min</span>&lt;<span class="type">int</span>&gt;(std::<span class="built_in">max</span>&lt;<span class="type">int</span>&gt;(<span class="number">1</span>, morsel_queue-&gt;<span class="built_in">max_degree_of_parallelism</span>()), pipeline_dop);</span><br><span class="line">        <span class="type">int</span> io_parallelism = scan_dop * <span class="built_in">io_tasks_per_scan_operator</span>();</span><br><span class="line"></span><br><span class="line">        <span class="comment">// If not so much morsels, try to assign morsel uniformly among operators to avoid data skew</span></span><br><span class="line">        <span class="keyword">if</span> (scan_dop &gt; <span class="number">1</span> &amp;&amp; <span class="built_in">dynamic_cast</span>&lt;pipeline::FixedMorselQueue*&gt;(morsel_queue.<span class="built_in">get</span>()) &amp;&amp;</span><br><span class="line">            morsel_queue-&gt;<span class="built_in">num_original_morsels</span>() &lt;= io_parallelism) &#123;</span><br><span class="line">            <span class="keyword">auto</span> morsel_queue_map = <span class="built_in">uniform_distribute_morsels</span>(std::<span class="built_in">move</span>(morsel_queue), scan_dop);</span><br><span class="line">            <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::IndividualMorselQueueFactory&gt;(std::<span class="built_in">move</span>(morsel_queue_map),</span><br><span class="line">                                                                            <span class="comment">/*could_local_shuffle*/</span> <span class="literal">true</span>);</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::SharedMorselQueueFactory&gt;(std::<span class="built_in">move</span>(morsel_queue), scan_dop);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="type">size_t</span> num_total_scan_ranges = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; [_, scan_ranges] : scan_ranges_per_driver_seq) &#123;</span><br><span class="line">            num_total_scan_ranges += scan_ranges.<span class="built_in">size</span>();</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        std::map&lt;<span class="type">int</span>, pipeline::MorselQueuePtr&gt; queue_per_driver_seq;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; [dop, scan_ranges] : scan_ranges_per_driver_seq) &#123;</span><br><span class="line">            <span class="built_in">ASSIGN_OR_RETURN</span>(<span class="keyword">auto</span> queue, <span class="built_in">convert_scan_range_to_morsel_queue</span>(</span><br><span class="line">                                                 scan_ranges, node_id, pipeline_dop, enable_tablet_internal_parallel,</span><br><span class="line">                                                 tablet_internal_parallel_mode, num_total_scan_ranges));</span><br><span class="line">            queue_per_driver_seq.<span class="built_in">emplace</span>(dop, std::<span class="built_in">move</span>(queue));</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;pipeline::IndividualMorselQueueFactory&gt;(std::<span class="built_in">move</span>(queue_per_driver_seq),</span><br><span class="line">                                                                        <span class="comment">/*could_local_shuffle*/</span> <span class="literal">false</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="MorselQueue"><a href="#MorselQueue" class="headerlink" title="MorselQueue"></a>MorselQueue</h3><p>MorselQueue 的继承体系如下。</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-morsel-3.svg?raw=true" alt="pipeline-morsel-3"></p>
+<h2 id="DriverQueue"><a href="#DriverQueue" class="headerlink" title="DriverQueue"></a>DriverQueue</h2><p>DriverQueue 的继承派生关系如下：</p>
+<p><img src="https://github.com/szza/szza.github.io.images/blob/master/StarRocks/pipeline-driver-queue-1.svg?raw=true" alt="pipeline-driver-queue-1"></p>
+<p><em>QuerySharedDriverQueue</em> 是由于多级反馈队列远离实现，没有指定资源组的 query 都会进行这个队列中。<em>WorkGroupDriverQueue</em> 是针对设置 {cpu, mem} 资源限制 的 query，都是在 <code>GlobalDriverExecutor</code> 中初始化。</p>
+<p>在 StarRocks Be(backend) 中是同时存在两个 GlobalDriverExecutor 对象，不同之处是分别用于实例化 QuerySharedDriverQueue 和 WorkGroupDriverQueue。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">GlobalDriverExecutor::<span class="built_in">GlobalDriverExecutor</span>(std::string name, std::unique_ptr&lt;ThreadPool&gt; thread_pool,</span><br><span class="line">                                           <span class="type">bool</span> enable_resource_group)</span><br><span class="line">        : <span class="built_in">Base</span>(std::<span class="built_in">move</span>(name)),</span><br><span class="line">          _driver_queue(enable_resource_group ? std::<span class="built_in">unique_ptr</span>&lt;DriverQueue&gt;(std::<span class="built_in">make_unique</span>&lt;WorkGroupDriverQueue&gt;())</span><br><span class="line">                                              : std::<span class="built_in">make_unique</span>&lt;QuerySharedDriverQueue&gt;()),</span><br><span class="line">          _thread_pool(std::<span class="built_in">move</span>(thread_pool)),</span><br><span class="line">          _blocked_driver_poller(<span class="keyword">new</span> <span class="built_in">PipelineDriverPoller</span>(_driver_queue.<span class="built_in">get</span>())),</span><br><span class="line">          _exec_state_reporter(<span class="keyword">new</span> <span class="built_in">ExecStateReporter</span>()) &#123; &#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="PipelineDriverPoller"><a href="#PipelineDriverPoller" class="headerlink" title="PipelineDriverPoller"></a>PipelineDriverPoller</h2><p>轮询判断某个 blocked_pipeline_driver 前置依赖是否已经 ready，ready 则加入 <code>_driver_queue</code>。</p>
+<h2 id="PipelineDriver"><a href="#PipelineDriver" class="headerlink" title="PipelineDriver"></a>PipelineDriver</h2><p>执行单元，在每次执行前后会更新统计信息，Executor 会基于统计信息进行下一次调度。</p>
+<p>StarRocks Pipeline 的设计还是挺复杂的，比 Morsel-Driven Parallelism[1] 论文做了很多的优化。后续再针对每个具体的数据结构进行分析。</p>
+<h2 id="Reference"><a href="#Reference" class="headerlink" title="Reference"></a>Reference</h2><ul>
+<li>[1] <a target="_blank" rel="noopener" href="https://db.in.tum.de/~leis/papers/morsels.pdf">Morsel-Driven Parallelism</a></li>
+<li>[2] <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/573181686">StarRocks Pipeline 执行框架（上)</a></li>
+<li>[3] <a target="_blank" rel="noopener" href="https://zhuanlan.zhihu.com/p/575526096">StarRocks Pipeline 执行框架（下)</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#GlobalDriverExecutor"><span class="toc-number">1.</span> <span class="toc-text">GlobalDriverExecutor</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Morsel"><span class="toc-number">2.</span> <span class="toc-text">Morsel</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#OlapScanNode-convert-scan-range-to-morsel-queue"><span class="toc-number">2.1.</span> <span class="toc-text">OlapScanNode::convert_scan_range_to_morsel_queue</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MorselQueueFactory"><span class="toc-number">2.2.</span> <span class="toc-text">MorselQueueFactory</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#MorselQueue"><span class="toc-number">2.3.</span> <span class="toc-text">MorselQueue</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DriverQueue"><span class="toc-number">3.</span> <span class="toc-text">DriverQueue</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PipelineDriverPoller"><span class="toc-number">4.</span> <span class="toc-text">PipelineDriverPoller</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#PipelineDriver"><span class="toc-number">5.</span> <span class="toc-text">PipelineDriver</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Reference"><span class="toc-number">6.</span> <span class="toc-text">Reference</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/07/Pipeline/Overview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&text=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&is_video=false&description=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Overview: StarRocks Pipeline Query Executor&body=Check out this article: https://szza.github.io/2023/05/07/Pipeline/Overview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&title=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/07/Pipeline/Overview/&name=Overview: StarRocks Pipeline Query Executor&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/07/Pipeline/Overview/&t=Overview: StarRocks Pipeline Query Executor"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2023
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

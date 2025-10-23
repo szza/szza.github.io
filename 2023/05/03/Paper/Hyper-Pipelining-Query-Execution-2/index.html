@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="4. X100: A Vectorized Query Processor上一篇翻译了 Hyper-Pipelining Query Execution 上半部分，核心思想就是 RDBMS 和 MonetDB 的优缺点。后半部分，就是如何从零开始设计新的查询处理引擎 X100。 新的 X100 查询处理引擎目标主要有三个：  高性能：以高 CPU 效率处理大数据量查询 拓展性：能够拓展到其他应用领">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Hyper-Pipelining Query Execution(下)">
+<meta property="og:url" content="https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="4. X100: A Vectorized Query Processor上一篇翻译了 Hyper-Pipelining Query Execution 上半部分，核心思想就是 RDBMS 和 MonetDB 的优缺点。后半部分，就是如何从零开始设计新的查询处理引擎 X100。 新的 X100 查询处理引擎目标主要有三个：  高性能：以高 CPU 效率处理大数据量查询 拓展性：能够拓展到其他应用领">
+<meta property="og:locale" content="en_US">
+<meta property="og:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-5.jpg?raw=true">
+<meta property="article:published_time" content="2023-05-03T02:08:23.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Papers">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-5.jpg?raw=true">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Hyper-Pipelining Query Execution(下)</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2023/05/07/StarRocks/Pipeline/Overview/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&text=Hyper-Pipelining Query Execution(下)"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&is_video=false&description=Hyper-Pipelining Query Execution(下)"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Hyper-Pipelining Query Execution(下)&body=Check out this article: https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&name=Hyper-Pipelining Query Execution(下)&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&t=Hyper-Pipelining Query Execution(下)"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#4-X100-A-Vectorized-Query-Processor"><span class="toc-number">1.</span> <span class="toc-text">4. X100: A Vectorized Query Processor</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Hyper-Pipelining Query Execution(下)
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-05-03T02:08:23.000Z" itemprop="datePublished">2023-05-03</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Papers/" rel="tag">Papers</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="4-X100-A-Vectorized-Query-Processor"><a href="#4-X100-A-Vectorized-Query-Processor" class="headerlink" title="4. X100: A Vectorized Query Processor"></a>4. X100: A Vectorized Query Processor</h2><p>上一篇翻译了 <a href="https://szza.github.io/2023/05/01/Paper/Hyper-Pipelining-Query-Execution-1">Hyper-Pipelining Query Execution</a> 上半部分，核心思想就是 RDBMS 和 MonetDB 的优缺点。后半部分，就是如何从零开始设计新的查询处理引擎 X100。</p>
+<p>新的 X100 查询处理引擎目标主要有三个：</p>
+<ol>
+<li>高性能：以高 CPU 效率处理大数据量查询</li>
+<li>拓展性：能够拓展到其他应用领域，比如 data-mining、multi-media retrieval等，并且能通过拓展代码在这些领域也能实现同样高的效率</li>
+<li>伸缩性：能随着最低存储层次结构（比如磁盘）的大小进行伸缩</li>
+</ol>
+<p>为了实现我们的目标，X100 必须与整个计算机架构中的瓶颈进行博弈：</p>
+<ol>
+<li><p>Disk: X100 的 ColumnBM <u>I&#x2F;O 子系统</u>面向高效的顺序数据访问。为降低对带宽的要求，它使用了垂直分段的数据布局（vertically fragmented data layout），在某些情况下，这种布局通过轻量级数据压缩得到了增强。</p>
+</li>
+<li><p>RAM: 与 I&#x2F;O 类似，RAM 的访问路线是 memory-to-cache 和 cache-to-memory，其中可能会包含与硬件相关的优化，比如使用 SSE 指令预取（Prefetching）数据以及一些汇编指令来移动数据。</p>
+</li>
+<li><p>Cache: CPU Cache 是唯一与内存带宽无关的地方。</p>
+<p>基于向量化处理（<em>vectorized processing</em>）模型，我们使用 Volcano-like execution pipeline。</p>
+<p>本文把比较小（比如 1000个值）的能留在 CPU Cache 的数据块(chunk)，叫 “vectors”，这也是 X100 查询执行的基本单位。X100查询处理算子都是 cache-conscious：因为会把巨大的数据集分割成 cache-chunk，只会在 cache 中进行随机访问。</p>
+</li>
+<li><p>CPU: 先让编译器生成 loop-pipelined 代码。为进一步提高 CPU 吞吐（主要是减少 <code>mix</code> 指令中 LOAD&#x2F;STOR 的次数），X100 也包含为整个表达式子树而不是单个函数编译向量化原语（<em>vectorized primitives</em>）的工具。目前，此编译是静态引导的，但它最终可能成为优化器强制执行的运行时活动（比如 LLVM JIT）。</p>
+</li>
+</ol>
+<p>为了保持本文的重点，我们仅简要描述磁盘存储问题，也是因为 ColumnBM Buffer Manager 仍在开发中。 在我们所有的实验中，X100 使用 MonetDB 作为其存储管理器（如图-5 所示），它在 in-memory BATs 上运行。<br><img src="https://github.com/szza/szza.github.io.images/blob/master/PaperReading/Hyper-Pipelining-5.jpg?raw=true" alt="Hyper-Pipelining-5"></p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#4-X100-A-Vectorized-Query-Processor"><span class="toc-number">1.</span> <span class="toc-text">4. X100: A Vectorized Query Processor</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&text=Hyper-Pipelining Query Execution(下)"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&is_video=false&description=Hyper-Pipelining Query Execution(下)"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Hyper-Pipelining Query Execution(下)&body=Check out this article: https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&title=Hyper-Pipelining Query Execution(下)"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&name=Hyper-Pipelining Query Execution(下)&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/05/03/Paper/Hyper-Pipelining-Query-Execution-2/&t=Hyper-Pipelining Query Execution(下)"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

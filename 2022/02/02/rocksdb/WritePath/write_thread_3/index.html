@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="在 ROCKSDB_NAMESPACE::WriteThread 中，通过 WriteThread::AwaitState 和 WriteThread::SetState 两个函数来 writers 的控制并发写入行为。 这一期主要来分析 RocksDB 中 WriteThread::AwaitState 中的优化，是如何尽可能地缩短阻塞等待时间。 WriteThread::AwaitStateA">
+<meta property="og:type" content="article">
+<meta property="og:title" content="WriteThread 如何自适应优化线程同步">
+<meta property="og:url" content="https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="在 ROCKSDB_NAMESPACE::WriteThread 中，通过 WriteThread::AwaitState 和 WriteThread::SetState 两个函数来 writers 的控制并发写入行为。 这一期主要来分析 RocksDB 中 WriteThread::AwaitState 中的优化，是如何尽可能地缩短阻塞等待时间。 WriteThread::AwaitStateA">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-02-02T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="RocksDb">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>WriteThread 如何自适应优化线程同步</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/02/13/rocksdb/WritePath/write_thread_4/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/01/15/rocksdb/WritePath/write_thread_2/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&text=WriteThread 如何自适应优化线程同步"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&is_video=false&description=WriteThread 如何自适应优化线程同步"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何自适应优化线程同步&body=Check out this article: https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&name=WriteThread 如何自适应优化线程同步&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&t=WriteThread 如何自适应优化线程同步"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#WriteThread-AwaitState"><span class="toc-number">1.</span> <span class="toc-text">WriteThread::AwaitState</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pause-based-spin-wait-loop"><span class="toc-number">1.1.</span> <span class="toc-text">pause-based spin-wait loop</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#memory-order-violation"><span class="toc-number">1.1.1.</span> <span class="toc-text">memory order violation</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-this-thread-yield"><span class="toc-number">1.2.</span> <span class="toc-text">std::this_thread::yield</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BlockingAwaitState"><span class="toc-number">1.3.</span> <span class="toc-text">BlockingAwaitState</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#WriteThread-SetState"><span class="toc-number">2.</span> <span class="toc-text">WriteThread::SetState</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        WriteThread 如何自适应优化线程同步
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-02-02T06:15:35.000Z" itemprop="datePublished">2022-02-02</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>在 <code>ROCKSDB_NAMESPACE::WriteThread</code> 中，通过 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/blob/749b179c041347d150fa6721992ae8398b7d2b39/db/write_thread.cc#L64">WriteThread::AwaitState</a> 和 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/blob/749b179c041347d150fa6721992ae8398b7d2b39/db/write_thread.cc#L212">WriteThread::SetState</a> 两个函数来 writers 的控制并发写入行为。 这一期主要来分析 RocksDB 中 WriteThread::AwaitState 中的优化，是如何尽可能地缩短阻塞等待时间。</p>
+<h2 id="WriteThread-AwaitState"><a href="#WriteThread-AwaitState" class="headerlink" title="WriteThread::AwaitState"></a>WriteThread::AwaitState</h2><p><code>AwaitState</code> 函数用于阻塞等待直到满足 <code>w-&gt;state &amp; goal_mask != 0</code> 这一条件。如 <a target="_blank" rel="noopener" href="https://github.com/facebook/rocksdb/blob/749b179c041347d150fa6721992ae8398b7d2b39/db/write_thread.cc#L401">JoinBatchGroup</a> 函数中新插入的 w 需要阻塞等待 <code>w-&gt;state</code> 变成 <code>goal_mask</code> 中的一种才能继续执行：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::JoinBatchGroup</span><span class="params">(Writer* w)</span> </span>&#123;</span><br><span class="line">    <span class="comment">//... above code</span></span><br><span class="line">    <span class="keyword">if</span> (!linked_as_leader) &#123; </span><br><span class="line">        <span class="built_in">AwaitState</span>(</span><br><span class="line">            w,</span><br><span class="line">            <span class="comment">// goal_mask</span></span><br><span class="line">            STATE_GROUP_LEADER | </span><br><span class="line">            STATE_MEMTABLE_WRITER_LEADER |</span><br><span class="line">            STATE_PARALLEL_MEMTABLE_WRITER | </span><br><span class="line">            STATE_COMPLETED,</span><br><span class="line">            &amp;jbg_ctx);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>RocksDB 为尽可能降低阻塞时间，将等待情况分为三种:</p>
+<ul>
+<li><em>short-uncontended</em>: 几乎无竞争，直接使用 <code>spin-wait loop</code> 就能解决；</li>
+<li><em>short-contended</em>: 存在竞争，但是预测阻塞时间不会太久，使用 <code>loop + yield</code> 应对</li>
+<li><em>long</em>: 竞争激烈，使用 <code>mutex + condition_variable</code> 应对。</li>
+</ul>
+<p>如果开启了上帝视角，即事先知道本次 <em>AwaitState</em> 要等待的时间，就可以直接使用 <code>spin-wait loop</code>  来应对 short-uncontended, <code>mutex</code> 来应对 long。显然没有这样的上帝视角，那么就只能通过一种自适应的方式来判断了。</p>
+<h3 id="pause-based-spin-wait-loop"><a href="#pause-based-spin-wait-loop" class="headerlink" title="pause-based spin-wait loop"></a><a target="_blank" rel="noopener" href="https://stackoverflow.com/questions/12894078/what-is-the-purpose-of-the-pause-instruction-in-x86">pause-based spin-wait loop</a></h3><p><code>spin-wait loop</code> 是应对阻塞时间很短 (short-periods) 场景的常用方式，即占据着 CPU 做空转阻塞等待 <code>w-&gt;state</code> 变成预期值，这样可以减少线程上下文切换（context switch）带来的开销。如下:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (<span class="literal">true</span>) &#123; </span><br><span class="line">    <span class="type">uint8_t</span> state = w-&gt;state.<span class="built_in">load</span>(std::memory_order_acquired);</span><br><span class="line">    <span class="keyword">if</span> (state &amp; goal_mask != <span class="number">0</span>) &#123; </span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>但是这么简单的写法却有问题，一般都会在 spin-wait loop 中加上一条 “<em>Pause</em>“ 指令来提升性能。在 <a target="_blank" rel="noopener" href="https://www.felixcloutier.com/x86/pause">Pause</a> 指令中有这么一段描述：</p>
+<blockquote>
+<p>When executing a ‘spin-wait loop’, processors will suffer a severe performance penalty when exiting the loop because it detects a <code>possible memory order violation</code></p>
+</blockquote>
+<p>意思就是说，如果 spin-wait loop 里如果不加上 <em>Pause</em> 指令，则很可能因为 memory order violation 问题导致退出 loop 时遭受严重的性能惩罚</p>
+<h4 id="memory-order-violation"><a href="#memory-order-violation" class="headerlink" title="memory order violation"></a>memory order violation</h4><p>如下从 <a target="_blank" rel="noopener" href="https://cdrdv2-public.intel.com/671488/248966-Software-Optimization-Manual-R047.pdf">Intel 64 and IA-32 Architectures Optimization Reference Manual</a> 中选取的示例代码，来解释为什么退出loop时会带来性能惩罚。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Spin_Lock:</span><br><span class="line">    CMP lockvar, <span class="number">0</span>;       <span class="comment">// (1) Check if lock is free.</span></span><br><span class="line">    JE Get_Lock;          <span class="comment">// (1.1) lockvar == 0</span></span><br><span class="line">    JMP Spin_Lock;        <span class="comment">// (1.2) lockvar != 0</span></span><br><span class="line">Get_Lock:</span><br><span class="line">    MOV EAX, <span class="number">1</span>;</span><br><span class="line">    XCHG EAX, lockvar;    <span class="comment">// (2) Try to get lock</span></span><br><span class="line">    CMP EAX, <span class="number">0</span>;           <span class="comment">// (3) Test if successful.</span></span><br><span class="line">    JNE Spin_Lock;</span><br><span class="line">Critical_Section:</span><br><span class="line">    <span class="comment">// critical section cod&gt;</span></span><br><span class="line">    MOV lockvar, <span class="number">0</span>;      <span class="comment">// (4) Release lock</span></span><br></pre></td></tr></table></figure>
+<p>当线程 T1 spin-wait loop 几轮迭代后，条件分支(1)处一直都是 false，即 <code>lockvar</code> 一直不是 0。这种情况下，CPU 的分支预测器会认为条件(1) 永远不会为 true，就会将 JMP(1.2) 的指令填充整个 pipeline。</p>
+<p>当线程 T2 将 <code>lockvar</code>  写为 0 时，由于此时 T1 的 <em>pipeline</em> 已经被错误的预测指令 (1.2) 填充满，即(1) 处的 <code>lockvar</code>  已经预测为0。这时 <em>memory order violation</em> 就会发生了：T1 线程看到 T2 线程对 <code>lockvar</code>  的修改后，就会在 T1 的 pipeline 中搜索访问了 <code>lockvar</code>  变量且还没执行的预测指令（1.2），如果发现了则会使得这部分预测指令失效，并且 flush pipeline 来删除这部分预测指令。获取锁后，就会退出 spin-wait loop。</p>
+<p>在退出时 flush pipeline 的代价会很高。</p>
+<p>因此，每次进入 spin-wait loop ，就会在满足条件退出 spin-wait loop 时带来严重的性能惩罚，比预期的同步时间要久。</p>
+<p>加上 <em>PAUSE</em> 指令，是通过引入轻微的延迟来 <code>de-pipelined</code>，使得 pipeline 中不会填充错误的预测指令: 插入 PAUSE 指令后，会等待 PAUSE 之前的 pipeline 执行完变空，然后再执行下一轮 CMP，如果 T2 线程将 lockvar 的值为 0，则 T1 能立即检测到。因此现在 CMP 指令就是顺序执行，消除了预测。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">Spin_Lock:</span><br><span class="line">    CMP lockvar, <span class="number">0</span>;       <span class="comment">// (1) Check if lock is free.</span></span><br><span class="line">    JE Get_Lock</span><br><span class="line">        PAUSE;            <span class="comment">// (2) short a delay, wait for memory pipeline to become empty</span></span><br><span class="line">    JMP Spin_Lock;</span><br><span class="line">Get_Lock:</span><br></pre></td></tr></table></figure>
+
+<p>从使用角度来说，”PAUSE” 指令<em>甚至是专门</em>用于优化 spin-wait loop 的，需要搭配使用。</p>
+<p>而 RocksDB 进入 <em>AwaitState</em> 后率先使用 <code>spin-wait loop</code> 迭代两百次(大约 1us)来尝试满足 short-uncontended 场景。原生代码如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">uint8_t</span> <span class="title">AwaitState</span><span class="params">(Writer* w, <span class="type">uint8_t</span> goal_mask, AdaptationContext* ctx)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">uint32_t</span> tries = <span class="number">0</span>; tries &lt; <span class="number">200</span>; ++tries) &#123;</span><br><span class="line">        state = w-&gt;state.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">        <span class="keyword">if</span> ((state &amp; goal_mask) != <span class="number">0</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> state;</span><br><span class="line">        &#125;</span><br><span class="line">        port::<span class="built_in">AsmVolatilePause</span>();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br><span class="line">````</span><br><span class="line">由于 <span class="string">&quot;PAUSE&quot;</span> 指令随着架构的变化，latency 也会更改，甚至差一个数量级，故而这里如果想要更准确的控制 wait 的时间可以使用 `__rdtsc()` 函数来控制:</span><br><span class="line">```cpp</span><br><span class="line">    <span class="comment">// __rdtsc intrinsic is used to read the time stamp counter</span></span><br><span class="line">    <span class="comment">// This allows the loop to run for a fixed number of cycles</span></span><br><span class="line">    <span class="type">uint64_t</span> prev = __rdtsc();</span><br><span class="line">    <span class="keyword">do</span> &#123;</span><br><span class="line">        state = w-&gt;state.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">        <span class="keyword">if</span> ((state &amp; goal_mask) != <span class="number">0</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> state;</span><br><span class="line">        &#125;</span><br><span class="line">        port::<span class="built_in">AsmVolatilePause</span>();</span><br><span class="line">    &#125; <span class="keyword">while</span> (__rdtsc() - prev &lt; max_spin_time);</span><br></pre></td></tr></table></figure>
+<h3 id="std-this-thread-yield"><a href="#std-this-thread-yield" class="headerlink" title="std::this_thread::yield"></a>std::this_thread::yield</h3><p>如果第一阶段的 spin-wait loop 没能等到 <code>w-&gt;state</code> 的值变更为预期值，说明还是存在竞争，则进入第二阶段 <code>short-contended</code>。 这一阶段由 <code>DBOptions::enable_write_thread_adaptive_yield</code> 配置是否开启，默认值为 true。</p>
+<p>这一段有两个问题:</p>
+<ul>
+<li>如何从 <code>short-contended</code> 阶段进入 <code>long</code> 阶段</li>
+<li>如何判断下一次是否需要再进入 <code>short-contended</code> 阶段</li>
+</ul>
+<p>当进入 <code>short-contended</code> 阶段说明存在竞争，<em>但是假设竞争可能不大</em>。比如线程数可能不超过 CPU cores 数目，这种情况下使用 <code>std::thread::yield()</code> 并不会导致 cotext switch，效果比 pthread_mutex 要好。</p>
+<blockquote>
+<p>注意：从 RocksDB 开发者角度，没有上帝视角，只能先假设没有竞争（short-uncontended），不满足则再假设存在竞争但是不激烈（<code>short-contended</code>），如果还没不满足再考虑mutex阻塞。</p>
+</blockquote>
+<p>因此，需要对调用 <code>std::thread::yield()</code> 前后的 latency 进行统计，粗略判断竞争激烈程度：</p>
+<ul>
+<li><p><code>max_yield_usec_</code>: 默认 100us，控制 <code>short-contended</code> 阶段最大等待时间</p>
+</li>
+<li><p><code>slow_yield_usec_</code>: 默认 3us, 是 <code>yield</code> 的 latency 上限，用来反应是否有其他线程也想占据当前 cpu core</p>
+<p>如果当前竞争比较激烈，那么调用 <code>std::thread::yield()</code> 前后的 latency 肯定会增加，(比如 threads &gt; cpu-cores 时，甚至会产生 context switch），最终导致 latency &gt; <code>slow_yield_usec_</code>。如果累计 <code>kMaxSlowYieldsWhileSpinning = 3</code> 次都超过该值，则可以跳出 <code>short-contended</code> 阶段，直接进入 <code>long</code> 阶段，阻塞等待。</p>
+</li>
+</ul>
+<p>开启第二阶段的开关有3个，这一部分代码如下:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">bool</span> would_spin_again = <span class="literal">false</span>;</span><br><span class="line"><span class="type">bool</span> update_ctx = <span class="literal">false</span>;</span><br><span class="line"><span class="type">uint64_t</span> sampling_base = <span class="number">256</span>;</span><br><span class="line"><span class="keyword">if</span> (max_yield_usec_ &gt; <span class="number">0</span>) &#123;</span><br><span class="line">  update_ctx = Random::<span class="built_in">GetTLSInstance</span>()-&gt;<span class="built_in">OneIn</span>(sampling_base);</span><br><span class="line"></span><br><span class="line">  <span class="keyword">if</span> (update_ctx || yield_credit.<span class="built_in">load</span>(std::memory_order_relaxed) &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="comment">// short-contended code...</span></span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<ul>
+<li><p><code>max_yield_usec_ &gt; 0</code>: 默认情况下总是开启</p>
+</li>
+<li><p><code>update_ctx</code>: 表示是否更新 <code>yield_credit</code> 的值。当且仅当基于均匀分布从 <em>[0, 255]</em> 区间获得 0 时值为 true，即 <code>Random::OneIn(sampling_base)</code> 返回 true 的概率为 <em>1&#x2F;256</em></p>
+<p>  <em>would_spin_again</em> 表示 <code>w-&gt;state</code> 是否在第二阶段等到预期值，如果成功则 <code>yield_credit</code> 值增加，反之降低。<code>yield_credit</code> 的更新公式如下：</p>
+  <figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> (update_ctx) &#123;</span><br><span class="line">   <span class="keyword">auto</span> v = yield_credit.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">   v = v - (v / <span class="number">1024</span>) + (would_spin_again ? <span class="number">1</span> : <span class="number">-1</span>) * <span class="number">131072</span>;</span><br><span class="line">   yield_credit.<span class="built_in">store</span>(v, std::memory_order_relaxed);</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure></li>
+<li><p><code>yield_credit</code>: 默认值为 0，在是否开启第二阶段中起着决定性作用。基本上需要满足 <code>yield_credit &gt;= 0</code> 才能进入第二阶段</p>
+<p>  <em>yield_credit</em> 值在两种情况下会更改，也是<strong>自适应</strong>原理：</p>
+<p>  1）进入了第二阶段，但是因为竞争太激烈，没有在第二阶段实现 <code>w-&gt;state &amp; goal_mask != 0</code>，此时会将 update_ctx &#x3D; true，再由上述公式降低 <em>yield_credit</em> 的值，使其小于 0，这样 AwaitState 函数下次不会再进入第二阶段；</p>
+<ol start="2">
+<li>如果长时间 <code>yield_credit &lt; 0</code> 会一直无法进入第二阶段。但是由均匀分布可知，存在 1&#x2F;256 的概率将 update_ctx &#x3D; true，进入第二阶段，来<em>试探</em>现在竞争是否没那么激烈了。如果此时在第二阶段等到了 <code>w-&gt;state &amp; goal_mask != 0</code> ，那么就会再根据上述公式将 <code>yield_credit</code> 调节为非负数，使得下一次 AwaitState 函数仍能进入第二阶段。</li>
+</ol>
+</li>
+</ul>
+<p>这里的 <code>yield_credit</code> 值记录在 <code>AdaptationContext::value</code> 中，<code>AdaptationContext</code> 的所有对象在 <code>WriteThread</code> 中都是 static 变量，因此会一直反应着进程生命周期中线程竞争状态，故而上述的 <code>update_ctx</code> 中的 <code>ctx</code> 即 <code>yield_credit</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">AdaptationContext</span> &#123;</span><br><span class="line">  <span class="type">const</span> <span class="type">char</span>* name;</span><br><span class="line">  std::atomic&lt;<span class="type">int32_t</span>&gt; value;</span><br><span class="line"></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">AdaptationContext</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* name0)</span> : name(name0), value(<span class="number">0</span>) &#123;</span>&#125;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>上面的介绍大致介绍了 <code>short-contended</code> 阶段的自适应原理，下面来看看核心代码：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">auto</span>&amp; yield_credit = ctx-&gt;value;</span><br><span class="line"><span class="type">bool</span> update_ctx = <span class="literal">false</span>;</span><br><span class="line"><span class="type">bool</span> would_spin_again = <span class="literal">false</span>;</span><br><span class="line"><span class="keyword">if</span> (update_ctx || yield_credit.<span class="built_in">load</span>(std::memory_order_relaxed) &gt;= <span class="number">0</span>) &#123;</span><br><span class="line">  <span class="keyword">auto</span> spin_begin = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 超过 slow_yield_usec_ 的次数</span></span><br><span class="line">  <span class="type">size_t</span> slow_yield_count = <span class="number">0</span>; </span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span> iter_begin = spin_begin;</span><br><span class="line">  <span class="comment">// 最多消耗的时间片: max_yield_usec_</span></span><br><span class="line">  <span class="keyword">while</span> (iter_begin - spin_begin) &lt;= </span><br><span class="line">            std::chrono::<span class="built_in">microseconds</span>(max_yield_usec_) &#123;</span><br><span class="line">    std::this_thread::<span class="built_in">yield</span>();</span><br><span class="line"></span><br><span class="line">    state = w-&gt;state.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">    <span class="keyword">if</span> ((state &amp; goal_mask) != <span class="number">0</span>) &#123;</span><br><span class="line">      <span class="comment">// 1. 成功，则退出第二阶段</span></span><br><span class="line">      would_spin_again = <span class="literal">true</span>; </span><br><span class="line">      <span class="keyword">break</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> now = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">    <span class="comment">// 2. latency 超过 slow_yield_usec_</span></span><br><span class="line">    <span class="keyword">if</span> (now == iter_begin ||</span><br><span class="line">        now - iter_begin &gt;= std::chrono::<span class="built_in">microseconds</span>(slow_yield_usec_)) &#123;</span><br><span class="line">      ++slow_yield_count;</span><br><span class="line">      <span class="comment">// 2.1 累计超过 kMaxSlowYieldsWhileSpinning 次则退出第二阶段，</span></span><br><span class="line">      <span class="comment">//     并设置 update_ctx =true，后续更新 yield_credit</span></span><br><span class="line">      <span class="keyword">if</span> (slow_yield_count &gt;= kMaxSlowYieldsWhileSpinning) &#123;</span><br><span class="line">        update_ctx = <span class="literal">true</span>;</span><br><span class="line">        <span class="keyword">break</span>;</span><br><span class="line">      &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    iter_begin = now;</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="BlockingAwaitState"><a href="#BlockingAwaitState" class="headerlink" title="BlockingAwaitState"></a>BlockingAwaitState</h3><p>如果不幸，<code>w-&gt;state</code> 的值仍然没有变更为预期值，则需要进入第三阶段：使用 Mutex + ConditionVarable 进行阻塞等待。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> ((state &amp; goal_mask) == <span class="number">0</span>) &#123;</span><br><span class="line">  state = <span class="built_in">BlockingAwaitState</span>(w, goal_mask);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>BlockingAwaitState</code> 函数比较简单：先再次判断 <code>w-&gt;state</code> 是否变更为预期值 <code>goal_mask</code>； 没有，则将 w-&gt;state 设置为 <code>STATE_LOCKED_WAITING</code> 状态，等待唤醒。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">uint8_t</span> <span class="title">WriteThread::BlockingAwaitState</span><span class="params">(Writer* w, <span class="type">uint8_t</span> goal_mask)</span> </span>&#123;</span><br><span class="line">  w-&gt;<span class="built_in">CreateMutex</span>();</span><br><span class="line"></span><br><span class="line">  <span class="keyword">auto</span> state = w-&gt;state.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">  <span class="built_in">assert</span>(state != STATE_LOCKED_WAITING);</span><br><span class="line">  <span class="keyword">if</span> ((state &amp; goal_mask) == <span class="number">0</span> &amp;&amp;</span><br><span class="line">      w-&gt;state.<span class="built_in">compare_exchange_strong</span>(state, STATE_LOCKED_WAITING)) &#123;</span><br><span class="line">    <span class="comment">// we have permission (and an obligation) to use StateMutex</span></span><br><span class="line">    <span class="function">std::unique_lock&lt;std::mutex&gt; <span class="title">guard</span><span class="params">(w-&gt;StateMutex())</span></span>;</span><br><span class="line">    w-&gt;<span class="built_in">StateCV</span>().<span class="built_in">wait</span>(guard, [w] &#123;</span><br><span class="line">      <span class="keyword">return</span> w-&gt;state.<span class="built_in">load</span>(std::memory_order_relaxed) != STATE_LOCKED_WAITING;</span><br><span class="line">    &#125;);</span><br><span class="line">    state = w-&gt;state.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// else tricky.  Goal is met or CAS failed.  In the latter case the waker</span></span><br><span class="line">  <span class="comment">// must have changed the state, and compare_exchange_strong has updated</span></span><br><span class="line">  <span class="comment">// our local variable with the new one.  At the moment WriteThread never</span></span><br><span class="line">  <span class="comment">// waits for a transition across intermediate states, so we know that</span></span><br><span class="line">  <span class="comment">// since a state change has occurred the goal must have been met</span></span><br><span class="line">  <span class="built_in">assert</span>((state &amp; goal_mask) != <span class="number">0</span>);</span><br><span class="line">  <span class="keyword">return</span> state;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<h2 id="WriteThread-SetState"><a href="#WriteThread-SetState" class="headerlink" title="WriteThread::SetState"></a>WriteThread::SetState</h2><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">WriteThread::SetState</span><span class="params">(Writer* w, <span class="type">uint8_t</span> new_state)</span> </span>&#123;</span><br><span class="line">  <span class="built_in">assert</span>(w);</span><br><span class="line">  <span class="keyword">auto</span> state = w-&gt;state.<span class="built_in">load</span>(std::memory_order_acquire);</span><br><span class="line">  <span class="keyword">if</span> (state == STATE_LOCKED_WAITING ||</span><br><span class="line">      !w-&gt;state.<span class="built_in">compare_exchange_strong</span>(state, new_state)) &#123;</span><br><span class="line">    <span class="built_in">assert</span>(state == STATE_LOCKED_WAITING);</span><br><span class="line"></span><br><span class="line">    <span class="function">std::lock_guard&lt;std::mutex&gt; <span class="title">guard</span><span class="params">(w-&gt;StateMutex())</span></span>;</span><br><span class="line">    <span class="built_in">assert</span>(w-&gt;state.<span class="built_in">load</span>(std::memory_order_relaxed) != new_state);</span><br><span class="line">    w-&gt;state.<span class="built_in">store</span>(new_state, std::memory_order_relaxed);</span><br><span class="line">    w-&gt;<span class="built_in">StateCV</span>().<span class="built_in">notify_one</span>();</span><br><span class="line">  &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#WriteThread-AwaitState"><span class="toc-number">1.</span> <span class="toc-text">WriteThread::AwaitState</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#pause-based-spin-wait-loop"><span class="toc-number">1.1.</span> <span class="toc-text">pause-based spin-wait loop</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#memory-order-violation"><span class="toc-number">1.1.1.</span> <span class="toc-text">memory order violation</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-this-thread-yield"><span class="toc-number">1.2.</span> <span class="toc-text">std::this_thread::yield</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#BlockingAwaitState"><span class="toc-number">1.3.</span> <span class="toc-text">BlockingAwaitState</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#WriteThread-SetState"><span class="toc-number">2.</span> <span class="toc-text">WriteThread::SetState</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&text=WriteThread 如何自适应优化线程同步"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&is_video=false&description=WriteThread 如何自适应优化线程同步"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=WriteThread 如何自适应优化线程同步&body=Check out this article: https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&title=WriteThread 如何自适应优化线程同步"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&name=WriteThread 如何自适应优化线程同步&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/02/02/rocksdb/WritePath/write_thread_3/&t=WriteThread 如何自适应优化线程同步"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

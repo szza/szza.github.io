@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="LessorLessor 是 ETCD 中负责管理租约 (Lease) 的核心组件。租约机制是 ETCD 实现分布式锁、会话管理和自动过期清理的重要基础。Lessor 提供了租约的创建、续期、撤销、过期处理等完整功能。 2. 核心接口设计2.1 Lessor 接口1234567891011121314151617181920212223242526272829type Lessor interfa">
+<meta property="og:type" content="article">
+<meta property="og:title" content="剖析 ETCD.lessor">
+<meta property="og:url" content="https://szza.github.io/2024/09/29/ETCD/4_lessor/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="LessorLessor 是 ETCD 中负责管理租约 (Lease) 的核心组件。租约机制是 ETCD 实现分布式锁、会话管理和自动过期清理的重要基础。Lessor 提供了租约的创建、续期、撤销、过期处理等完整功能。 2. 核心接口设计2.1 Lessor 接口1234567891011121314151617181920212223242526272829type Lessor interfa">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2024-09-29T15:10:00.000Z">
+<meta property="article:modified_time" content="2025-10-23T13:00:42.964Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="ETCD">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>剖析 ETCD.lessor</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        
+        <li><a class="icon" href="/2024/09/03/ETCD/3_mvcc/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2024/09/29/ETCD/4_lessor/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&text=剖析 ETCD.lessor"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&is_video=false&description=剖析 ETCD.lessor"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 ETCD.lessor&body=Check out this article: https://szza.github.io/2024/09/29/ETCD/4_lessor/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&name=剖析 ETCD.lessor&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2024/09/29/ETCD/4_lessor/&t=剖析 ETCD.lessor"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Lessor"><span class="toc-number">1.</span> <span class="toc-text">Lessor</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E6%A0%B8%E5%BF%83%E6%8E%A5%E5%8F%A3%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.1.</span> <span class="toc-text">2. 核心接口设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-Lessor-%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.1.1.</span> <span class="toc-text">2.1 Lessor 接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E5%85%B3%E9%94%AE%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">1.1.2.</span> <span class="toc-text">2.2 关键数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Lease-%E7%BB%93%E6%9E%84%E4%BD%93"><span class="toc-number">1.1.2.1.</span> <span class="toc-text">Lease 结构体</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#lessor-%E7%BB%93%E6%9E%84%E4%BD%93"><span class="toc-number">1.1.2.2.</span> <span class="toc-text">lessor 结构体</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E6%A0%B8%E5%BF%83%E5%8A%9F%E8%83%BD%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.2.</span> <span class="toc-text">3. 核心功能设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LeaseExpiredNotifier"><span class="toc-number">1.2.1.</span> <span class="toc-text">LeaseExpiredNotifier</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E7%A7%9F%E7%BA%A6%E5%88%9B%E5%BB%BA%EF%BC%88Grant%EF%BC%89"><span class="toc-number">1.2.2.</span> <span class="toc-text">3.1 租约创建（Grant）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E7%A7%9F%E7%BA%A6%E7%BB%AD%E6%9C%9F%EF%BC%88Renew%EF%BC%89"><span class="toc-number">1.2.3.</span> <span class="toc-text">3.2 租约续期（Renew）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E7%A7%9F%E7%BA%A6%E6%92%A4%E9%94%80%EF%BC%88Revoke%EF%BC%89"><span class="toc-number">1.2.4.</span> <span class="toc-text">3.3 租约撤销（Revoke）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E4%B8%BB%E4%BB%8E%E5%88%87%E6%8D%A2%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.5.</span> <span class="toc-text">3.4 主从切换机制</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Promote%EF%BC%88%E6%8F%90%E5%8D%87%E4%B8%BA%E4%B8%BB%E8%8A%82%E7%82%B9%EF%BC%89"><span class="toc-number">1.2.5.1.</span> <span class="toc-text">Promote（提升为主节点）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Demote%EF%BC%88%E9%99%8D%E7%BA%A7%E4%B8%BA%E4%BB%8E%E8%8A%82%E7%82%B9%EF%BC%89"><span class="toc-number">1.2.5.2.</span> <span class="toc-text">Demote（降级为从节点）</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-5-%E8%BF%87%E6%9C%9F%E5%A4%84%E7%90%86%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.6.</span> <span class="toc-text">3.5 过期处理机制</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BB%E5%BE%AA%E7%8E%AF%EF%BC%88runLoop%EF%BC%89"><span class="toc-number">1.2.6.1.</span> <span class="toc-text">主循环（runLoop）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%BF%87%E6%9C%9F%E7%A7%9F%E7%BA%A6%E5%A4%84%E7%90%86"><span class="toc-number">1.2.6.2.</span> <span class="toc-text">过期租约处理</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-6-%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.7.</span> <span class="toc-text">3.6 检查点机制</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E8%B0%83%E5%BA%A6"><span class="toc-number">1.2.7.1.</span> <span class="toc-text">检查点调度</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E5%A4%84%E7%90%86"><span class="toc-number">1.2.7.2.</span> <span class="toc-text">检查点处理</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.3.</span> <span class="toc-text">4. 数据结构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E8%BF%87%E6%9C%9F%E9%80%9A%E7%9F%A5%E5%99%A8%EF%BC%88LeaseExpiredNotifier%EF%BC%89"><span class="toc-number">1.3.1.</span> <span class="toc-text">4.1 过期通知器（LeaseExpiredNotifier）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E7%A7%9F%E7%BA%A6%E9%98%9F%E5%88%97%EF%BC%88LeaseQueue%EF%BC%89"><span class="toc-number">1.3.2.</span> <span class="toc-text">4.2 租约队列（LeaseQueue）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E6%8C%81%E4%B9%85%E5%8C%96%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.4.</span> <span class="toc-text">5. 持久化设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%90%8E%E7%AB%AF%E5%AD%98%E5%82%A8"><span class="toc-number">1.4.1.</span> <span class="toc-text">5.1 后端存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E6%81%A2%E5%A4%8D%E6%9C%BA%E5%88%B6"><span class="toc-number">1.4.2.</span> <span class="toc-text">5.2 恢复机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.5.</span> <span class="toc-text">6. 性能优化设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-%E9%80%9F%E7%8E%87%E9%99%90%E5%88%B6"><span class="toc-number">1.5.1.</span> <span class="toc-text">6.1 速率限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E5%86%85%E5%AD%98%E4%BC%98%E5%8C%96"><span class="toc-number">1.5.2.</span> <span class="toc-text">6.2 内存优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-3-%E5%B9%B6%E5%8F%91%E5%AE%89%E5%85%A8"><span class="toc-number">1.5.3.</span> <span class="toc-text">6.3 并发安全</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E5%AE%B9%E9%94%99%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.6.</span> <span class="toc-text">7. 容错设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E4%B8%BB%E4%BB%8E%E5%88%87%E6%8D%A2%E5%AE%B9%E9%94%99"><span class="toc-number">1.6.1.</span> <span class="toc-text">7.1 主从切换容错</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E7%BD%91%E7%BB%9C%E5%88%86%E5%8C%BA%E5%AE%B9%E9%94%99"><span class="toc-number">1.6.2.</span> <span class="toc-text">7.2 网络分区容错</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E7%9B%91%E6%8E%A7%E5%92%8C%E6%8C%87%E6%A0%87"><span class="toc-number">1.7.</span> <span class="toc-text">8. 监控和指标</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#8-1-Prometheus%E6%8C%87%E6%A0%87"><span class="toc-number">1.7.1.</span> <span class="toc-text">8.1 Prometheus指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-2-%E6%97%A5%E5%BF%97%E8%AE%B0%E5%BD%95"><span class="toc-number">1.7.2.</span> <span class="toc-text">8.2 日志记录</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E6%80%BB%E7%BB%93"><span class="toc-number">1.8.</span> <span class="toc-text">9. 总结</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        剖析 ETCD.lessor
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2024-09-29T15:10:00.000Z" itemprop="datePublished">2024-09-29</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/ETCD/" rel="tag">ETCD</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Lessor"><a href="#Lessor" class="headerlink" title="Lessor"></a>Lessor</h1><p><code>Lessor</code> 是 ETCD 中负责管理租约 (Lease) 的核心组件。租约机制是 ETCD 实现分布式锁、会话管理和自动过期清理的重要基础。<code>Lessor</code> 提供了租约的创建、续期、撤销、过期处理等完整功能。</p>
+<h2 id="2-核心接口设计"><a href="#2-核心接口设计" class="headerlink" title="2. 核心接口设计"></a>2. 核心接口设计</h2><h3 id="2-1-Lessor-接口"><a href="#2-1-Lessor-接口" class="headerlink" title="2.1 Lessor 接口"></a>2.1 Lessor 接口</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Lessor <span class="keyword">interface</span> &#123;</span><br><span class="line">    <span class="comment">// 设置范围删除器和检查点器</span></span><br><span class="line">    SetRangeDeleter(rd RangeDeleter)</span><br><span class="line">    SetCheckpointer(cp Checkpointer)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 租约生命周期管理</span></span><br><span class="line">    Grant(id LeaseID, ttl <span class="type">int64</span>) (*Lease, <span class="type">error</span>)     <span class="comment">// 创建租约</span></span><br><span class="line">    Revoke(id LeaseID) <span class="type">error</span>                         <span class="comment">// 撤销租约</span></span><br><span class="line">    Renew(id LeaseID) (<span class="type">int64</span>, <span class="type">error</span>)                 <span class="comment">// 续期租约</span></span><br><span class="line">    Checkpoint(id LeaseID, remainingTTL <span class="type">int64</span>) <span class="type">error</span> <span class="comment">// 检查点</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 租约项管理</span></span><br><span class="line">    Attach(id LeaseID, items []LeaseItem) <span class="type">error</span>      <span class="comment">// 附加项到租约</span></span><br><span class="line">    Detach(id LeaseID, items []LeaseItem) <span class="type">error</span>      <span class="comment">// 从租约分离项</span></span><br><span class="line">    GetLease(item LeaseItem) LeaseID                 <span class="comment">// 获取项的租约ID</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 主从管理 callback</span></span><br><span class="line">    Promote(extend time.Duration)                    <span class="comment">// 提升为主节点时的 callback</span></span><br><span class="line">    Demote()                                         <span class="comment">// 降级为从节点的 callback</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 查询操作</span></span><br><span class="line">    Lookup(id LeaseID) *Lease                        <span class="comment">// 查找租约</span></span><br><span class="line">    Leases() []*Lease                                <span class="comment">// 获取所有租约</span></span><br><span class="line">    ExpiredLeasesC() &lt;-<span class="keyword">chan</span> []*Lease                 <span class="comment">// 过期租约通道</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 恢复和停止</span></span><br><span class="line">    Recover(b backend.Backend, rd RangeDeleter)      <span class="comment">// 从后端恢复</span></span><br><span class="line">    Stop()                                           <span class="comment">// 停止服务</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-关键数据结构"><a href="#2-2-关键数据结构" class="headerlink" title="2.2 关键数据结构"></a>2.2 关键数据结构</h3><h4 id="Lease-结构体"><a href="#Lease-结构体" class="headerlink" title="Lease 结构体"></a>Lease 结构体</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Lease <span class="keyword">struct</span> &#123;</span><br><span class="line">    ID           LeaseID                    <span class="comment">// 租约ID</span></span><br><span class="line">    ttl          <span class="type">int64</span>                      <span class="comment">// 生存时间（秒）</span></span><br><span class="line">    remainingTTL <span class="type">int64</span>                      <span class="comment">// 剩余生存时间</span></span><br><span class="line">    expiryMu     sync.RWMutex               <span class="comment">// 保护过期时间的互斥锁</span></span><br><span class="line">    expiry       time.Time                  <span class="comment">// 过期时间</span></span><br><span class="line">    mu           sync.RWMutex               <span class="comment">// 保护项集合的互斥锁</span></span><br><span class="line">    itemSet      <span class="keyword">map</span>[LeaseItem]<span class="keyword">struct</span>&#123;&#125;     <span class="comment">// 附加的项集合</span></span><br><span class="line">    revokec      <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;              <span class="comment">// 撤销完成信号</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="lessor-结构体"><a href="#lessor-结构体" class="headerlink" title="lessor 结构体"></a>lessor 结构体</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> lessor <span class="keyword">struct</span> &#123;</span><br><span class="line">    mu                      sync.RWMutex</span><br><span class="line">    demotec                 <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;              <span class="comment">// 降级信号通道</span></span><br><span class="line">    leaseMap                <span class="keyword">map</span>[LeaseID]*Lease         <span class="comment">// 租约映射</span></span><br><span class="line">    leaseExpiredNotifier    *LeaseExpiredNotifier      <span class="comment">// 过期通知器</span></span><br><span class="line">    leaseCheckpointHeap     LeaseQueue                 <span class="comment">// 检查点堆</span></span><br><span class="line">    itemMap                 <span class="keyword">map</span>[LeaseItem]LeaseID      <span class="comment">// 项到租约的映射</span></span><br><span class="line">    rd                      RangeDeleter               <span class="comment">// 范围删除器</span></span><br><span class="line">    cp                      Checkpointer               <span class="comment">// 检查点器</span></span><br><span class="line">    b                       backend.Backend            <span class="comment">// 后端存储</span></span><br><span class="line">    minLeaseTTL             <span class="type">int64</span>                      <span class="comment">// 最小TTL</span></span><br><span class="line">    leaseRevokeRate         <span class="type">int</span>                        <span class="comment">// 撤销速率限制</span></span><br><span class="line">    expiredC                <span class="keyword">chan</span> []*Lease              <span class="comment">// 过期租约通道</span></span><br><span class="line">    stopC                   <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;              <span class="comment">// 停止信号</span></span><br><span class="line">    doneC                   <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;              <span class="comment">// 完成信号</span></span><br><span class="line">    checkpointInterval      time.Duration              <span class="comment">// 检查点间隔</span></span><br><span class="line">    expiredLeaseRetryInterval time.Duration            <span class="comment">// 过期重试间隔</span></span><br><span class="line">    checkpointPersist       <span class="type">bool</span>                       <span class="comment">// 是否持久化检查点</span></span><br><span class="line">    cluster                 cluster                    <span class="comment">// 集群版本信息</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="3-核心功能设计"><a href="#3-核心功能设计" class="headerlink" title="3. 核心功能设计"></a>3. 核心功能设计</h2><h3 id="LeaseExpiredNotifier"><a href="#LeaseExpiredNotifier" class="headerlink" title="LeaseExpiredNotifier"></a>LeaseExpiredNotifier</h3><p><code>LeaseQueue</code> 是 lessor 中的一个核心数据结构，<code>queue</code> 是个基于堆排序的优先级队列，堆顶的元素是最先超时的 lease。 <code>m</code> 用于快速查找某个 lease 是否存在。在 grant 时，会在更新 <code>leaseExpiredNotifier</code>。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// LeaseExpiredNotifier is a queue used to notify lessor to revoke expired lease.</span></span><br><span class="line"><span class="comment">// Only save one item for a lease, `Register` will update time of the corresponding lease.</span></span><br><span class="line"><span class="keyword">type</span> LeaseExpiredNotifier <span class="keyword">struct</span> &#123;</span><br><span class="line">	m     <span class="keyword">map</span>[LeaseID]*LeaseWithTime</span><br><span class="line">	queue LeaseQueue</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-1-租约创建（Grant）"><a href="#3-1-租约创建（Grant）" class="headerlink" title="3.1 租约创建（Grant）"></a>3.1 租约创建（Grant）</h3><p><strong>设计要点：</strong></p>
+<ul>
+<li><p>支持最小TTL限制，防止过短的租约， 用户 TTL 只能在 <code>[le.minLeaseTTl, MaxLeaseTTL]</code> 范围</p>
+</li>
+<li><p>主从节点采用不同的过期策略</p>
+</li>
+<li><p>自动注册到 expired notifier 和 checkpoint heap，由后台 goroutine 进行超 ttl 超时检测以及 checkpoint 同步。</p>
+<p> checkpoint 机制后面统一阐述，目的是为了保存 ttl 进度。</p>
+</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> Grant(id LeaseID, ttl <span class="type">int64</span>) (*Lease, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// 1. 参数验证</span></span><br><span class="line">    <span class="keyword">if</span> id == NoLease || ttl &gt; MaxLeaseTTL &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, ErrLeaseNotFound/ErrLeaseTTLTooLarge</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 创建租约对象</span></span><br><span class="line">    l := NewLease(id, ttl)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 设置最小TTL</span></span><br><span class="line">    <span class="keyword">if</span> l.ttl &lt; le.minLeaseTTL &#123;</span><br><span class="line">        l.ttl = le.minLeaseTTL</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 4. 根据主从状态设置过期时间</span></span><br><span class="line">    <span class="keyword">if</span> le.isPrimary() &#123;</span><br><span class="line">        l.refresh(<span class="number">0</span>)  <span class="comment">// 主节点：设置正常过期时间</span></span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        l.forever()   <span class="comment">// 从节点：设置为永不过期</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 5. 持久化到后端</span></span><br><span class="line">    le.leaseMap[id] = l</span><br><span class="line">    l.persistTo(le.b)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 6. 注册到 expired notifier 和 checkpoint heap</span></span><br><span class="line">    <span class="keyword">if</span> le.isPrimary() &#123;</span><br><span class="line">        item := &amp;LeaseWithTime&#123;id: l.ID, time: l.expiry&#125;</span><br><span class="line">        le.leaseExpiredNotifier.RegisterOrUpdate(item)</span><br><span class="line">        le.scheduleCheckpointIfNeeded(l)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> l, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-租约续期（Renew）"><a href="#3-2-租约续期（Renew）" class="headerlink" title="3.2 租约续期（Renew）"></a>3.2 租约续期（Renew）</h3><p><strong>设计要点：</strong></p>
+<ul>
+<li>只有主节点可以处理续期请求</li>
+<li>对已过期租约有特殊的等待机制</li>
+<li>支持检查点清除，减少RAFT日志</li>
+</ul>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> Renew(id LeaseID) (<span class="type">int64</span>, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// 1. 检查主节点状态</span></span><br><span class="line">    <span class="keyword">if</span> !le.isPrimary() &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>, ErrNotPrimary</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 查找租约</span></span><br><span class="line">    l := le.leaseMap[id]</span><br><span class="line">    <span class="keyword">if</span> l == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">-1</span>, ErrLeaseNotFound</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 处理已过期租约</span></span><br><span class="line">    <span class="keyword">if</span> l.expired() &#123;</span><br><span class="line">        <span class="comment">// 等待撤销完成或主节点变更</span></span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> &lt;-l.revokec:</span><br><span class="line">            <span class="keyword">return</span> <span class="number">-1</span>, ErrLeaseNotFound</span><br><span class="line">        <span class="keyword">case</span> &lt;-demotec:</span><br><span class="line">            <span class="keyword">return</span> <span class="number">-1</span>, ErrNotPrimary</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 4. 清除剩余TTL（如果设置了检查点）</span></span><br><span class="line">    clearRemainingTTL := le.cp != <span class="literal">nil</span> &amp;&amp; l.remainingTTL &gt; <span class="number">0</span></span><br><span class="line">    <span class="keyword">if</span> clearRemainingTTL &#123;</span><br><span class="line">        le.cp(context.Background(), &amp;pb.LeaseCheckpointRequest&#123;</span><br><span class="line">            Checkpoints: []*pb.LeaseCheckpoint&#123;</span><br><span class="line">                &#123;ID: <span class="type">int64</span>(l.ID), Remaining_TTL: <span class="number">0</span>&#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 5. 刷新过期时间</span></span><br><span class="line">    l.refresh(<span class="number">0</span>)</span><br><span class="line">    item := &amp;LeaseWithTime&#123;id: l.ID, time: l.expiry&#125;</span><br><span class="line">    le.leaseExpiredNotifier.RegisterOrUpdate(item)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> l.ttl, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+
+<h3 id="3-3-租约撤销（Revoke）"><a href="#3-3-租约撤销（Revoke）" class="headerlink" title="3.3 租约撤销（Revoke）"></a>3.3 租约撤销（Revoke）</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> Revoke(id LeaseID) <span class="type">error</span> &#123;</span><br><span class="line">    <span class="comment">// 1. 查找租约</span></span><br><span class="line">    l := le.leaseMap[id]</span><br><span class="line">    <span class="keyword">if</span> l == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> ErrLeaseNotFound</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 删除附加的键值对</span></span><br><span class="line">    <span class="keyword">if</span> le.rd != <span class="literal">nil</span> &#123;</span><br><span class="line">        txn := le.rd()</span><br><span class="line">        keys := l.Keys()</span><br><span class="line">        sort.StringSlice(keys).Sort()  <span class="comment">// 保证删除顺序一致</span></span><br><span class="line">        <span class="keyword">for</span> _, key := <span class="keyword">range</span> keys &#123;</span><br><span class="line">            txn.DeleteRange([]<span class="type">byte</span>(key), <span class="literal">nil</span>)</span><br><span class="line">        &#125;</span><br><span class="line">        txn.End()</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 从内存和持久化存储中删除</span></span><br><span class="line">    <span class="built_in">delete</span>(le.leaseMap, l.ID)</span><br><span class="line">    le.b.BatchTx().UnsafeDelete(buckets.Lease, int64ToBytes(<span class="type">int64</span>(l.ID)))</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 4. 通知撤销完成</span></span><br><span class="line">    <span class="built_in">close</span>(l.revokec)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>原子性删除：键值对删除和租约删除在同一事务中</li>
+<li>保证删除顺序一致性，避免不同节点产生不同的哈希值</li>
+<li>通过通道通知撤销完成</li>
+</ul>
+<h3 id="3-4-主从切换机制"><a href="#3-4-主从切换机制" class="headerlink" title="3.4 主从切换机制"></a>3.4 主从切换机制</h3><h4 id="Promote（提升为主节点）"><a href="#Promote（提升为主节点）" class="headerlink" title="Promote（提升为主节点）"></a>Promote（提升为主节点）</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> Promote(extend time.Duration) &#123;</span><br><span class="line">    le.mu.Lock()</span><br><span class="line">    <span class="keyword">defer</span> le.mu.Unlock()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 设置主节点标志</span></span><br><span class="line">    le.demotec = <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 刷新所有租约的过期时间</span></span><br><span class="line">    <span class="keyword">for</span> _, l := <span class="keyword">range</span> le.leaseMap &#123;</span><br><span class="line">        l.refresh(extend)</span><br><span class="line">        item := &amp;LeaseWithTime&#123;id: l.ID, time: l.expiry&#125;</span><br><span class="line">        le.leaseExpiredNotifier.RegisterOrUpdate(item)</span><br><span class="line">        le.scheduleCheckpointIfNeeded(l)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 处理租约堆积问题</span></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(le.leaseMap) &gt;= le.leaseRevokeRate &#123;</span><br><span class="line">        le.adjustExpiriesForPileup(leases)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="Demote（降级为从节点）"><a href="#Demote（降级为从节点）" class="headerlink" title="Demote（降级为从节点）"></a>Demote（降级为从节点）</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> Demote() &#123;</span><br><span class="line">    le.mu.Lock()</span><br><span class="line">    <span class="keyword">defer</span> le.mu.Unlock()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 将所有租约设置为永不过期</span></span><br><span class="line">    <span class="keyword">for</span> _, l := <span class="keyword">range</span> le.leaseMap &#123;</span><br><span class="line">        l.forever()</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 清理检查点和过期通知器</span></span><br><span class="line">    le.clearScheduledLeasesCheckpoints()</span><br><span class="line">    le.clearLeaseExpiredNotifier()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 关闭降级信号通道</span></span><br><span class="line">    <span class="keyword">if</span> le.demotec != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="built_in">close</span>(le.demotec)</span><br><span class="line">        le.demotec = <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>主节点负责租约过期管理和续期</li>
+<li>从节点将租约设置为永不过期，避免误删</li>
+<li>支持租约堆积的智能调整，防止大量租约同时过期</li>
+</ul>
+<h3 id="3-5-过期处理机制"><a href="#3-5-过期处理机制" class="headerlink" title="3.5 过期处理机制"></a>3.5 过期处理机制</h3><h4 id="主循环（runLoop）"><a href="#主循环（runLoop）" class="headerlink" title="主循环（runLoop）"></a>主循环（runLoop）</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> runLoop() &#123;</span><br><span class="line">    <span class="keyword">defer</span> <span class="built_in">close</span>(le.doneC)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        le.revokeExpiredLeases()      <span class="comment">// 处理过期租约</span></span><br><span class="line">        le.checkpointScheduledLeases() <span class="comment">// 处理检查点</span></span><br><span class="line">        </span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> &lt;-time.After(<span class="number">500</span> * time.Millisecond):</span><br><span class="line">        <span class="keyword">case</span> &lt;-le.stopC:</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="过期租约处理"><a href="#过期租约处理" class="headerlink" title="过期租约处理"></a>过期租约处理</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> revokeExpiredLeases() &#123;</span><br><span class="line">    <span class="comment">// 1. 速率限制</span></span><br><span class="line">    revokeLimit := le.leaseRevokeRate / <span class="number">2</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 查找过期租约</span></span><br><span class="line">    le.mu.RLock()</span><br><span class="line">    <span class="keyword">if</span> le.isPrimary() &#123;</span><br><span class="line">        ls = le.findExpiredLeases(revokeLimit)</span><br><span class="line">    &#125;</span><br><span class="line">    le.mu.RUnlock()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 发送到过期通道</span></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(ls) != <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> le.expiredC &lt;- ls:</span><br><span class="line">        <span class="keyword">default</span>:</span><br><span class="line">            <span class="comment">// 通道满时跳过，下次再处理</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>500ms 的固定检查间隔，平衡性能和及时性</li>
+<li>速率限制防止大量租约同时过期造成系统压力</li>
+<li>非阻塞的过期通道，避免阻塞主循环</li>
+</ul>
+<h3 id="3-6-检查点机制"><a href="#3-6-检查点机制" class="headerlink" title="3.6 检查点机制"></a>3.6 检查点机制</h3><h4 id="检查点调度"><a href="#检查点调度" class="headerlink" title="检查点调度"></a>检查点调度</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> scheduleCheckpointIfNeeded(lease *Lease) &#123;</span><br><span class="line">    <span class="keyword">if</span> le.cp == <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 只有当剩余TTL大于检查点间隔时才调度</span></span><br><span class="line">    <span class="keyword">if</span> lease.RemainingTTL() &gt; <span class="type">int64</span>(le.checkpointInterval.Seconds()) &#123;</span><br><span class="line">        heap.Push(&amp;le.leaseCheckpointHeap, &amp;LeaseWithTime&#123;</span><br><span class="line">            id:   lease.ID,</span><br><span class="line">            time: time.Now().Add(le.checkpointInterval),</span><br><span class="line">        &#125;)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="检查点处理"><a href="#检查点处理" class="headerlink" title="检查点处理"></a>检查点处理</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> checkpointScheduledLeases() &#123;</span><br><span class="line">    <span class="comment">// 速率限制</span></span><br><span class="line">    <span class="keyword">for</span> i := <span class="number">0</span>; i &lt; leaseCheckpointRate/<span class="number">2</span>; i++ &#123;</span><br><span class="line">        <span class="keyword">var</span> cps []*pb.LeaseCheckpoint</span><br><span class="line">        le.mu.Lock()</span><br><span class="line">        <span class="keyword">if</span> le.isPrimary() &#123;</span><br><span class="line">            cps = le.findDueScheduledCheckpoints(maxLeaseCheckpointBatchSize)</span><br><span class="line">        &#125;</span><br><span class="line">        le.mu.Unlock()</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(cps) != <span class="number">0</span> &#123;</span><br><span class="line">            <span class="comment">// 提交到RAFT</span></span><br><span class="line">            le.cp(context.Background(), &amp;pb.LeaseCheckpointRequest&#123;Checkpoints: cps&#125;)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>使用最小堆管理检查点调度</li>
+<li>批量处理减少RAFT日志数量</li>
+<li>速率限制防止检查点过于频繁</li>
+</ul>
+<h2 id="4-数据结构设计"><a href="#4-数据结构设计" class="headerlink" title="4. 数据结构设计"></a>4. 数据结构设计</h2><h3 id="4-1-过期通知器（LeaseExpiredNotifier）"><a href="#4-1-过期通知器（LeaseExpiredNotifier）" class="headerlink" title="4.1 过期通知器（LeaseExpiredNotifier）"></a>4.1 过期通知器（LeaseExpiredNotifier）</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> LeaseExpiredNotifier <span class="keyword">struct</span> &#123;</span><br><span class="line">    m     <span class="keyword">map</span>[LeaseID]*LeaseWithTime  <span class="comment">// 租约ID到时间项的映射</span></span><br><span class="line">    queue LeaseQueue                  <span class="comment">// 基于过期时间的最小堆</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>使用最小堆按过期时间排序</li>
+<li>支持O(log N)的插入、删除和查找</li>
+<li>映射表提供O(1)的租约查找</li>
+</ul>
+<h3 id="4-2-租约队列（LeaseQueue）"><a href="#4-2-租约队列（LeaseQueue）" class="headerlink" title="4.2 租约队列（LeaseQueue）"></a>4.2 租约队列（LeaseQueue）</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> LeaseQueue []*LeaseWithTime</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> LeaseWithTime <span class="keyword">struct</span> &#123;</span><br><span class="line">    id    LeaseID</span><br><span class="line">    time  time.Time</span><br><span class="line">    index <span class="type">int</span>  <span class="comment">// 堆中的索引</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>实现标准堆接口</li>
+<li>支持堆修复操作</li>
+<li>索引字段支持O(log N)的堆修复</li>
+</ul>
+<h2 id="5-持久化设计"><a href="#5-持久化设计" class="headerlink" title="5. 持久化设计"></a>5. 持久化设计</h2><h3 id="5-1-后端存储"><a href="#5-1-后端存储" class="headerlink" title="5.1 后端存储"></a>5.1 后端存储</h3><p>租约信息持久化到 <code>buckets.Lease</code> 桶中：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Lease <span class="keyword">struct</span> &#123;</span><br><span class="line">    ID           <span class="type">int64</span>  <span class="comment">// 租约ID</span></span><br><span class="line">    TTL          <span class="type">int64</span>  <span class="comment">// 生存时间</span></span><br><span class="line">    RemainingTTL <span class="type">int64</span>  <span class="comment">// 剩余时间（v3.6+支持）</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-恢复机制"><a href="#5-2-恢复机制" class="headerlink" title="5.2 恢复机制"></a>5.2 恢复机制</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(le *lessor)</span></span> initAndRecover() &#123;</span><br><span class="line">    tx := le.b.BatchTx()</span><br><span class="line">    tx.LockOutsideApply()</span><br><span class="line">    </span><br><span class="line">    tx.UnsafeCreateBucket(buckets.Lease)</span><br><span class="line">    lpbs := unsafeGetAllLeases(tx)</span><br><span class="line">    tx.Unlock()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 从持久化数据恢复租约</span></span><br><span class="line">    <span class="keyword">for</span> _, lpb := <span class="keyword">range</span> lpbs &#123;</span><br><span class="line">        ID := LeaseID(lpb.ID)</span><br><span class="line">        le.leaseMap[ID] = &amp;Lease&#123;</span><br><span class="line">            ID:           ID,</span><br><span class="line">            ttl:          lpb.TTL,</span><br><span class="line">            itemSet:      <span class="built_in">make</span>(<span class="keyword">map</span>[LeaseItem]<span class="keyword">struct</span>&#123;&#125;),</span><br><span class="line">            expiry:       forever,  <span class="comment">// 初始设置为永不过期</span></span><br><span class="line">            revokec:      <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;),</span><br><span class="line">            remainingTTL: lpb.RemainingTTL,</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    le.leaseExpiredNotifier.Init()</span><br><span class="line">    heap.Init(&amp;le.leaseCheckpointHeap)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计要点：</strong></p>
+<ul>
+<li>租约项（itemSet）不持久化，通过遍历KV恢复</li>
+<li>初始过期时间设为永不过期，等待Promote时刷新</li>
+<li>支持RemainingTTL的版本兼容性</li>
+</ul>
+<h2 id="6-性能优化设计"><a href="#6-性能优化设计" class="headerlink" title="6. 性能优化设计"></a>6. 性能优化设计</h2><h3 id="6-1-速率限制"><a href="#6-1-速率限制" class="headerlink" title="6.1 速率限制"></a>6.1 速率限制</h3><ul>
+<li><strong>撤销速率限制</strong>：<code>leaseRevokeRate</code> 控制每秒最大撤销数量</li>
+<li><strong>检查点速率限制</strong>：<code>leaseCheckpointRate</code> 控制每秒最大检查点数量</li>
+<li><strong>批量处理</strong>：检查点支持批量提交，减少RAFT日志</li>
+</ul>
+<h3 id="6-2-内存优化"><a href="#6-2-内存优化" class="headerlink" title="6.2 内存优化"></a>6.2 内存优化</h3><ul>
+<li><strong>最小堆</strong>：O(log N)的过期时间管理</li>
+<li><strong>映射表</strong>：O(1)的租约查找</li>
+<li><strong>缓冲通道</strong>：避免过期处理阻塞主循环</li>
+</ul>
+<h3 id="6-3-并发安全"><a href="#6-3-并发安全" class="headerlink" title="6.3 并发安全"></a>6.3 并发安全</h3><ul>
+<li><strong>读写锁</strong>：支持并发读操作</li>
+<li><strong>细粒度锁</strong>：租约级别的互斥锁</li>
+<li><strong>通道通信</strong>：避免共享状态竞争</li>
+</ul>
+<h2 id="7-容错设计"><a href="#7-容错设计" class="headerlink" title="7. 容错设计"></a>7. 容错设计</h2><h3 id="7-1-主从切换容错"><a href="#7-1-主从切换容错" class="headerlink" title="7.1 主从切换容错"></a>7.1 主从切换容错</h3><ul>
+<li><strong>短暂双主</strong>：Raft允许短暂的双主状态，通过term保证正确性</li>
+<li><strong>降级保护</strong>：从节点将租约设为永不过期，避免误删</li>
+<li><strong>重试机制</strong>：过期租约的重试间隔机制</li>
+</ul>
+<h3 id="7-2-网络分区容错"><a href="#7-2-网络分区容错" class="headerlink" title="7.2 网络分区容错"></a>7.2 网络分区容错</h3><ul>
+<li><strong>检查点机制</strong>：保存剩余TTL，支持跨重启恢复</li>
+<li><strong>版本兼容</strong>：支持不同版本的检查点行为</li>
+<li><strong>优雅降级</strong>：网络问题时自动降级为从节点</li>
+</ul>
+<h2 id="8-监控和指标"><a href="#8-监控和指标" class="headerlink" title="8. 监控和指标"></a>8. 监控和指标</h2><h3 id="8-1-Prometheus指标"><a href="#8-1-Prometheus指标" class="headerlink" title="8.1 Prometheus指标"></a>8.1 Prometheus指标</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">var</span> (</span><br><span class="line">    leaseGranted   = prometheus.NewCounter(...)  <span class="comment">// 租约创建总数</span></span><br><span class="line">    leaseRevoked   = prometheus.NewCounter(...)  <span class="comment">// 租约撤销总数</span></span><br><span class="line">    leaseRenewed   = prometheus.NewCounter(...)  <span class="comment">// 租约续期总数</span></span><br><span class="line">    leaseTotalTTLs = prometheus.NewHistogram(...) <span class="comment">// TTL分布直方图</span></span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<h3 id="8-2-日志记录"><a href="#8-2-日志记录" class="headerlink" title="8.2 日志记录"></a>8.2 日志记录</h3><ul>
+<li><strong>调试日志</strong>：检查点调度和处理的详细日志</li>
+<li><strong>错误日志</strong>：租约操作失败的错误信息</li>
+<li><strong>性能日志</strong>：关键操作的性能指标</li>
+</ul>
+<h2 id="9-总结"><a href="#9-总结" class="headerlink" title="9. 总结"></a>9. 总结</h2><p>etcd 的 Lessor 设计体现了以下核心特点：</p>
+<ol>
+<li><strong>高可用性</strong>：通过主从切换和检查点机制保证服务连续性</li>
+<li><strong>高性能</strong>：使用最小堆和映射表优化查找性能，支持速率限制</li>
+<li><strong>强一致性</strong>：通过RAFT协议保证租约操作的一致性</li>
+<li><strong>可扩展性</strong>：支持大量租约的高效管理</li>
+<li><strong>容错性</strong>：完善的错误处理和恢复机制</li>
+</ol>
+<p>Lessor 的设计充分考虑了分布式环境下的各种挑战，是一个经过充分验证的租约管理实现。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Lessor"><span class="toc-number">1.</span> <span class="toc-text">Lessor</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E6%A0%B8%E5%BF%83%E6%8E%A5%E5%8F%A3%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.1.</span> <span class="toc-text">2. 核心接口设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-Lessor-%E6%8E%A5%E5%8F%A3"><span class="toc-number">1.1.1.</span> <span class="toc-text">2.1 Lessor 接口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E5%85%B3%E9%94%AE%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">1.1.2.</span> <span class="toc-text">2.2 关键数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Lease-%E7%BB%93%E6%9E%84%E4%BD%93"><span class="toc-number">1.1.2.1.</span> <span class="toc-text">Lease 结构体</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#lessor-%E7%BB%93%E6%9E%84%E4%BD%93"><span class="toc-number">1.1.2.2.</span> <span class="toc-text">lessor 结构体</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E6%A0%B8%E5%BF%83%E5%8A%9F%E8%83%BD%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.2.</span> <span class="toc-text">3. 核心功能设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#LeaseExpiredNotifier"><span class="toc-number">1.2.1.</span> <span class="toc-text">LeaseExpiredNotifier</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E7%A7%9F%E7%BA%A6%E5%88%9B%E5%BB%BA%EF%BC%88Grant%EF%BC%89"><span class="toc-number">1.2.2.</span> <span class="toc-text">3.1 租约创建（Grant）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E7%A7%9F%E7%BA%A6%E7%BB%AD%E6%9C%9F%EF%BC%88Renew%EF%BC%89"><span class="toc-number">1.2.3.</span> <span class="toc-text">3.2 租约续期（Renew）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E7%A7%9F%E7%BA%A6%E6%92%A4%E9%94%80%EF%BC%88Revoke%EF%BC%89"><span class="toc-number">1.2.4.</span> <span class="toc-text">3.3 租约撤销（Revoke）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-4-%E4%B8%BB%E4%BB%8E%E5%88%87%E6%8D%A2%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.5.</span> <span class="toc-text">3.4 主从切换机制</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#Promote%EF%BC%88%E6%8F%90%E5%8D%87%E4%B8%BA%E4%B8%BB%E8%8A%82%E7%82%B9%EF%BC%89"><span class="toc-number">1.2.5.1.</span> <span class="toc-text">Promote（提升为主节点）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#Demote%EF%BC%88%E9%99%8D%E7%BA%A7%E4%B8%BA%E4%BB%8E%E8%8A%82%E7%82%B9%EF%BC%89"><span class="toc-number">1.2.5.2.</span> <span class="toc-text">Demote（降级为从节点）</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-5-%E8%BF%87%E6%9C%9F%E5%A4%84%E7%90%86%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.6.</span> <span class="toc-text">3.5 过期处理机制</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BB%E5%BE%AA%E7%8E%AF%EF%BC%88runLoop%EF%BC%89"><span class="toc-number">1.2.6.1.</span> <span class="toc-text">主循环（runLoop）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%BF%87%E6%9C%9F%E7%A7%9F%E7%BA%A6%E5%A4%84%E7%90%86"><span class="toc-number">1.2.6.2.</span> <span class="toc-text">过期租约处理</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-6-%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.7.</span> <span class="toc-text">3.6 检查点机制</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E8%B0%83%E5%BA%A6"><span class="toc-number">1.2.7.1.</span> <span class="toc-text">检查点调度</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E5%A4%84%E7%90%86"><span class="toc-number">1.2.7.2.</span> <span class="toc-text">检查点处理</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.3.</span> <span class="toc-text">4. 数据结构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-%E8%BF%87%E6%9C%9F%E9%80%9A%E7%9F%A5%E5%99%A8%EF%BC%88LeaseExpiredNotifier%EF%BC%89"><span class="toc-number">1.3.1.</span> <span class="toc-text">4.1 过期通知器（LeaseExpiredNotifier）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E7%A7%9F%E7%BA%A6%E9%98%9F%E5%88%97%EF%BC%88LeaseQueue%EF%BC%89"><span class="toc-number">1.3.2.</span> <span class="toc-text">4.2 租约队列（LeaseQueue）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E6%8C%81%E4%B9%85%E5%8C%96%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.4.</span> <span class="toc-text">5. 持久化设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%90%8E%E7%AB%AF%E5%AD%98%E5%82%A8"><span class="toc-number">1.4.1.</span> <span class="toc-text">5.1 后端存储</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-%E6%81%A2%E5%A4%8D%E6%9C%BA%E5%88%B6"><span class="toc-number">1.4.2.</span> <span class="toc-text">5.2 恢复机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.5.</span> <span class="toc-text">6. 性能优化设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-%E9%80%9F%E7%8E%87%E9%99%90%E5%88%B6"><span class="toc-number">1.5.1.</span> <span class="toc-text">6.1 速率限制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-%E5%86%85%E5%AD%98%E4%BC%98%E5%8C%96"><span class="toc-number">1.5.2.</span> <span class="toc-text">6.2 内存优化</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-3-%E5%B9%B6%E5%8F%91%E5%AE%89%E5%85%A8"><span class="toc-number">1.5.3.</span> <span class="toc-text">6.3 并发安全</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E5%AE%B9%E9%94%99%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.6.</span> <span class="toc-text">7. 容错设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E4%B8%BB%E4%BB%8E%E5%88%87%E6%8D%A2%E5%AE%B9%E9%94%99"><span class="toc-number">1.6.1.</span> <span class="toc-text">7.1 主从切换容错</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E7%BD%91%E7%BB%9C%E5%88%86%E5%8C%BA%E5%AE%B9%E9%94%99"><span class="toc-number">1.6.2.</span> <span class="toc-text">7.2 网络分区容错</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E7%9B%91%E6%8E%A7%E5%92%8C%E6%8C%87%E6%A0%87"><span class="toc-number">1.7.</span> <span class="toc-text">8. 监控和指标</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#8-1-Prometheus%E6%8C%87%E6%A0%87"><span class="toc-number">1.7.1.</span> <span class="toc-text">8.1 Prometheus指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-2-%E6%97%A5%E5%BF%97%E8%AE%B0%E5%BD%95"><span class="toc-number">1.7.2.</span> <span class="toc-text">8.2 日志记录</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E6%80%BB%E7%BB%93"><span class="toc-number">1.8.</span> <span class="toc-text">9. 总结</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2024/09/29/ETCD/4_lessor/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&text=剖析 ETCD.lessor"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&is_video=false&description=剖析 ETCD.lessor"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=剖析 ETCD.lessor&body=Check out this article: https://szza.github.io/2024/09/29/ETCD/4_lessor/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&title=剖析 ETCD.lessor"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2024/09/29/ETCD/4_lessor/&name=剖析 ETCD.lessor&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2024/09/29/ETCD/4_lessor/&t=剖析 ETCD.lessor"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

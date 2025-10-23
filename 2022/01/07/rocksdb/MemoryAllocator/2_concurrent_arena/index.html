@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="concurrent_arena在上一期的 存分配器之 arena 中，讲解了 RocksDB 是如何混合new、mmap设计一个高效的内存分配器。这一期，我们继续深入探索 RocksDB 是如何设计出一个高效的多线程内存分配器 concurrent_arena 。 let’s go 多线程程序的性能关键，有两个关键因素：  减少竞争 减少竞争，有诸多方式，比如使用原子变量、细粒度锁（fine-g">
+<meta property="og:type" content="article">
+<meta property="og:title" content="内存分配器之 concurrent_arena">
+<meta property="og:url" content="https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="concurrent_arena在上一期的 存分配器之 arena 中，讲解了 RocksDB 是如何混合new、mmap设计一个高效的内存分配器。这一期，我们继续深入探索 RocksDB 是如何设计出一个高效的多线程内存分配器 concurrent_arena 。 let’s go 多线程程序的性能关键，有两个关键因素：  减少竞争 减少竞争，有诸多方式，比如使用原子变量、细粒度锁（fine-g">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-01-07T06:15:35.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="RocksDb">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>内存分配器之 concurrent_arena</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/01/08/rocksdb/WritePath/overview/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/01/06/rocksdb/MemoryAllocator/2_arena/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&text=内存分配器之 concurrent_arena"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&is_video=false&description=内存分配器之 concurrent_arena"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=内存分配器之 concurrent_arena&body=Check out this article: https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&name=内存分配器之 concurrent_arena&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&t=内存分配器之 concurrent_arena"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#concurrent-arena"><span class="toc-number">1.</span> <span class="toc-text">concurrent_arena</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-Shard"><span class="toc-number">1.0.1.</span> <span class="toc-text">ConcurrentArena::Shard</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CoreLocalArray"><span class="toc-number">1.0.1.1.</span> <span class="toc-text">CoreLocalArray</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#CoreLocalArray-CoreLocalArray"><span class="toc-number">1.0.1.1.1.</span> <span class="toc-text">CoreLocalArray::CoreLocalArray</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#CoreLocalArray-AccessAtCore"><span class="toc-number">1.0.1.1.2.</span> <span class="toc-text">CoreLocalArray::AccessAtCore</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#CoreLocalArray-AccessElementAndIndex"><span class="toc-number">1.0.1.1.3.</span> <span class="toc-text">CoreLocalArray::AccessElementAndIndex</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-ShardAllocatedAndUnused"><span class="toc-number">1.0.2.</span> <span class="toc-text">ConcurrentArena::ShardAllocatedAndUnused</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-ConcurrentArena"><span class="toc-number">1.0.3.</span> <span class="toc-text">ConcurrentArena::ConcurrentArena</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-Fixup"><span class="toc-number">1.0.4.</span> <span class="toc-text">ConcurrentArena::Fixup</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-Repick"><span class="toc-number">1.0.5.</span> <span class="toc-text">ConcurrentArena::Repick</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-AllocateImpl"><span class="toc-number">1.0.6.</span> <span class="toc-text">ConcurrentArena::AllocateImpl</span></a></li><li class="toc-item toc-level-3"><a class="toc-link"><span class="toc-number">1.0.7.</span> <span class="toc-text"></span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        内存分配器之 concurrent_arena
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-01-07T06:15:35.000Z" itemprop="datePublished">2022-01-07</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/RocksDb/" rel="tag">RocksDb</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="concurrent-arena"><a href="#concurrent-arena" class="headerlink" title="concurrent_arena"></a>concurrent_arena</h1><p>在上一期的 <a href="./2_arena.md">存分配器之 arena</a> 中，讲解了 RocksDB 是如何混合new、mmap设计一个高效的内存分配器。这一期，我们继续深入探索 RocksDB 是如何设计出一个高效的多线程内存分配器 <code>concurrent_arena</code> 。</p>
+<p>let’s go</p>
+<p>多线程程序的性能关键，有两个关键因素：</p>
+<ul>
+<li><p>减少竞争</p>
+<p>减少竞争，有诸多方式，比如使用原子变量、细粒度锁（fine-grained mutex），threadlocal。</p>
+</li>
+<li><p>False Sharing</p>
+<p>降低false sharing，一般解决办法是将线程间共享的数据大小与cacheline大小对齐（align）。</p>
+</li>
+</ul>
+<p>而 concurrent_arena 即在 arena 的基础上，增加了一些多线程间的操作。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ConcurrentArena</span> : <span class="keyword">public</span> Allocator &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="comment">/// @brief 参数 @c block_size 与 @c huge_page_size 含义同 Arena 中</span></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">ConcurrentArena</span><span class="params">(<span class="type">size_t</span> block_size = Arena::kMinBlockSize,</span></span></span><br><span class="line"><span class="params"><span class="function">                           <span class="type">size_t</span> huge_page_size = <span class="number">0</span>)</span></span>;</span><br><span class="line"></span><br><span class="line">  </span><br><span class="line">  <span class="comment">/// @brief 分配无须对齐的内存</span></span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">Allocate</span><span class="params">(<span class="type">size_t</span> bytes)</span> <span class="keyword">override</span></span>;</span><br><span class="line">	</span><br><span class="line">  <span class="comment">/// @brief 分配需要对齐的内存</span></span><br><span class="line">  <span class="function"><span class="type">char</span>* <span class="title">AllocateAligned</span><span class="params">(<span class="type">size_t</span> bytes, </span></span></span><br><span class="line"><span class="params"><span class="function">                        <span class="type">size_t</span> huge_page_size = <span class="number">0</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">                        Logger* logger = <span class="literal">nullptr</span>)</span> <span class="keyword">override</span></span>;</span><br><span class="line">  </span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  <span class="keyword">struct</span> <span class="title class_">Shard</span> &#123;</span><br><span class="line">    <span class="type">char</span> padding[<span class="number">40</span>] ROCKSDB_FIELD_UNUSED; </span><br><span class="line">    <span class="keyword">mutable</span> SpinMutex mutex;</span><br><span class="line">    <span class="type">char</span>* free_begin_; </span><br><span class="line">    std::atomic&lt;<span class="type">size_t</span>&gt; allocated_and_unused_; </span><br><span class="line"></span><br><span class="line">    <span class="built_in">Shard</span>() : <span class="built_in">free_begin_</span>(<span class="literal">nullptr</span>), <span class="built_in">allocated_and_unused_</span>(<span class="number">0</span>) &#123;&#125;</span><br><span class="line">  &#125;;</span><br><span class="line"></span><br><span class="line">  <span class="type">static</span> <span class="keyword">thread_local</span> <span class="type">size_t</span> tls_cpuid; </span><br><span class="line"></span><br><span class="line">  <span class="type">char</span> padding0[<span class="number">56</span>] ROCKSDB_FIELD_UNUSED;</span><br><span class="line"></span><br><span class="line">  <span class="type">size_t</span> shard_block_size_;</span><br><span class="line"></span><br><span class="line">  CoreLocalArray&lt;Shard&gt; shards_; <span class="comment">// 存储数据</span></span><br><span class="line"></span><br><span class="line">  Arena arena_;                                     <span class="comment">// 内存分配器</span></span><br><span class="line">  <span class="keyword">mutable</span> SpinMutex arena_mutex_;                   <span class="comment">// 保证使用 arena 分配内存时线程安全</span></span><br><span class="line">  std::atomic&lt;<span class="type">size_t</span>&gt; arena_allocated_and_unused_;  <span class="comment">// arena_ 剩余可使用的内存 </span></span><br><span class="line">  std::atomic&lt;<span class="type">size_t</span>&gt; memory_allocated_bytes_;      <span class="comment">// arena 总的分配内存</span></span><br><span class="line">  std::atomic&lt;<span class="type">size_t</span>&gt; irregular_block_num_;</span><br><span class="line"></span><br><span class="line">  <span class="type">char</span> padding1[<span class="number">56</span>] ROCKSDB_FIELD_UNUSED;</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ConcurrentArena-Shard"><a href="#ConcurrentArena-Shard" class="headerlink" title="ConcurrentArena::Shard"></a>ConcurrentArena::Shard</h3><p>为避免竞争，<code>concurrent_arena</code> 使用将每个线程所需的内存分配在线程所属的cpu核上，如此每个线程在分配内存时都会使用自己的内存，如此就避免了竞争。这也是一种空间换时间的策略，类似于threadlocal思想。</p>
+<p>结构体 <code>Shard</code> 记录了每个核上的内存分配、使用情况。字段 <code>shards_</code> 记录了所有核上shard。</p>
+<p>类<code>CoreLocalArray</code> 本质上是个数组，为了提高多线程的访问效率，要将<code>Shard</code>的大小对齐到cacheline大小，以阻止false sharing现象。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Shard</span> &#123;</span><br><span class="line">   <span class="comment">// 填充字节以对齐到 cacheline, 避免 false sharding</span></span><br><span class="line">   <span class="type">char</span> padding[<span class="number">40</span>] ROCKSDB_FIELD_UNUSED; </span><br><span class="line">   <span class="comment">// 用于保护 free_begin_ 指向的数据</span></span><br><span class="line">   <span class="keyword">mutable</span> SpinMutex mutex;</span><br><span class="line">   <span class="comment">// 每个core上分配内存地址</span></span><br><span class="line">   <span class="type">char</span>* free_begin_; </span><br><span class="line">   <span class="comment">// 每个core剩余可用内存</span></span><br><span class="line">   std::atomic&lt;<span class="type">size_t</span>&gt; allocated_and_unused_; </span><br><span class="line"></span><br><span class="line">   <span class="built_in">Shard</span>() : <span class="built_in">free_begin_</span>(<span class="literal">nullptr</span>), <span class="built_in">allocated_and_unused_</span>(<span class="number">0</span>) &#123;&#125;</span><br><span class="line"> &#125;;</span><br><span class="line"></span><br><span class="line"> CoreLocalArray&lt;Shard&gt; shards_;</span><br></pre></td></tr></table></figure>
+
+<h4 id="CoreLocalArray"><a href="#CoreLocalArray" class="headerlink" title="CoreLocalArray"></a>CoreLocalArray</h4><p>类 <code>CoreLocalArray</code>  只用于存储数据，本身不是线程安全的，因此需要 <code>Shard::mutex</code> 字段保护。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">CoreLocalArray</span> &#123;</span><br><span class="line"> <span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">CoreLocalArray</span>();</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// 数组元素个数</span></span><br><span class="line">  <span class="function"><span class="type">size_t</span> <span class="title">Size</span><span class="params">()</span> <span class="type">const</span> </span>&#123; </span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">static_cast</span>&lt;<span class="type">size_t</span>&gt;(<span class="number">1</span>) &lt;&lt; size_shift_;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// @return 返回当前线程所在core上的数据地址 ptr</span></span><br><span class="line">  <span class="function">T* <span class="title">Access</span><span class="params">()</span> <span class="type">const</span> </span>&#123; </span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">AccessElementAndIndex</span>().first;</span><br><span class="line">  &#125;</span><br><span class="line"> </span><br><span class="line">  <span class="comment">/// @return 不仅返回当前线程所在core上的数据地址 ptr，还返回该core的index</span></span><br><span class="line">  <span class="function">std::pair&lt;T*, <span class="type">size_t</span>&gt; <span class="title">AccessElementAndIndex</span><span class="params">()</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">/// @brief 通过 core_idx 来获取该 core 的数据</span></span><br><span class="line">  <span class="function">T* <span class="title">AccessAtCore</span><span class="params">(<span class="type">size_t</span> core_idx)</span> <span class="type">const</span></span>;</span><br><span class="line"></span><br><span class="line"> <span class="keyword">private</span>:</span><br><span class="line">  std::unique_ptr&lt;T[]&gt; data_;  <span class="comment">// 数组</span></span><br><span class="line">  <span class="type">int</span> size_shift_;             </span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<h5 id="CoreLocalArray-CoreLocalArray"><a href="#CoreLocalArray-CoreLocalArray" class="headerlink" title="CoreLocalArray::CoreLocalArray"></a>CoreLocalArray::CoreLocalArray</h5><p>C++11中提供了<code>std::thread::hardware_concurrency</code> 函数，来获取CPU的核数<code>num_cpus</code>，将线程数设置为 <code>num_cpus</code>，如此就能避免在一个进程中线程频繁的在不同的core上来回切换，降低线程切换上下文的开销。</p>
+<ul>
+<li>如果<code>num_cpus &lt;= 8</code>，则启动8个线程；</li>
+<li>否则，开启<code>num_cpus</code>个线程（num_cpus 一般也是2的幂）。</li>
+</ul>
+<p>代码简洁如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line">CoreLocalArray&lt;T&gt;::<span class="built_in">CoreLocalArray</span>() &#123;</span><br><span class="line">  <span class="type">int</span> num_cpus = <span class="built_in">static_cast</span>&lt;<span class="type">int</span>&gt;(std::thread::<span class="built_in">hardware_concurrency</span>());</span><br><span class="line">  size_shift_ = <span class="number">3</span>;</span><br><span class="line">  <span class="keyword">while</span> (<span class="number">1</span> &lt;&lt; size_shift_ &lt; num_cpus) &#123;</span><br><span class="line">    ++size_shift_;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 每个core上都有类型 T 的数据</span></span><br><span class="line">  data_.<span class="built_in">reset</span>(<span class="keyword">new</span> T[<span class="built_in">static_cast</span>&lt;<span class="type">size_t</span>&gt;(<span class="number">1</span>) &lt;&lt; size_shift_]);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="CoreLocalArray-AccessAtCore"><a href="#CoreLocalArray-AccessAtCore" class="headerlink" title="CoreLocalArray::AccessAtCore"></a>CoreLocalArray::AccessAtCore</h5><p><code>AccessAtCore</code> 函数，用于获取核<code>core_idx</code>上的数据，即获取数组<code>data_[core_idx]</code>中数据。</p>
+<p>在这解释下为啥类型<code>T</code>大小需要对齐到 cacheline大小。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line">T* CoreLocalArray&lt;T&gt;::<span class="built_in">AccessAtCore</span>(<span class="type">size_t</span> core_idx) <span class="type">const</span> &#123;</span><br><span class="line">  <span class="built_in">assert</span>(core_idx &lt; <span class="built_in">static_cast</span>&lt;<span class="type">size_t</span>&gt;(<span class="number">1</span>) &lt;&lt; size_shift_);</span><br><span class="line">  <span class="keyword">return</span> &amp;data_[core_idx];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h5 id="CoreLocalArray-AccessElementAndIndex"><a href="#CoreLocalArray-AccessElementAndIndex" class="headerlink" title="CoreLocalArray::AccessElementAndIndex"></a>CoreLocalArray::AccessElementAndIndex</h5><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line">std::pair&lt;T*, <span class="type">size_t</span>&gt; CoreLocalArray&lt;T&gt;::<span class="built_in">AccessElementAndIndex</span>() <span class="type">const</span> &#123;</span><br><span class="line">  <span class="type">int</span> cpuid = port::<span class="built_in">PhysicalCoreID</span>(); <span class="comment">// 获取cpu的物理id</span></span><br><span class="line">  <span class="type">size_t</span> core_idx;</span><br><span class="line">  <span class="keyword">if</span> (<span class="built_in">UNLIKELY</span>(cpuid &lt; <span class="number">0</span>)) &#123;</span><br><span class="line">    <span class="comment">// cpu id unavailable, just pick randomly</span></span><br><span class="line">    core_idx = Random::<span class="built_in">GetTLSInstance</span>()-&gt;<span class="built_in">Uniform</span>(<span class="number">1</span> &lt;&lt; size_shift_);</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// 将 cpuid 映射到 1 &lt;&lt; size_shift_ 以内</span></span><br><span class="line">    core_idx = <span class="built_in">static_cast</span>&lt;<span class="type">size_t</span>&gt;(cpuid &amp; ((<span class="number">1</span> &lt;&lt; size_shift_) - <span class="number">1</span>));</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> &#123;<span class="built_in">AccessAtCore</span>(core_idx), core_idx&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ConcurrentArena-ShardAllocatedAndUnused"><a href="#ConcurrentArena-ShardAllocatedAndUnused" class="headerlink" title="ConcurrentArena::ShardAllocatedAndUnused"></a>ConcurrentArena::ShardAllocatedAndUnused</h3><p><code>ShardAllocatedAndUnused</code> 则用于记录，<code>shards</code>中各个<code>shard</code>中剩余可用内存大小。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 所有已分配但未使用的内存</span></span><br><span class="line"> <span class="function"><span class="type">size_t</span> <span class="title">ConcurrentArena::ShardAllocatedAndUnused</span><span class="params">()</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">   <span class="type">size_t</span> total = <span class="number">0</span>;</span><br><span class="line">   <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; shards_.<span class="built_in">Size</span>(); ++i) &#123;</span><br><span class="line">     total += </span><br><span class="line">       shards_.<span class="built_in">AccessAtCore</span>(i)-&gt;allocated_and_unused_.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="keyword">return</span> total;</span><br><span class="line"> &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ConcurrentArena-ConcurrentArena"><a href="#ConcurrentArena-ConcurrentArena" class="headerlink" title="ConcurrentArena::ConcurrentArena"></a>ConcurrentArena::ConcurrentArena</h3><p><code>ConcurrentArena</code> 的构造函数比较简单：</p>
+<ol>
+<li>初始化每个<code>shard</code> 需要分配的内存大小 <code>shard_block_size_</code>；</li>
+<li>初始化 <code>shards_</code> 数组；</li>
+<li>初始化<code>arena</code></li>
+<li>调用<code>Fixup</code>函数，初始化内存使用情况；</li>
+</ol>
+<p>简单如下。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">ConcurrentArena::<span class="built_in">ConcurrentArena</span>(<span class="type">size_t</span> block_size,</span><br><span class="line">                                 AllocTracker* tracker,</span><br><span class="line">                                 <span class="type">size_t</span> huge_page_size)</span><br><span class="line">    : <span class="built_in">shard_block_size_</span>(std::<span class="built_in">min</span>(kMaxShardBlockSize, block_size / <span class="number">8</span>)),</span><br><span class="line">      <span class="built_in">shards_</span>(),</span><br><span class="line">      <span class="built_in">arena_</span>(block_size, tracker, huge_page_size) &#123;</span><br><span class="line">  <span class="built_in">Fixup</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ConcurrentArena-Fixup"><a href="#ConcurrentArena-Fixup" class="headerlink" title="ConcurrentArena::Fixup"></a>ConcurrentArena::Fixup</h3><p><code>FixUp</code> 函数用于记录当前内存情况。</p>
+<p>下面三个原子变量写入新值时，使用<code>::std::memory_order_relaxed</code>即能满足。关于<code>memory order</code>，花了两个周末的时候重温了下，有时间会再出博客深度讲解。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">ConcurrentArena::Fixup</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// arena_ 所分配的内存中剩余可使用的内存</span></span><br><span class="line">    arena_allocated_and_unused_.<span class="built_in">store</span>(arena_.<span class="built_in">AllocatedAndUnused</span>(), std::memory_order_relaxed);</span><br><span class="line">    <span class="comment">// arena 分配的内存总量</span></span><br><span class="line">    memory_allocated_bytes_.<span class="built_in">store</span>(arena_.<span class="built_in">MemoryAllocatedBytes</span>(), std::memory_order_relaxed);</span><br><span class="line">    irregular_block_num_.<span class="built_in">store</span>(arena_.<span class="built_in">IrregularBlockNum</span>(), std::memory_order_relaxed);</span><br><span class="line">  &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ConcurrentArena-Repick"><a href="#ConcurrentArena-Repick" class="headerlink" title="ConcurrentArena::Repick"></a>ConcurrentArena::Repick</h3><p><code>Repick</code> 函数，用来初始化线程。把一个线程绑定到所属的核<code>tls_cpuid</code>。这样下次以后这个线程需要内存，直接去对应的<code>shard</code>获取内存。</p>
+<p>注意，<code>tls_cpuid</code> 默认为0，因此对于<code>core_idx</code>为0的线程需要映射到<code>num_cpus</code>，这样就能通过<code>tls_cpuid != 0</code>来判断这个线程是否初始化过。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ConcurrentArena::Shard* <span class="title">ConcurrentArena::Repick</span><span class="params">()</span> </span>&#123;</span><br><span class="line">  <span class="keyword">auto</span> shard_and_index = shards_.<span class="built_in">AccessElementAndIndex</span>();</span><br><span class="line">  <span class="comment">// 用于将 cord_idx 为 0 时 映射为 num_cpus，来体现此线程已初始化 </span></span><br><span class="line">  tls_cpuid = shard_and_index.second | shards_.<span class="built_in">Size</span>();</span><br><span class="line">  <span class="keyword">return</span> shard_and_index.first;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ConcurrentArena-AllocateImpl"><a href="#ConcurrentArena-AllocateImpl" class="headerlink" title="ConcurrentArena::AllocateImpl"></a>ConcurrentArena::AllocateImpl</h3><p>整个流程如下：</p>
+<ol>
+<li><p>先判断此次分配内存，是否需要从arena直接分配即可</p>
+<ul>
+<li>超过一个shards内存大小的1&#x2F;4</li>
+<li>上层强制使用 arena</li>
+<li>该线程首次调用<code>AllocateImpl</code> 函数，此时<code>shards</code>中的各个<code>shard-&gt;free_begin</code>尚未指向有效内存地址；</li>
+</ul>
+<p>如果要使用 <code>arena_</code>，则需要使用<code>arena_mutex_</code>保护。</p>
+</li>
+<li><p>尝试从shard中获取内存</p>
+</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> Func&gt;</span><br><span class="line"><span class="function"><span class="type">char</span>* <span class="title">AllocateImpl</span><span class="params">(<span class="type">size_t</span> bytes, <span class="type">bool</span> force_arena, <span class="type">const</span> Func&amp; func)</span> </span>&#123;</span><br><span class="line">  <span class="type">size_t</span> cpu;</span><br><span class="line">  <span class="comment">// 直接使用arena分配内存，有两种情况：</span></span><br><span class="line">  <span class="comment">// 1. 待分配的内存比较大。</span></span><br><span class="line">  <span class="comment">// 2. Repick 尚未调用过，并且当前 arena_mutex_ 能直接获得</span></span><br><span class="line">  <span class="function">std::unique_lock&lt;SpinMutex&gt; <span class="title">arena_lock</span><span class="params">(arena_mutex_, std::defer_lock)</span></span>;</span><br><span class="line">  <span class="keyword">if</span> (bytes &gt; shard_block_size_ / <span class="number">4</span> </span><br><span class="line">      <span class="comment">// 使用 huge_page</span></span><br><span class="line">      || force_arena </span><br><span class="line">      <span class="comment">// 判断条件执行到此，说明 所需的内存 bytes 并不大，比较小</span></span><br><span class="line">      <span class="comment">// 原则上是不需要使用 arena，但是如果同时满足以下二个条件：</span></span><br><span class="line">      <span class="comment">//  1. 没有执行过 Repick 函数</span></span><br><span class="line">      <span class="comment">//  2. 成功获得锁</span></span><br><span class="line">      || ((cpu = tls_cpuid) == <span class="number">0</span>   <span class="comment">// 线程尚未初始化</span></span><br><span class="line">           &amp;&amp; !shards_.<span class="built_in">AccessAtCore</span>(<span class="number">0</span>)-&gt;allocated_and_unused_.<span class="built_in">load</span>(std::memory_order_relaxed) </span><br><span class="line">           &amp;&amp; arena_lock.<span class="built_in">try_lock</span>())) &#123;</span><br><span class="line">    <span class="keyword">if</span> (!arena_lock.<span class="built_in">owns_lock</span>()) &#123;</span><br><span class="line">      <span class="comment">// 阻塞等待</span></span><br><span class="line">      arena_lock.<span class="built_in">lock</span>();</span><br><span class="line">      <span class="comment">// 获得锁</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">auto</span> rv = <span class="built_in">func</span>(); <span class="comment">// 分配内存的回调函数</span></span><br><span class="line">    <span class="built_in">Fixup</span>();</span><br><span class="line">    <span class="keyword">return</span> rv;</span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 2. 选择一个 shard 来满足此次内存分配</span></span><br><span class="line">  Shard* s = shards_.<span class="built_in">AccessAtCore</span>(cpu &amp; (shards_.<span class="built_in">Size</span>() - <span class="number">1</span>));</span><br><span class="line">  <span class="keyword">if</span> (!s-&gt;mutex.<span class="built_in">try_lock</span>()) &#123;</span><br><span class="line">    s = <span class="built_in">Repick</span>();</span><br><span class="line">    s-&gt;mutex.<span class="built_in">lock</span>();</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="function">std::unique_lock&lt;SpinMutex&gt; <span class="title">lock</span><span class="params">(s-&gt;mutex, std::adopt_lock)</span></span>;</span><br><span class="line"></span><br><span class="line">  <span class="type">size_t</span> avail = s-&gt;allocated_and_unused_.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">  <span class="keyword">if</span> (avail &lt; bytes) &#123;</span><br><span class="line">    <span class="comment">// reload</span></span><br><span class="line">    <span class="comment">// 此时需要使用 arnea 来分配内存</span></span><br><span class="line">    <span class="comment">// 1. 该 core 所剩的内存不足</span></span><br><span class="line">    <span class="comment">// 2. 第一次执行（本质还是第一种情况）</span></span><br><span class="line">    <span class="function">std::lock_guard&lt;SpinMutex&gt; <span class="title">reload_lock</span><span class="params">(arena_mutex_)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> exact = arena_allocated_and_unused_.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">    <span class="built_in">assert</span>(exact == arena_.<span class="built_in">AllocatedAndUnused</span>());</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (exact &gt;= bytes &amp;&amp; arena_.<span class="built_in">IsInInlineBlock</span>()) &#123;</span><br><span class="line">      <span class="comment">// 如果还没有消耗完 arena 的inline block的内存，则直接使用该内存</span></span><br><span class="line">      <span class="comment">// 这样就可以避免分配新的block，</span></span><br><span class="line">      <span class="keyword">auto</span> rv = <span class="built_in">func</span>(); <span class="comment">// 执行回调函数分配</span></span><br><span class="line">      <span class="built_in">Fixup</span>();</span><br><span class="line">      <span class="keyword">return</span> rv;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    avail = exact &gt;= shard_block_size_ / <span class="number">2</span> &amp;&amp; exact &lt; shard_block_size_ * <span class="number">2</span></span><br><span class="line">                ? exact</span><br><span class="line">                : shard_block_size_;</span><br><span class="line">    <span class="comment">// 重新分配内存</span></span><br><span class="line">    <span class="comment">// 首次调用即在此分配内存</span></span><br><span class="line">    s-&gt;free_begin_ = arena_.<span class="built_in">AllocateAligned</span>(avail);</span><br><span class="line">    <span class="built_in">Fixup</span>();</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 可用内存减少</span></span><br><span class="line">  s-&gt;allocated_and_unused_.<span class="built_in">store</span>(avail - bytes, std::memory_order_relaxed);</span><br><span class="line"></span><br><span class="line">  <span class="type">char</span>* rv;</span><br><span class="line">  <span class="keyword">if</span> ((bytes % <span class="built_in">sizeof</span>(<span class="type">void</span>*)) == <span class="number">0</span>) &#123;</span><br><span class="line">    <span class="comment">// aligned allocation from the beginning</span></span><br><span class="line">    rv = s-&gt;free_begin_;</span><br><span class="line">    s-&gt;free_begin_ += bytes;</span><br><span class="line">  &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// unaligned from the end</span></span><br><span class="line">    rv = s-&gt;free_begin_ + avail - bytes;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="keyword">return</span> rv;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id><a href="#" class="headerlink" title></a></h3>
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#concurrent-arena"><span class="toc-number">1.</span> <span class="toc-text">concurrent_arena</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-Shard"><span class="toc-number">1.0.1.</span> <span class="toc-text">ConcurrentArena::Shard</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CoreLocalArray"><span class="toc-number">1.0.1.1.</span> <span class="toc-text">CoreLocalArray</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#CoreLocalArray-CoreLocalArray"><span class="toc-number">1.0.1.1.1.</span> <span class="toc-text">CoreLocalArray::CoreLocalArray</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#CoreLocalArray-AccessAtCore"><span class="toc-number">1.0.1.1.2.</span> <span class="toc-text">CoreLocalArray::AccessAtCore</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#CoreLocalArray-AccessElementAndIndex"><span class="toc-number">1.0.1.1.3.</span> <span class="toc-text">CoreLocalArray::AccessElementAndIndex</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-ShardAllocatedAndUnused"><span class="toc-number">1.0.2.</span> <span class="toc-text">ConcurrentArena::ShardAllocatedAndUnused</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-ConcurrentArena"><span class="toc-number">1.0.3.</span> <span class="toc-text">ConcurrentArena::ConcurrentArena</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-Fixup"><span class="toc-number">1.0.4.</span> <span class="toc-text">ConcurrentArena::Fixup</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-Repick"><span class="toc-number">1.0.5.</span> <span class="toc-text">ConcurrentArena::Repick</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ConcurrentArena-AllocateImpl"><span class="toc-number">1.0.6.</span> <span class="toc-text">ConcurrentArena::AllocateImpl</span></a></li><li class="toc-item toc-level-3"><a class="toc-link"><span class="toc-number">1.0.7.</span> <span class="toc-text"></span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&text=内存分配器之 concurrent_arena"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&is_video=false&description=内存分配器之 concurrent_arena"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=内存分配器之 concurrent_arena&body=Check out this article: https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&title=内存分配器之 concurrent_arena"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&name=内存分配器之 concurrent_arena&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/01/07/rocksdb/MemoryAllocator/2_concurrent_arena/&t=内存分配器之 concurrent_arena"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

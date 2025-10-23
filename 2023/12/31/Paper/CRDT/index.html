@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="Abstarct强一致性需要的延迟高，无法应当网络分区（network partition）故障，很有可能导致无法执行操作，那么可选的方案就是弱一致性模型，比如最终一致性（eventual consistency），因果一致性（causal consistency），此时任何一个副本都能接受更新，并异步复制到其他副本。 采用弱一致性模型的系统，就允许副本短暂的和集群分离(比如因为网络问题等），并且">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Conflict-free Replicated Data Types: An Overview">
+<meta property="og:url" content="https://szza.github.io/2023/12/31/Paper/CRDT/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="Abstarct强一致性需要的延迟高，无法应当网络分区（network partition）故障，很有可能导致无法执行操作，那么可选的方案就是弱一致性模型，比如最终一致性（eventual consistency），因果一致性（causal consistency），此时任何一个副本都能接受更新，并异步复制到其他副本。 采用弱一致性模型的系统，就允许副本短暂的和集群分离(比如因为网络问题等），并且">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2023-12-31T02:20:00.000Z">
+<meta property="article:modified_time" content="2024-01-01T06:10:59.077Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Papers">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Conflict-free Replicated Data Types: An Overview</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2024/08/01/ETCD/1_backend/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2023/11/05/Paper/HashTable-Desigin/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/12/31/Paper/CRDT/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/12/31/Paper/CRDT/&text=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/12/31/Paper/CRDT/&is_video=false&description=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Conflict-free Replicated Data Types: An Overview&body=Check out this article: https://szza.github.io/2023/12/31/Paper/CRDT/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/12/31/Paper/CRDT/&name=Conflict-free Replicated Data Types: An Overview&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/12/31/Paper/CRDT/&t=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstarct"><span class="toc-number">1.</span> <span class="toc-text">Abstarct</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CRDTs-for-the-Application-Developer"><span class="toc-number">2.</span> <span class="toc-text">CRDTs for the Application Developer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Happend-before-relation"><span class="toc-number">2.1.</span> <span class="toc-text">Happend-before relation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Total-order-among-updates"><span class="toc-number">2.2.</span> <span class="toc-text">Total order among updates</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Question"><span class="toc-number">3.</span> <span class="toc-text">Question</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CRDTs-for-the-System-Developer"><span class="toc-number">4.</span> <span class="toc-text">CRDTs for the System Developer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Synchronization-model"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 Synchronization model</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#3-1-State-based-synchronization"><span class="toc-number">4.1.1.</span> <span class="toc-text">3.1 State-based synchronization</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-1-2-Operation-based-synchronization"><span class="toc-number">4.1.2.</span> <span class="toc-text">3.1.2 Operation-based synchronization</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Conflict-free Replicated Data Types: An Overview
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2023-12-31T02:20:00.000Z" itemprop="datePublished">2023-12-31</time>
+        
+      
+    </div>
+
+
+      
+    <div class="article-category">
+        <i class="fas fa-archive"></i>
+        <a class="category-link" href="/categories/CRDT/">CRDT</a>
+    </div>
+
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Papers/" rel="tag">Papers</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="Abstarct"><a href="#Abstarct" class="headerlink" title="Abstarct"></a>Abstarct</h2><p>强一致性需要的延迟高，无法应当网络分区（network partition）故障，很有可能导致无法执行操作，那么可选的方案就是弱一致性模型，比如最终一致性（eventual consistency），因果一致性（causal consistency），此时任何一个副本都能接受更新，并异步复制到其他副本。</p>
+<p>采用弱一致性模型的系统，就允许副本短暂的和集群分离(比如因为网络问题等），并且需要一个机制来合并 (merge mechanism) 对同一个状态的并发更新。Conflict-free Replicated Data Types(CRDT) 就是这么一种算法。</p>
+<h2 id="CRDTs-for-the-Application-Developer"><a href="#CRDTs-for-the-Application-Developer" class="headerlink" title="CRDTs for the Application Developer"></a>CRDTs for the Application Developer</h2><h3 id="Happend-before-relation"><a href="#Happend-before-relation" class="headerlink" title="Happend-before relation"></a>Happend-before relation</h3><p>happen-before relation 定义：event1 happend-before event2 （表述为 e1 ≺ e2）， 当且仅当满足条件以下三个条件之一：</p>
+<ol>
+<li>相同进程中，e1 在发生在 e2</li>
+<li>e1 是 message m 的发送端，e2 是 message m 的接收端</li>
+<li>已经存在一个 event e，满足 e1 ≺ e ≺ e2 条件</li>
+</ol>
+<p>在 CRDT 中，如果 update u1 happend-before update u2，u1 ≺ u2，当且仅当当u2开始执行时 u1 已经生效。</p>
+<h3 id="Total-order-among-updates"><a href="#Total-order-among-updates" class="headerlink" title="Total order among updates"></a>Total order among updates</h3><p>定义全局序</p>
+<h2 id="Question"><a href="#Question" class="headerlink" title="Question"></a>Question</h2><ol>
+<li>fig7 的结果???</li>
+</ol>
+<h2 id="CRDTs-for-the-System-Developer"><a href="#CRDTs-for-the-System-Developer" class="headerlink" title="CRDTs for the System Developer"></a>CRDTs for the System Developer</h2><h3 id="3-1-Synchronization-model"><a href="#3-1-Synchronization-model" class="headerlink" title="3.1 Synchronization model"></a>3.1 Synchronization model</h3><h4 id="3-1-State-based-synchronization"><a href="#3-1-State-based-synchronization" class="headerlink" title="3.1 State-based synchronization"></a>3.1 State-based synchronization</h4><p>crdt 需要设计一个 merge 函数来合并remote rpelica 发送的状态，收敛条件有三个：</p>
+<ol>
+<li>基于的状态是可以形成一个偏序的:</li>
+<li>产生的新状态要大于等于原始状态：对于更新 u, $s leq u(s)$，</li>
+<li>merge 函数需要生成两个状态的最小上界：对于状态 states s1, s2 ， 能得到 $s1 \bigcup s2$.</li>
+</ol>
+<p>为了确保所有的更新最终都能到达所有的副本，我们只需要保证同步图是连通的。</p>
+<blockquote>
+<p>这里的”同步图”代表分布式系统中不同数据副本间的通信路径。如果图是连通的，那就意味着图中任意两个节点（副本）之间都存在路径。 这是保证所有更新最终到达所有副本的必要条件。如果图不连通，那么可能存在一些副本与其他副本隔离，无法接收到所有的更新。然而，需要注意的是，虽然连通的同步图是必要的，但在所有情况下，它可能并不足以确保最终的一致性。其他因素，如操作的顺序和网络延迟，也可能影响所有副本是否最终达到一致。例如，在一些分布式系统中，可能需要使用额外的机制，如向量时钟，来跟踪操作的因果顺序，或使用确保按照某种顺序将更新传播到所有副本的协议。</p>
+</blockquote>
+<h4 id="3-1-2-Operation-based-synchronization"><a href="#3-1-2-Operation-based-synchronization" class="headerlink" title="3.1.2 Operation-based synchronization"></a>3.1.2 Operation-based synchronization</h4><p>传递的是更新。除了要可靠地传递给 operations，一些 crdt 设计还需要按照某些顺序来传递 operation。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Abstarct"><span class="toc-number">1.</span> <span class="toc-text">Abstarct</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CRDTs-for-the-Application-Developer"><span class="toc-number">2.</span> <span class="toc-text">CRDTs for the Application Developer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Happend-before-relation"><span class="toc-number">2.1.</span> <span class="toc-text">Happend-before relation</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Total-order-among-updates"><span class="toc-number">2.2.</span> <span class="toc-text">Total order among updates</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Question"><span class="toc-number">3.</span> <span class="toc-text">Question</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#CRDTs-for-the-System-Developer"><span class="toc-number">4.</span> <span class="toc-text">CRDTs for the System Developer</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Synchronization-model"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 Synchronization model</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#3-1-State-based-synchronization"><span class="toc-number">4.1.1.</span> <span class="toc-text">3.1 State-based synchronization</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-1-2-Operation-based-synchronization"><span class="toc-number">4.1.2.</span> <span class="toc-text">3.1.2 Operation-based synchronization</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2023/12/31/Paper/CRDT/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2023/12/31/Paper/CRDT/&text=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2023/12/31/Paper/CRDT/&is_video=false&description=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Conflict-free Replicated Data Types: An Overview&body=Check out this article: https://szza.github.io/2023/12/31/Paper/CRDT/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2023/12/31/Paper/CRDT/&title=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2023/12/31/Paper/CRDT/&name=Conflict-free Replicated Data Types: An Overview&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2023/12/31/Paper/CRDT/&t=Conflict-free Replicated Data Types: An Overview"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

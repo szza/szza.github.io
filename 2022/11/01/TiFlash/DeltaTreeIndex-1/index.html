@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="DeltaIndexTreeDeltaIndex 在 tiflash 中是 Segment 级别的索引，用来对 Stable 层和 Delta 层的数据进行 merge。 定义在 DeltaValueSpace 中: 12345678class DeltaValueSpace    : public std::enable_shared_from_this&lt;DeltaValueSpace&amp;g">
+<meta property="og:type" content="article">
+<meta property="og:title" content="tiflash: 构建 DeltaTree Index(1)">
+<meta property="og:url" content="https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="DeltaIndexTreeDeltaIndex 在 tiflash 中是 Segment 级别的索引，用来对 Stable 层和 Delta 层的数据进行 merge。 定义在 DeltaValueSpace 中: 12345678class DeltaValueSpace    : public std::enable_shared_from_this&lt;DeltaValueSpace&amp;g">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2022-11-01T02:00:01.000Z">
+<meta property="article:modified_time" content="2023-09-02T14:15:12.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="tidb-v6.1">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>tiflash: 构建 DeltaTree Index(1)</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2022/11/02/TiFlash/DeltaTreeIndex-2/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2022/10/21/TiFlash/tiflash_region/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&text=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&is_video=false&description=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tiflash: 构建 DeltaTree Index(1)&body=Check out this article: https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&name=tiflash: 构建 DeltaTree Index(1)&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&t=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#DeltaIndexTree"><span class="toc-number">1.</span> <span class="toc-text">DeltaIndexTree</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DeltaValueSpace-flush"><span class="toc-number">2.</span> <span class="toc-text">DeltaValueSpace::flush</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ColumnFileFlushTask"><span class="toc-number">2.1.</span> <span class="toc-text">ColumnFileFlushTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ColumnFileFlushTask-prepare"><span class="toc-number">2.2.</span> <span class="toc-text">ColumnFileFlushTask::prepare</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DeltaIndex-Updates"><span class="toc-number">2.3.</span> <span class="toc-text">DeltaIndex::Updates</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DeltaIndex-cloneWithUpdates"><span class="toc-number">2.4.</span> <span class="toc-text">DeltaIndex::cloneWithUpdates</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DeltaIndex"><span class="toc-number">3.</span> <span class="toc-text">DeltaIndex</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DeltaIndex-tryCloneInner"><span class="toc-number">3.1.</span> <span class="toc-text">DeltaIndex::tryCloneInner</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#applyUpdates"><span class="toc-number">3.2.</span> <span class="toc-text">applyUpdates</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        tiflash: 构建 DeltaTree Index(1)
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2022-11-01T02:00:01.000Z" itemprop="datePublished">2022-11-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/tidb-v6-1/" rel="tag">tidb-v6.1</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="DeltaIndexTree"><a href="#DeltaIndexTree" class="headerlink" title="DeltaIndexTree"></a>DeltaIndexTree</h2><p>DeltaIndex 在 tiflash 中是 Segment 级别的索引，用来对 Stable 层和 Delta 层的数据进行 merge。</p>
+<p>定义在 DeltaValueSpace 中:</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">DeltaValueSpace</span></span><br><span class="line">    : <span class="keyword">public</span> std::enable_shared_from_this&lt;DeltaValueSpace&gt;</span><br><span class="line">    , <span class="keyword">private</span> boost::noncopyable</span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    DeltaIndexPtr delta_index;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>主要在两种场景会更新 delta_index</p>
+<ul>
+<li>DeltaValueSpace::flush</li>
+<li>Segment::getReadInfo</li>
+</ul>
+<h2 id="DeltaValueSpace-flush"><a href="#DeltaValueSpace-flush" class="headerlink" title="DeltaValueSpace::flush"></a>DeltaValueSpace::flush</h2><p>可以分为几个部分</p>
+<h3 id="ColumnFileFlushTask"><a href="#ColumnFileFlushTask" class="headerlink" title="ColumnFileFlushTask"></a>ColumnFileFlushTask</h3><p>memtable 中的每个文件 ColumnInMemoryFile 数据及元信息由一个 ColumnFileFlushTask::task 保存.</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">ColumnFileFlushTask</span></span><br><span class="line">&#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">struct</span> <span class="title class_">Task</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="function"><span class="keyword">explicit</span> <span class="title">Task</span><span class="params">(<span class="type">const</span> ColumnFilePtr &amp; column_file_)</span></span></span><br><span class="line"><span class="function">        : column_file(column_file_)</span></span><br><span class="line"><span class="function">        &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">        ColumnFilePtr column_file;</span><br><span class="line"></span><br><span class="line">        Block block_data;</span><br><span class="line">        PageId data_page = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">        <span class="type">bool</span> sorted = <span class="literal">false</span>;</span><br><span class="line">        <span class="type">size_t</span> rows_offset = <span class="number">0</span>;</span><br><span class="line">        <span class="type">size_t</span> deletes_offset = <span class="number">0</span>;</span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="keyword">using</span> Tasks = std::vector&lt;Task&gt;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    Tasks tasks;</span><br><span class="line">    DMContext &amp; context;</span><br><span class="line">    MemTableSetPtr mem_table_set;</span><br><span class="line">    <span class="type">size_t</span> flush_version;</span><br><span class="line"></span><br><span class="line">    <span class="type">size_t</span> flush_rows = <span class="number">0</span>;</span><br><span class="line">    <span class="type">size_t</span> flush_deletes = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">inline</span> Task &amp; <span class="title">addColumnFile</span><span class="params">(ColumnFilePtr column_file)</span></span></span><br><span class="line"><span class="function">    </span>&#123;</span><br><span class="line">        flush_rows += column_file-&gt;<span class="built_in">getRows</span>();</span><br><span class="line">        flush_deletes += column_file-&gt;<span class="built_in">getDeletes</span>();</span><br><span class="line">        <span class="keyword">return</span> tasks.<span class="built_in">emplace_back</span>(column_file);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+
+<p>MemTableSet::buildFlushTask 核心代码如下。</p>
+<p>其中 rows_offset 开始存储的的起始地址</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">ColumnFileFlushTaskPtr <span class="title">MemTableSet::buildFlushTask</span><span class="params">(DMContext &amp; context,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                   <span class="type">size_t</span> rows_offset,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                   <span class="type">size_t</span> deletes_offset,</span></span></span><br><span class="line"><span class="params"><span class="function">                                                   <span class="type">size_t</span> flush_version)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (column_files.<span class="built_in">empty</span>())</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line"></span><br><span class="line">    <span class="type">size_t</span> cur_rows_offset = rows_offset;</span><br><span class="line">    <span class="type">size_t</span> cur_deletes_offset = deletes_offset;</span><br><span class="line">    <span class="keyword">auto</span> flush_task = std::<span class="built_in">make_shared</span>&lt;ColumnFileFlushTask&gt;(context, </span><br><span class="line">                                                            <span class="built_in">shared_from_this</span>(),</span><br><span class="line">                                                            flush_version);</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> &amp; column_file : column_files)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">auto</span> &amp; task = flush_task-&gt;<span class="built_in">addColumnFile</span>(column_file);</span><br><span class="line">        <span class="keyword">if</span> (<span class="keyword">auto</span> * m_file = column_file-&gt;<span class="built_in">tryToInMemoryFile</span>(); m_file)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">// If the ColumnFile is not yet persisted in the disk, it will contain block data.</span></span><br><span class="line">            <span class="comment">// In this case, let&#x27;s write the block data in the flush process as well.</span></span><br><span class="line">            task.rows_offset = cur_rows_offset;      <span class="comment">// 每个file的起始地址</span></span><br><span class="line">            task.deletes_offset = cur_deletes_offset;</span><br><span class="line">            task.block_data = m_file-&gt;<span class="built_in">readDataForFlush</span>();</span><br><span class="line">        &#125;</span><br><span class="line">        cur_rows_offset += column_file-&gt;<span class="built_in">getRows</span>();</span><br><span class="line">        cur_deletes_offset += column_file-&gt;<span class="built_in">getDeletes</span>();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> flush_task;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="ColumnFileFlushTask-prepare"><a href="#ColumnFileFlushTask-prepare" class="headerlink" title="ColumnFileFlushTask::prepare"></a>ColumnFileFlushTask::prepare</h3><p>那么是怎么获得 delta_index 的动态更新信息 delta_index_updates 的呢？</p>
+<p>在上面的  MemTableSet::buildFlushTask 函数返回的 ColumnFileFlushTask::Task 记录了每个ColumnFile对应的存储地址信息，即下次要寻找这个ColumnFile的位置信息，delta_index_updates 则可以记录这个数据，以及对 task.block 的排列 perm信息，则记录本次数据更新。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DeltaIndex::Updates <span class="title">ColumnFileFlushTask::prepare</span><span class="params">(WriteBatches &amp; wbs)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    DeltaIndex::Updates delta_index_updates;</span><br><span class="line">    <span class="comment">/// Write prepared data to disk.</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> &amp; task : tasks)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">if</span> (!task.block_data)</span><br><span class="line">            <span class="keyword">continue</span>;</span><br><span class="line"></span><br><span class="line">        IColumn::Permutation perm;</span><br><span class="line">        task.sorted = <span class="built_in">sortBlockByPk</span>(<span class="built_in">getExtraHandleColumnDefine</span>(context.is_common_handle),</span><br><span class="line">                                    task.block_data,</span><br><span class="line">                                    perm);</span><br><span class="line">        <span class="keyword">if</span> (task.sorted)</span><br><span class="line">            delta_index_updates.<span class="built_in">emplace_back</span>(task.deletes_offset, task.rows_offset, perm);</span><br><span class="line">        task.data_page = ColumnFileTiny::<span class="built_in">writeColumnFileData</span>(context,</span><br><span class="line">                                                             task.block_data,</span><br><span class="line">                                                             <span class="number">0</span>,</span><br><span class="line">                                                             task.block_data.<span class="built_in">rows</span>(),</span><br><span class="line">                                                             wbs);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    wbs.<span class="built_in">writeLogAndData</span>(); <span class="comment">// 写wal</span></span><br><span class="line">    <span class="keyword">return</span> delta_index_updates;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="DeltaIndex-Updates"><a href="#DeltaIndex-Updates" class="headerlink" title="DeltaIndex::Updates"></a>DeltaIndex::Updates</h3><p>DeltaIndex::Updates 记录的是每次数据flush到磁盘的信息</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Update</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="type">size_t</span> delete_ranges_offset; <span class="comment">// 存储的起始地址</span></span><br><span class="line">    <span class="type">size_t</span> rows_offset;</span><br><span class="line">    TupleRefs idx_mapping;       <span class="comment">// old index -&gt; new index</span></span><br><span class="line"></span><br><span class="line">    <span class="built_in">Update</span>(<span class="type">size_t</span> delete_ranges_offset_, <span class="type">size_t</span> rows_offset_, <span class="type">const</span> IColumn::Permutation &amp; sort_perm)</span><br><span class="line">        : <span class="built_in">delete_ranges_offset</span>(delete_ranges_offset_)</span><br><span class="line">        , <span class="built_in">rows_offset</span>(rows_offset_)</span><br><span class="line">        , <span class="built_in">idx_mapping</span>(sort_perm.<span class="built_in">size</span>())</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> pos = <span class="number">0</span>; pos &lt; sort_perm.<span class="built_in">size</span>(); ++pos)</span><br><span class="line">            idx_mapping[sort_perm[pos]] = pos;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">using</span> Updates = std::vector&lt;Update&gt;;</span><br></pre></td></tr></table></figure>
+
+<h3 id="DeltaIndex-cloneWithUpdates"><a href="#DeltaIndex-cloneWithUpdates" class="headerlink" title="DeltaIndex::cloneWithUpdates"></a>DeltaIndex::cloneWithUpdates</h3><p>获得 DeltaIndex::Updates 之后，就可以对 delta_index 进行更新，得到新的 new_delta_index，来替换旧的索引。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">DeltaValueSpace::flush</span><span class="params">(DMContext &amp; context)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="comment">///...</span></span><br><span class="line">    <span class="comment">/// Write prepared data to disk.</span></span><br><span class="line">    <span class="keyword">auto</span> delta_index_updates = flush_task-&gt;<span class="built_in">prepare</span>(wbs);</span><br><span class="line">    DeltaIndexPtr new_delta_index;</span><br><span class="line">    <span class="keyword">if</span> (!delta_index_updates.<span class="built_in">empty</span>())</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="built_in">LOG_FMT_DEBUG</span>(log, <span class="string">&quot;&#123;&#125; Update index start&quot;</span>, <span class="built_in">simpleInfo</span>());</span><br><span class="line">        new_delta_index = cur_delta_index-&gt;<span class="built_in">cloneWithUpdates</span>(delta_index_updates);</span><br><span class="line">        <span class="built_in">LOG_FMT_DEBUG</span>(log, <span class="string">&quot;&#123;&#125; Update index done&quot;</span>, <span class="built_in">simpleInfo</span>());</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">    <span class="comment">/// Update delta tree</span></span><br><span class="line">    <span class="keyword">if</span> (new_delta_index)</span><br><span class="line">        delta_index = new_delta_index;</span><br><span class="line">    <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="DeltaIndex"><a href="#DeltaIndex" class="headerlink" title="DeltaIndex"></a>DeltaIndex</h2><p>下面来看 DeltaIndex 中使用到的函数及其内在逻辑</p>
+<h3 id="DeltaIndex-tryCloneInner"><a href="#DeltaIndex-tryCloneInner" class="headerlink" title="DeltaIndex::tryCloneInner"></a>DeltaIndex::tryCloneInner</h3><p>DeltaIndex::cloneWithUpdates 内部实际调用的是 DeltaIndex::tryCloneInner 函数</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">DeltaIndexPtr <span class="title">DeltaIndex::cloneWithUpdates</span><span class="params">(<span class="type">const</span> Updates &amp; updates)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">unlikely</span>(updates.<span class="built_in">empty</span>()))</span><br><span class="line">        <span class="keyword">throw</span> <span class="built_in">Exception</span>(<span class="string">&quot;Unexpected empty updates&quot;</span>);</span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">tryCloneInner</span>(updates.<span class="built_in">front</span>().delete_ranges_offset, &amp;updates);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function">DeltaIndexPtr <span class="title">tryCloneInner</span><span class="params">(<span class="type">size_t</span> placed_deletes_limit, <span class="type">const</span> Updates * updates = <span class="literal">nullptr</span>)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    DeltaTreePtr delta_tree_copy;</span><br><span class="line">    <span class="type">size_t</span> placed_rows_copy = <span class="number">0</span>;</span><br><span class="line">    <span class="type">size_t</span> placed_deletes_copy = <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// Make sure the delta index do not place more deletes than `placed_deletes_limit`.</span></span><br><span class="line">    <span class="comment">// Because delete ranges can break MVCC view.</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="function">std::scoped_lock <span class="title">lock</span><span class="params">(mutex)</span></span>;</span><br><span class="line">        <span class="comment">// Safe to reuse the copy of the existing DeltaIndex</span></span><br><span class="line">        <span class="keyword">if</span> (placed_deletes &lt;= placed_deletes_limit)</span><br><span class="line">        &#123;</span><br><span class="line">            delta_tree_copy = delta_tree;</span><br><span class="line">            placed_rows_copy = placed_rows;</span><br><span class="line">            placed_deletes_copy = placed_deletes;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (delta_tree_copy)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">auto</span> new_delta_tree = std::<span class="built_in">make_shared</span>&lt;DefaultDeltaTree&gt;(*delta_tree_copy);</span><br><span class="line">        <span class="keyword">auto</span> new_index = std::<span class="built_in">make_shared</span>&lt;DeltaIndex&gt;(new_delta_tree, placed_rows_copy, placed_deletes_copy);</span><br><span class="line">        <span class="comment">// try to do some updates before return it if need</span></span><br><span class="line">        <span class="keyword">if</span> (updates)</span><br><span class="line">            new_index-&gt;<span class="built_in">applyUpdates</span>(*updates);</span><br><span class="line">        <span class="keyword">return</span> new_index;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">else</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">// Otherwise, create an empty new DeltaIndex.</span></span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">make_shared</span>&lt;DeltaIndex&gt;();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="applyUpdates"><a href="#applyUpdates" class="headerlink" title="applyUpdates"></a>applyUpdates</h3><figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">applyUpdates</span><span class="params">(<span class="type">const</span> Updates &amp; updates)</span></span></span><br><span class="line"><span class="function"></span>&#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span> &amp; update : updates)</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="comment">// Current index does not contain any inserts which go shuffled.</span></span><br><span class="line">        <span class="keyword">if</span> (placed_rows &lt;= update.rows_offset)</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// Current index contains part of inserts which go shuffled, they should be removed.</span></span><br><span class="line">        <span class="keyword">if</span> (placed_rows &lt; update.rows_offset + update.idx_mapping.<span class="built_in">size</span>())</span><br><span class="line">        &#123;</span><br><span class="line">            delta_tree-&gt;<span class="built_in">removeInsertsStartFrom</span>(update.rows_offset);</span><br><span class="line">            placed_rows = update.rows_offset;</span><br><span class="line">            <span class="keyword">return</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// Current index contains all inserts which go shuffled, let&#x27;s update them directly.</span></span><br><span class="line">        delta_tree-&gt;<span class="built_in">updateTupleId</span>(update.idx_mapping, update.rows_offset);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#DeltaIndexTree"><span class="toc-number">1.</span> <span class="toc-text">DeltaIndexTree</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DeltaValueSpace-flush"><span class="toc-number">2.</span> <span class="toc-text">DeltaValueSpace::flush</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#ColumnFileFlushTask"><span class="toc-number">2.1.</span> <span class="toc-text">ColumnFileFlushTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#ColumnFileFlushTask-prepare"><span class="toc-number">2.2.</span> <span class="toc-text">ColumnFileFlushTask::prepare</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DeltaIndex-Updates"><span class="toc-number">2.3.</span> <span class="toc-text">DeltaIndex::Updates</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#DeltaIndex-cloneWithUpdates"><span class="toc-number">2.4.</span> <span class="toc-text">DeltaIndex::cloneWithUpdates</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#DeltaIndex"><span class="toc-number">3.</span> <span class="toc-text">DeltaIndex</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#DeltaIndex-tryCloneInner"><span class="toc-number">3.1.</span> <span class="toc-text">DeltaIndex::tryCloneInner</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#applyUpdates"><span class="toc-number">3.2.</span> <span class="toc-text">applyUpdates</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&text=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&is_video=false&description=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=tiflash: 构建 DeltaTree Index(1)&body=Check out this article: https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&title=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&name=tiflash: 构建 DeltaTree Index(1)&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2022/11/01/TiFlash/DeltaTreeIndex-1/&t=tiflash: 构建 DeltaTree Index(1)"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

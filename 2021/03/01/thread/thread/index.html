@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="经过千呼万唤，终于在C++11中，引入了线程库std::thread。本文要完成两个目标：  如何使用std::thread创建线程 深入剖析std::thread的设计原理  使用std::thread在如下的demo中，在主线程中使用std::thread创建3个子线程，线程入口函数是do_some_word，在主线程运行结束前等待子线程结束。 123456789101112131415161">
+<meta property="og:type" content="article">
+<meta property="og:title" content="从std::thread开始，迈入多线程编程的大门">
+<meta property="og:url" content="https://szza.github.io/2021/03/01/thread/thread/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="经过千呼万唤，终于在C++11中，引入了线程库std::thread。本文要完成两个目标：  如何使用std::thread创建线程 深入剖析std::thread的设计原理  使用std::thread在如下的demo中，在主线程中使用std::thread创建3个子线程，线程入口函数是do_some_word，在主线程运行结束前等待子线程结束。 123456789101112131415161">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2021-03-01T07:29:45.000Z">
+<meta property="article:modified_time" content="2023-08-26T17:48:00.000Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Modern C++">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>从std::thread开始，迈入多线程编程的大门</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2021/03/03/C++/allocator/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2021/03/01/C++/unordered_mpa_2_/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/thread/thread/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/thread/thread/&text=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/thread/thread/&is_video=false&description=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=从std::thread开始，迈入多线程编程的大门&body=Check out this article: https://szza.github.io/2021/03/01/thread/thread/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/thread/thread/&name=从std::thread开始，迈入多线程编程的大门&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/thread/thread/&t=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8std-thread"><span class="toc-number">1.</span> <span class="toc-text">使用std::thread</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B7%B1%E5%85%A5%E5%89%96%E6%9E%90-std-thread"><span class="toc-number">2.</span> <span class="toc-text">深入剖析 std::thread</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A7%BB%E5%8A%A8%E5%B1%9E%E6%80%A7"><span class="toc-number">2.1.</span> <span class="toc-text">移动属性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-thread-id"><span class="toc-number">2.2.</span> <span class="toc-text">std::thread::id</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E5%AD%90%E7%BA%BF%E7%A8%8B"><span class="toc-number">2.3.</span> <span class="toc-text">创建子线程</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        从std::thread开始，迈入多线程编程的大门
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2021-03-01T07:29:45.000Z" itemprop="datePublished">2021-03-01</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Modern-C/" rel="tag">Modern C++</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>经过千呼万唤，终于在C++11中，引入了线程库<code>std::thread</code>。本文要完成两个目标：</p>
+<ul>
+<li>如何使用<code>std::thread</code>创建线程</li>
+<li>深入剖析<code>std::thread</code>的设计原理</li>
+</ul>
+<h2 id="使用std-thread"><a href="#使用std-thread" class="headerlink" title="使用std::thread"></a>使用std::thread</h2><p>在如下的demo中，在主线程中使用<code>std::thread</code>创建3个子线程，线程入口函数是<code>do_some_word</code>，在主线程运行结束前等待子线程结束。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">do_some_work</span><span class="params">(<span class="type">int</span> num)</span> </span>&#123; </span><br><span class="line">  std::cout&lt;&lt;<span class="string">&quot;thread: &quot;</span>&lt;&lt;num&lt;&lt;std::endl;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span></span>&#123; </span><br><span class="line">    <span class="type">int</span> threadNums =<span class="number">3</span>;</span><br><span class="line">    std::vector&lt;std::thread&gt; threadList;</span><br><span class="line">    threadList.<span class="built_in">reserve</span>(threadNums);</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 1 创建 threadNums 个线程</span></span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> idx=<span class="number">0</span>; idx &lt; threadNums; ++idx) &#123; </span><br><span class="line">      threadList.<span class="built_in">emplace_back</span>(std::thread&#123;do_some_work, idx&#125;);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    std::cout&lt;&lt;<span class="string">&quot;work in main thread&quot;</span>&lt;&lt;std::endl;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 2 终止 threadNums 个线程</span></span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> idx=<span class="number">0</span>; idx &lt; threadNums; ++idx) &#123; </span><br><span class="line">      threadList[idx].<span class="built_in">join</span>();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    std::cout&lt;&lt;<span class="string">&quot;main thread end&quot;</span>&lt;&lt;std::endl;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在demo中，在构造线程对象<code>std::thread&#123;do_some_work, idx&#125;</code>的时候，还是建议使用<code>&#123;&#125;</code>而不是<code>()</code>，以防止编译器产生错误的决议，具体原因可以参考前文【 别再徘徊于{}与()之间了，来学习正确用法】。</p>
+<p>三个子线程共享输出缓冲区<code>std::cout</code>，此时没有采取任何机制保护线程间共享数据，因此上面demo的输出可能不符合你的预期，即很可能不是按照如下格式输出：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">thread: <span class="number">1</span></span><br><span class="line">thread: <span class="number">2</span></span><br><span class="line">thread: <span class="number">3</span></span><br></pre></td></tr></table></figure>
+
+<p>实际上的输出，可能会非常混乱：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -g thread_unitest.cc  -o thread -lpthread &amp;&amp; ./thread</span><br><span class="line">  thread: thread: <span class="number">12</span>	<span class="comment">// 两个线程的输出融合在一起了，</span></span><br><span class="line">	  </span><br><span class="line">      </span><br><span class="line">  work in main thread</span><br><span class="line">  thread: <span class="number">0</span>			   <span class="comment">// 最先启动的线程，却最后输出</span></span><br><span class="line">  main thread end	   <span class="comment">// 子线程都已中止</span></span><br></pre></td></tr></table></figure>
+
+<p>从输出可以看出：</p>
+<ul>
+<li>先创建的线程，未必就先运行；</li>
+<li>而且几个线程之间是互相抢档CPU资源的。</li>
+</ul>
+<p>线程间数据共享问题及其应对措施，留到后文讲解，下面讲解<code>std::thread</code>的设计。</p>
+<h2 id="深入剖析-std-thread"><a href="#深入剖析-std-thread" class="headerlink" title="深入剖析 std::thread"></a>深入剖析 std::thread</h2><p>在<code>g++</code>中，<code>thread</code>是基于<code>pthread</code>实现的。本次主要从以下三个方面分析<code>std::thread</code>：</p>
+<ul>
+<li><code>std::thread</code>对象不可复制，只具有移动属性</li>
+<li>每个线程具有唯一的标志，即线程id</li>
+<li>创建子线程</li>
+</ul>
+<h3 id="移动属性"><a href="#移动属性" class="headerlink" title="移动属性"></a>移动属性</h3><p>有很多书籍说，<code>std::thread</code>对象的所有权只能传递不能复制。实际上，就是<code>std::thread</code>对象，只具有移动属性，不具有复制属性。<code>std::thread</code>的构造函数如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">thread</span> &#123;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  id				_M_id;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">thread</span>() <span class="keyword">noexcept</span> = <span class="keyword">default</span>;</span><br><span class="line"></span><br><span class="line">  <span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Callable, </span><br><span class="line">           <span class="keyword">typename</span>... _Args,</span><br><span class="line">           <span class="keyword">typename</span> = _Require&lt;__not_same&lt;_Callable&gt;&gt;&gt;</span><br><span class="line">  <span class="keyword">explicit</span> <span class="built_in">thread</span>(_Callable&amp;&amp; __f, _Args&amp;&amp;... __args) &#123;</span><br><span class="line">       <span class="comment">//...</span></span><br><span class="line">  &#125;</span><br><span class="line"></span><br><span class="line">  ~<span class="built_in">thread</span>() &#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">joinable</span>())</span><br><span class="line">      std::<span class="built_in">terminate</span>();</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">// 禁止复制</span></span><br><span class="line">  <span class="built_in">thread</span>(<span class="type">const</span> thread&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">  thread&amp; <span class="keyword">operator</span>=(<span class="type">const</span> thread&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// std::thread 只具有移动属性</span></span><br><span class="line">  <span class="built_in">thread</span>(thread&amp;&amp; <span class="type">__t</span>) <span class="keyword">noexcept</span></span><br><span class="line">  &#123; <span class="built_in">swap</span>(<span class="type">__t</span>); &#125;</span><br><span class="line"></span><br><span class="line">  thread&amp; <span class="keyword">operator</span>=(thread&amp;&amp; <span class="type">__t</span>) <span class="keyword">noexcept</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (<span class="built_in">joinable</span>())</span><br><span class="line">        std::<span class="built_in">terminate</span>();</span><br><span class="line">    <span class="built_in">swap</span>(<span class="type">__t</span>);</span><br><span class="line">    <span class="keyword">return</span> *<span class="keyword">this</span>;</span><br><span class="line">  &#125;</span><br><span class="line">  <span class="comment">//...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>可以发现，<code>std::thread</code>禁止了复制构造函数、复制赋值表达式，只留下了移动构造函数、赋值，使得<code>std::thread</code>对象只能移动，不能复制。这就是本文开篇demo中使用<code>emplace_back</code>函数添加<code>std::thread</code>对象的原因，防止触发复制构造函数。</p>
+<p>向<code>threadList</code>中添加<code>std::thread</code>对象，有如下三种方式：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">threadList.<span class="built_in">emplace_back</span>(std::thread&#123;do_some_work, idx&#125;);	<span class="comment">// 1) ok </span></span><br><span class="line"></span><br><span class="line">std::thread trd&#123;do_some_work, idx&#125;;</span><br><span class="line">threadList.<span class="built_in">push_back</span>(trd);			   <span class="comment">// 2) error</span></span><br><span class="line">threadList.<span class="built_in">push_back</span>(std::<span class="built_in">move</span>(td));	<span class="comment">// 3) ok</span></span><br><span class="line">threadList.<span class="built_in">emplace_back</span>(std::<span class="built_in">move</span>(td)); <span class="comment">// 4) ok</span></span><br></pre></td></tr></table></figure>
+<p>注意：当<code>push_back</code>接受的是右值时，底层调用的还是<code>emplace_back</code>函数，因此，<code>3)</code>和<code>4)</code>算是等价。</p>
+<h3 id="std-thread-id"><a href="#std-thread-id" class="headerlink" title="std::thread::id"></a>std::thread::id</h3><p>观察可发现，在<code>std::thread</code>对象中，只有一个成员变量<code>_M_id</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">id				_M_id;</span><br></pre></td></tr></table></figure>
+
+<p>这个类<code>id</code>全称是<code> std::thread::id</code>，实现如下：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="type">pthread_t</span> native_handle_type;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">id</span> &#123; </span><br><span class="line"></span><br><span class="line">  native_handle_type	_M_thread;  <span class="comment">// _M_thread 即 pthread_t 对象，线程的唯一辨识标志</span></span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">  <span class="built_in">id</span>() <span class="keyword">noexcept</span> : _M_thread() &#123; &#125;  <span class="comment">// _M_thread 默认值是 0</span></span><br><span class="line">  <span class="function"><span class="keyword">explicit</span> <span class="title">id</span><span class="params">(native_handle_type __id)</span> : _M_thread(__id) &#123;</span> &#125;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">  <span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">thread</span>;</span><br><span class="line">  <span class="keyword">friend</span> <span class="keyword">class</span> <span class="title class_">hash</span>&lt;thread::id&gt;;</span><br><span class="line"></span><br><span class="line">  <span class="comment">// 为 std::thread::id 对象重载了 == 运算</span></span><br><span class="line">  <span class="keyword">friend</span> <span class="type">bool</span> <span class="keyword">operator</span>==(thread::id __x, thread::id __y) <span class="keyword">noexcept</span>;</span><br><span class="line">  <span class="keyword">friend</span> <span class="type">bool</span> <span class="keyword">operator</span>&lt;(thread::id __x,  thread::id __y) <span class="keyword">noexcept</span>;</span><br><span class="line">  <span class="comment">// 为 std::thread::id 对象重载了 &lt;&lt; 操作</span></span><br><span class="line">  <span class="keyword">template</span>&lt;<span class="keyword">class</span> <span class="title class_">_CharT</span>, <span class="keyword">class</span> <span class="title class_">_Traits</span>&gt;</span><br><span class="line">  <span class="keyword">friend</span> basic_ostream&lt;_CharT, _Traits&gt;&amp;</span><br><span class="line">  <span class="keyword">operator</span>&lt;&lt;(basic_ostream&lt;_CharT, _Traits&gt;&amp; __out, thread::id __id);</span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>因此，这个<code> std::thread::id</code>实际上，就是封装了<code>pthread_t</code>对象，用作每个线程标志。</p>
+<ul>
+<li><p>在构造<code> std::thread</code>对象的时候，如果没有设置线程入口函数，则线程<code>_M_id._M_thread</code>的值是0。</p>
+<p>比如下面的demo中，<code>trd</code>没有设置线程入口函数，<code>trd</code>调用默认构造函数时，<code>trd</code>的<code>_M_id._M_thread</code>会被初始化为0。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  </span><br><span class="line">  std::thread trd;</span><br><span class="line">  std::cout&lt;&lt;trd.<span class="built_in">get_id</span>()&lt;&lt;std::endl;</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>但是，打印线程标志<code>trd.get_id()</code>，输出的是却不是0。这仅仅是<code>std::thread::id</code>在重载<code>&lt;&lt;</code>操作符时的设定，用于提示调用者线程没有启动。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ g++  thread_.cc -o thread_ &amp;&amp; ./thread_</span><br><span class="line">thread::id of a non-executing thread</span><br></pre></td></tr></table></figure>
+
+<p>可以到<code>std::thread::id</code>重载的<code>&lt;&lt;</code>操作符的函数中一探究竟：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">class</span> <span class="title class_">_CharT</span>, <span class="keyword">class</span> <span class="title class_">_Traits</span>&gt;</span><br><span class="line"><span class="keyword">inline</span> basic_ostream&lt;_CharT, _Traits&gt;&amp; <span class="keyword">operator</span>&lt;&lt;(basic_ostream&lt;_CharT, _Traits&gt;&amp; __out, thread::id __id) &#123;</span><br><span class="line">  <span class="comment">// 线程未启动 </span></span><br><span class="line">  <span class="keyword">if</span> (__id == thread::<span class="built_in">id</span>())</span><br><span class="line">    <span class="keyword">return</span> __out &lt;&lt; <span class="string">&quot;thread::id of a non-executing thread&quot;</span>;</span><br><span class="line">  <span class="comment">// 线程成功启动</span></span><br><span class="line">  <span class="keyword">else</span></span><br><span class="line">    <span class="keyword">return</span> __out &lt;&lt; __id._M_thread;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// id的相等判断 </span></span><br><span class="line"><span class="keyword">inline</span> <span class="type">bool</span> <span class="keyword">operator</span>==(thread::id __x, thread::id __y) <span class="keyword">noexcept</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> __x._M_thread == __y._M_thread;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因此，判断一个线程是否启动，可如下检测：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">bool</span> <span class="title">thread_is_active</span><span class="params">(<span class="type">const</span> std::thread::id&amp; thread_id)</span> </span>&#123; </span><br><span class="line">    <span class="keyword">return</span> thread_id != std::thread::<span class="built_in">id</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>设置了线程入口函数，<code>_M_id._M_thread</code>才会有值显示。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">  </span><br><span class="line">  std::thread trd&#123;[]&#123;std::cout&lt;&lt;<span class="string">&quot;wok in sub-thread\n&quot;</span>;&#125;&#125;;</span><br><span class="line">  </span><br><span class="line">  std::cout&lt;&lt;trd.<span class="built_in">get_id</span>()&lt;&lt;std::endl;</span><br><span class="line">  trd.<span class="built_in">join</span>();</span><br><span class="line">  <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>输出的是：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ g++  thread_.cc -o thread_ -lpthread &amp;&amp; ./thread_</span><br><span class="line"><span class="number">139794901763840</span></span><br><span class="line">wok in sub-thread</span><br></pre></td></tr></table></figure>
+
+<p>当设置了显示入口函数时，<code>_M_id._M_thread</code>才是线程的<code>tid</code>值，由<code>pthread_create(&amp;tid, NULL, ...)</code>函数设置。</p>
+</li>
+</ul>
+<p><strong>by the way</strong></p>
+<p>在创建<code>std::thread</code>对象<code>trd</code>时，如果设置了线程入口函数，那么就必须使用<code>trd.join()</code>或者<code>trd.detach()</code>来表达子线程与主线程的运行关系，否则在<code>std::thread</code>对象析构时，整个程序会被<code> std::terminate()</code>中止。</p>
+<p>没有设置线程入口函数，<code>trd.joinable()</code>返回值就是<code>false</code>，因此不会触发<code>std::terminate()</code>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">~<span class="built_in">thread</span>() &#123;</span><br><span class="line">  <span class="keyword">if</span> (<span class="built_in">joinable</span>())</span><br><span class="line">    std::<span class="built_in">terminate</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="创建子线程"><a href="#创建子线程" class="headerlink" title="创建子线程"></a>创建子线程</h3><p>当构造<code>std::thread</code>对象时，设置了线程入口函数，会在相匹配的构造函数里调用<code>pthread_create</code>函数创建子线程。先看整体实现：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">   <span class="comment">// std::thread 构造函数</span></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Callable, </span><br><span class="line">            <span class="keyword">typename</span>... _Args,</span><br><span class="line">            <span class="keyword">typename</span> = _Require&lt;__not_same&lt;_Callable&gt;&gt;&gt;</span><br><span class="line">   <span class="keyword">explicit</span> <span class="built_in">thread</span>(_Callable&amp;&amp; __f, _Args&amp;&amp;... __args)</span><br><span class="line">   &#123;</span><br><span class="line">       <span class="built_in">static_assert</span>( __is_invocable&lt;<span class="keyword">typename</span> decay&lt;_Callable&gt;::type, </span><br><span class="line">                                     <span class="keyword">typename</span> decay&lt;_Args&gt;::type...&gt;::value,</span><br><span class="line">                     <span class="string">&quot;std::thread arguments must be invocable after conversion to rvalues&quot;</span>);</span><br><span class="line"></span><br><span class="line">       <span class="comment">// Create a reference to pthread_create, not just the gthr weak symbol.</span></span><br><span class="line">       <span class="keyword">auto</span> __depend = <span class="built_in">reinterpret_cast</span>&lt;<span class="built_in">void</span>(*)()&gt;(&amp;pthread_create);</span><br><span class="line">       <span class="comment">// 启动线程</span></span><br><span class="line">       _M_start_thread(_S_make_state(__make_invoker(std::forward&lt;_Callable&gt;(__f), </span><br><span class="line">                                                    std::forward&lt;_Args&gt;(__args)...)),</span><br><span class="line">                       __depend);</span><br><span class="line">     &#125;</span><br></pre></td></tr></table></figure>
+
+<p>再细看构造函数执行流程：</p>
+<ol>
+<li><p>在编译期判断构造<code>std::thread</code>对象时设置的线程入口函数<code>__f</code>及其参数<code>__args</code>能否调用。</p>
+<p>比如，下面的demo中，线程入口函数<code>thread_func</code>有个<code>int</code>类型的参数<code>arg</code>，如果传入的参数<code>__args</code>无法隐式转换为<code>int</code>类型，或者没有设置<code>__args</code>，都会触发<code>std::thread</code>构造函数中的静态断言<code>static_assert</code>，报错：<em>error: static assertion failed: std::thread arguments must be invocable after conversion to rvalues</em> 。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">thread_func</span><span class="params">(<span class="type">int</span> arg)</span> </span>&#123;   &#125;</span><br><span class="line">   </span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> <span class="type">const</span> *argv[])</span> </span>&#123;</span><br><span class="line">    std::thread trd_1&#123;thread_func, <span class="string">&quot;str&quot;</span>&#125;;  <span class="comment">// arg类型不对</span></span><br><span class="line">    std::thread trd_2&#123;thread_func&#125;;	 	   <span class="comment">// 缺少 arg</span></span><br><span class="line">   </span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>将线程入口函数<code>__f</code>及其参数<code>__args</code>进一步封装起来。</p>
+<p>这里是使用<code>__make_invoker</code>完成的：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">__make_invoker(std::forward&lt;_Callable&gt;(__f), std::forward&lt;_Args&gt;(__args)...))</span><br></pre></td></tr></table></figure>
+<p><code>__make_invoker</code>的作用是返回一个<code>_Invoker</code>对象，<code>_Invoker</code>是个仿函数，通过<code>_Invoker()</code>就可以以指定的参数<code>__args</code>直接执行线程入口函数<code>__f</code>。类似于<code>std::bind</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">print_num</span><span class="params">(<span class="type">int</span> i)</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; i &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">const</span> <span class="type">char</span>* argv[])</span> </span>&#123;</span><br><span class="line">  <span class="comment">// wrapper</span></span><br><span class="line">  <span class="keyword">auto</span> invoker =  std::<span class="built_in">bind</span>(print_num, <span class="number">-9</span>);</span><br><span class="line">  <span class="comment">// 直接调用 invoker() 就可以以指定参数 -9 调用 print_num</span></span><br><span class="line">  <span class="built_in">invoker</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+<li><p>启动子线程</p>
+<p>在调用<code>_M_start_thread</code>函数启动子线程前，执行过程：创建 <code>_State_ptr</code>的对象，来封装<code>_Invoker</code>对象，再传递给<code>_M_start_thread</code>函数。这个过程，由<code>_S_make_state</code>函数完成，<code>_S_make_state</code>最终返回<code>_State_ptr</code>对象。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 基类</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">_State</span> &#123;</span><br><span class="line">    <span class="keyword">virtual</span> ~_State();          <span class="comment">// 虚析构函数</span></span><br><span class="line">    <span class="keyword">virtual</span> <span class="type">void</span> _M_run() = <span class="number">0</span>;  <span class="comment">// 线程运行函数</span></span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">using</span> _State_ptr = unique_ptr&lt;_State&gt;;	<span class="comment">// 父类指针</span></span><br><span class="line">   </span><br><span class="line"><span class="comment">// 子类</span></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Callable&gt;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">_State_impl</span> : <span class="keyword">public</span> _State &#123;</span><br><span class="line">    _Callable		_M_func;	<span class="comment">// 线程入口函数</span></span><br><span class="line">   		</span><br><span class="line">    _State_impl(_Callable&amp;&amp; __f) : _M_func(std::forward&lt;_Callable&gt;(__f))</span><br><span class="line">    &#123; &#125;</span><br><span class="line">   </span><br><span class="line">    <span class="type">void</span> _M_run() &#123; _M_func(); &#125; <span class="comment">// 执行线程入口函数</span></span><br><span class="line">&#125;;</span><br><span class="line">   </span><br><span class="line"><span class="comment">// 传入_Invoker对象，返回 _State_ptr 对象</span></span><br><span class="line"><span class="keyword">template</span>&lt;<span class="keyword">typename</span> _Callable&gt;</span><br><span class="line"><span class="type">static</span> _State_ptr _S_make_state(_Callable&amp;&amp; __f)  &#123;</span><br><span class="line">    <span class="keyword">using</span> _Impl = _State_impl&lt;_Callable&gt;;</span><br><span class="line">    <span class="comment">// 使用子类对象来初始化父类</span></span><br><span class="line">    <span class="keyword">return</span> _State_ptr&#123;<span class="keyword">new</span> _Impl&#123;std::forward&lt;_Callable&gt;(__f)&#125;&#125;;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>_S_make_state</code>函数，将线程入口函数<code>__f</code>及其参数<code>__args</code>封装到<code>_State_ptr</code>对象<code>_State_ptr_obj</code>中， 这样最后可以通过<code>_State_ptr_obj-&gt;_M_run()</code>来调用<code>__f</code>。</p>
+<p>下面到了<code>_M_start_thread</code>函数了：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">void</span> thread::_M_start_thread(_State_ptr state, <span class="built_in">void</span> (*)())</span><br><span class="line">   &#123;</span><br><span class="line">       <span class="type">const</span> <span class="type">int</span> err = __gthread_create(&amp;_M_id._M_thread,</span><br><span class="line">                                        &amp;execute_native_thread_routine, <span class="comment">// 线程执行函数</span></span><br><span class="line">                                        state.<span class="built_in">get</span>());</span><br><span class="line">       <span class="keyword">if</span> (err)</span><br><span class="line">         __throw_system_error(err);</span><br><span class="line">       state.<span class="built_in">release</span>();</span><br><span class="line">&#125;</span><br><span class="line">   </span><br><span class="line">   <span class="comment">// 内部调用的是 pthread_create 函数</span></span><br><span class="line">   <span class="type">static</span> <span class="keyword">inline</span> <span class="type">int</span> __gthread_create(<span class="type">pthread_t</span> *__threadid, <span class="type">void</span> *(*__func) (<span class="type">void</span>*), <span class="type">void</span> *__args)</span><br><span class="line">   &#123;</span><br><span class="line">       <span class="keyword">return</span> <span class="built_in">pthread_create</span>(__threadid, <span class="literal">NULL</span>, __func, __args);</span><br><span class="line">   &#125;</span><br><span class="line">   <span class="comment">// 内部执行线程入口函数</span></span><br><span class="line">   <span class="function"><span class="type">static</span> <span class="type">void</span>* <span class="title">execute_native_thread_routine</span><span class="params">(<span class="type">void</span>* __p)</span></span></span><br><span class="line"><span class="function">   </span>&#123;</span><br><span class="line">       thread::_State_ptr <span class="type">__t</span>&#123;<span class="built_in">static_cast</span>&lt;thread::_State*&gt;(__p)&#125;;</span><br><span class="line">       <span class="type">__t</span>-&gt;_M_run();		<span class="comment">// 运行线程入口函数</span></span><br><span class="line">       <span class="keyword">return</span> <span class="literal">nullptr</span>;</span><br><span class="line">   &#125;</span><br></pre></td></tr></table></figure>
+
+<p>因此，在执行完<code>_M_start_thread</code>函数后，才具有<code>_M_start_thread !=0</code>。</p>
+</li>
+</ol>
+<p>好，到此为此已实现了本文开篇提出的两个目标，下一篇将继续讲解线程间共享数据的访问。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8std-thread"><span class="toc-number">1.</span> <span class="toc-text">使用std::thread</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B7%B1%E5%85%A5%E5%89%96%E6%9E%90-std-thread"><span class="toc-number">2.</span> <span class="toc-text">深入剖析 std::thread</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A7%BB%E5%8A%A8%E5%B1%9E%E6%80%A7"><span class="toc-number">2.1.</span> <span class="toc-text">移动属性</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#std-thread-id"><span class="toc-number">2.2.</span> <span class="toc-text">std::thread::id</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%88%9B%E5%BB%BA%E5%AD%90%E7%BA%BF%E7%A8%8B"><span class="toc-number">2.3.</span> <span class="toc-text">创建子线程</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2021/03/01/thread/thread/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2021/03/01/thread/thread/&text=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2021/03/01/thread/thread/&is_video=false&description=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=从std::thread开始，迈入多线程编程的大门&body=Check out this article: https://szza.github.io/2021/03/01/thread/thread/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2021/03/01/thread/thread/&title=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2021/03/01/thread/thread/&name=从std::thread开始，迈入多线程编程的大门&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2021/03/01/thread/thread/&t=从std::thread开始，迈入多线程编程的大门"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2025
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>
