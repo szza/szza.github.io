@@ -2,6 +2,15 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://szza.github.io/2025/06/15/Juicefs/cached_store/</loc>
+    
+    <lastmod>2025-11-18</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://szza.github.io/2023/12/31/Paper/CRDT/</loc>
     
     <lastmod>2025-10-23</lastmod>
@@ -778,7 +787,7 @@
 
   <url>
     <loc>https://szza.github.io/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -786,56 +795,63 @@
   
   <url>
     <loc>https://szza.github.io/tags/Modern-C/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Papers/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Redis6-0/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/StarRocks/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/tidb-v6-1/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/RocksDb/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/ETCD/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/CRDT/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/tags/Juicefs/</loc>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
@@ -844,28 +860,28 @@
   
   <url>
     <loc>https://szza.github.io/categories/SIMD/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/CBO/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/Pipeline/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/CRDT/</loc>
-    <lastmod>2025-10-23</lastmod>
+    <lastmod>2025-11-18</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
