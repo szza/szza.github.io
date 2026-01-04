@@ -20,7 +20,6 @@ https://szza.github.io/2025/06/15/Milvus/flush_pipeline_data_sync_service/
 https://szza.github.io/2025/06/15/Milvus/cgo_cpp_integration_analysis/
 https://szza.github.io/2025/06/15/Milvus/arrow_parquet_advantages_analysis/
 https://szza.github.io/2025/06/15/Juicefs/cached_store/
-https://szza.github.io/2023/12/31/Paper/CRDT/
 https://szza.github.io/2024/08/19/ETCD/2_kv/
 https://szza.github.io/2024/08/01/ETCD/1_backend/
 https://szza.github.io/2024/09/29/ETCD/4_lessor/
@@ -114,10 +113,8 @@ https://szza.github.io/tags/StarRocks/
 https://szza.github.io/tags/tidb-v6-1/
 https://szza.github.io/tags/RocksDb/
 https://szza.github.io/tags/ETCD/
-https://szza.github.io/tags/CRDT/
 https://szza.github.io/tags/Juicefs/
 https://szza.github.io/tags/Milvus/
 https://szza.github.io/categories/SIMD/
 https://szza.github.io/categories/CBO/
 https://szza.github.io/categories/Pipeline/
-https://szza.github.io/categories/CRDT/
