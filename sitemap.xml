@@ -2,6 +2,24 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://szza.github.io/2025/08/15/Milvus/flush_pipeline_flowgraph_manager/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/08/11/Milvus/flush_pipeline_data_sync_service/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/</loc>
     
     <lastmod>2026-01-04</lastmod>
@@ -165,24 +183,6 @@
   
   <url>
     <loc>https://szza.github.io/2025/08/15/Milvus/arrow_parquet_advantages_analysis/</loc>
-    
-    <lastmod>2026-01-04</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2025/08/15/Milvus/flush_pipeline_data_sync_service/</loc>
-    
-    <lastmod>2026-01-04</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2025/08/15/Milvus/flush_pipeline_flowgraph_manager/</loc>
     
     <lastmod>2026-01-04</lastmod>
     
