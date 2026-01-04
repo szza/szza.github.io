@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="概述Milvus 采用混合架构设计，核心性能关键路径使用 C++ 实现，通过 CGO（C Go）提供给 Go 代码调用。这种设计既保证了性能，又保持了 Go 代码的简洁性和可维护性。 一、CGO 集成架构1.1 基本结构12345678910111213141516┌─────────────────────────────────────────┐│         Go 代码层">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus C++ 功能通过 CGO 集成分析">
+<meta property="og:url" content="https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="概述Milvus 采用混合架构设计，核心性能关键路径使用 C++ 实现，通过 CGO（C Go）提供给 Go 代码调用。这种设计既保证了性能，又保持了 Go 代码的简洁性和可维护性。 一、CGO 集成架构1.1 基本结构12345678910111213141516┌─────────────────────────────────────────┐│         Go 代码层">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-04T13:34:03.531Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus C++ 功能通过 CGO 集成分析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/15/Milvus/arrow_parquet_advantages_analysis/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/15/Milvus/flush_pipeline_data_sync_service/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&text=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&is_video=false&description=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus C++ 功能通过 CGO 集成分析&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&name=Milvus C++ 功能通过 CGO 集成分析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&t=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81CGO-%E9%9B%86%E6%88%90%E6%9E%B6%E6%9E%84"><span class="toc-number">2.</span> <span class="toc-text">一、CGO 集成架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E5%9F%BA%E6%9C%AC%E7%BB%93%E6%9E%84"><span class="toc-number">2.1.</span> <span class="toc-text">1.1 基本结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-CGO-%E4%BD%BF%E7%94%A8%E6%96%B9%E5%BC%8F"><span class="toc-number">2.2.</span> <span class="toc-text">1.2 CGO 使用方式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E4%B8%BB%E8%A6%81-C-%E5%8A%9F%E8%83%BD%E6%A8%A1%E5%9D%97"><span class="toc-number">3.</span> <span class="toc-text">二、主要 C++ 功能模块</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E7%B4%A2%E5%BC%95%E6%9E%84%E5%BB%BA%EF%BC%88Index-Building%EF%BC%89"><span class="toc-number">3.1.</span> <span class="toc-text">2.1 索引构建（Index Building）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E6%AE%B5%E6%A0%B8%E5%BF%83%EF%BC%88Segcore%EF%BC%89"><span class="toc-number">3.2.</span> <span class="toc-text">2.2 段核心（Segcore）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-1-Collection-%E7%AE%A1%E7%90%86"><span class="toc-number">3.2.1.</span> <span class="toc-text">2.2.1 Collection 管理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-2-Segment-%E6%93%8D%E4%BD%9C"><span class="toc-number">3.2.2.</span> <span class="toc-text">2.2.2 Segment 操作</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-3-%E6%9F%A5%E8%AF%A2%E8%AE%A1%E5%88%92%EF%BC%88Query-Plan%EF%BC%89"><span class="toc-number">3.2.3.</span> <span class="toc-text">2.2.3 查询计划（Query Plan）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-4-%E7%BB%93%E6%9E%9C%E5%BD%92%E5%B9%B6%EF%BC%88Reduce%EF%BC%89"><span class="toc-number">3.2.4.</span> <span class="toc-text">2.2.4 结果归并（Reduce）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-5-%E5%90%91%E9%87%8F%E7%B4%A2%E5%BC%95%E6%93%8D%E4%BD%9C"><span class="toc-number">3.2.5.</span> <span class="toc-text">2.2.5 向量索引操作</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-6-%E5%AD%97%E6%AE%B5%E6%95%B0%E6%8D%AE%E5%8A%A0%E8%BD%BD"><span class="toc-number">3.2.6.</span> <span class="toc-text">2.2.6 字段数据加载</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-7-%E7%B4%A2%E5%BC%95%E5%8A%A0%E8%BD%BD"><span class="toc-number">3.2.7.</span> <span class="toc-text">2.2.7 索引加载</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-%E5%AD%98%E5%82%A8%EF%BC%88Storage%EF%BC%89"><span class="toc-number">3.3.</span> <span class="toc-text">2.3 存储（Storage）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-1-Parquet-%E8%AF%BB%E5%86%99"><span class="toc-number">3.3.1.</span> <span class="toc-text">2.3.1 Parquet 读写</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-2-%E5%AD%98%E5%82%A8%E6%8A%BD%E8%B1%A1"><span class="toc-number">3.3.2.</span> <span class="toc-text">2.3.2 存储抽象</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%89%A7%E8%A1%8C%EF%BC%88Expression-Execution%EF%BC%89"><span class="toc-number">3.4.</span> <span class="toc-text">2.4 表达式执行（Expression Execution）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-%E8%81%9A%E7%B1%BB%E5%88%86%E6%9E%90%EF%BC%88Clustering%EF%BC%89"><span class="toc-number">3.5.</span> <span class="toc-text">2.5 聚类分析（Clustering）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-6-%E7%9B%91%E6%8E%A7%EF%BC%88Monitor%EF%BC%89"><span class="toc-number">3.6.</span> <span class="toc-text">2.6 监控（Monitor）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-7-Tokenizer"><span class="toc-number">3.7.</span> <span class="toc-text">2.7 Tokenizer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-8-Future%EF%BC%88%E5%BC%82%E6%AD%A5%E6%93%8D%E4%BD%9C%EF%BC%89"><span class="toc-number">3.8.</span> <span class="toc-text">2.8 Future（异步操作）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-9-%E5%90%91%E9%87%8F%E7%B4%A2%E5%BC%95%E6%A3%80%E6%9F%A5"><span class="toc-number">3.9.</span> <span class="toc-text">2.9 向量索引检查</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81CGO-%E6%8E%A5%E5%8F%A3%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F"><span class="toc-number">4.</span> <span class="toc-text">三、CGO 接口设计模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 错误处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 内存管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E6%95%B0%E6%8D%AE%E8%BD%AC%E6%8D%A2"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 数据转换</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E8%80%83%E8%99%91"><span class="toc-number">5.</span> <span class="toc-text">四、性能优化考虑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-CGO-%E8%B0%83%E7%94%A8%E5%BC%80%E9%94%80"><span class="toc-number">5.1.</span> <span class="toc-text">4.1 CGO 调用开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E7%BA%BF%E7%A8%8B%E7%AE%A1%E7%90%86"><span class="toc-number">5.2.</span> <span class="toc-text">4.2 线程管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%BC%98%E5%8C%96"><span class="toc-number">5.3.</span> <span class="toc-text">4.3 内存管理优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E4%B8%BB%E8%A6%81%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-number">6.</span> <span class="toc-text">五、主要使用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-QueryNode-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">6.1.</span> <span class="toc-text">5.1 QueryNode 中的使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-DataNode-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">6.2.</span> <span class="toc-text">5.2 DataNode 中的使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-Proxy-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">6.3.</span> <span class="toc-text">5.3 Proxy 中的使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-StorageV2-%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B"><span class="toc-number">6.4.</span> <span class="toc-text">5.4 StorageV2 写入流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81C-%E6%A0%B8%E5%BF%83%E6%A8%A1%E5%9D%97%E6%80%BB%E7%BB%93"><span class="toc-number">7.</span> <span class="toc-text">六、C++ 核心模块总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-number">8.</span> <span class="toc-text">七、总结</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E8%AE%BE%E8%AE%A1%E4%BC%98%E5%8A%BF"><span class="toc-number">8.1.</span> <span class="toc-text">7.1 设计优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99"><span class="toc-number">8.2.</span> <span class="toc-text">7.2 关键设计原则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-3-%E6%9C%AA%E6%9D%A5%E6%96%B9%E5%90%91"><span class="toc-number">8.3.</span> <span class="toc-text">7.3 未来方向</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus C++ 功能通过 CGO 集成分析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-15T02:20:00.000Z" itemprop="datePublished">2025-08-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>Milvus 采用混合架构设计，核心性能关键路径使用 C++ 实现，通过 CGO（C Go）提供给 Go 代码调用。这种设计既保证了性能，又保持了 Go 代码的简洁性和可维护性。</p>
+<h2 id="一、CGO-集成架构"><a href="#一、CGO-集成架构" class="headerlink" title="一、CGO 集成架构"></a>一、CGO 集成架构</h2><h3 id="1-1-基本结构"><a href="#1-1-基本结构" class="headerlink" title="1.1 基本结构"></a>1.1 基本结构</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────┐</span><br><span class="line">│         Go 代码层                        │</span><br><span class="line">│  (Proxy, QueryNode, DataNode, etc.)     │</span><br><span class="line">└──────────────┬──────────────────────────┘</span><br><span class="line">               │ CGO 调用</span><br><span class="line">               ↓</span><br><span class="line">┌─────────────────────────────────────────┐</span><br><span class="line">│      C 接口层 (_c.h, _c.cpp)            │</span><br><span class="line">│  封装 C++ 实现，提供 C 兼容接口          │</span><br><span class="line">└──────────────┬──────────────────────────┘</span><br><span class="line">               │</span><br><span class="line">               ↓</span><br><span class="line">┌─────────────────────────────────────────┐</span><br><span class="line">│      C++ 实现层                         │</span><br><span class="line">│  (高性能核心逻辑)                        │</span><br><span class="line">└─────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="1-2-CGO-使用方式"><a href="#1-2-CGO-使用方式" class="headerlink" title="1.2 CGO 使用方式"></a>1.2 CGO 使用方式</h3><p><strong>典型示例</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">package</span> segcore</span><br><span class="line"></span><br><span class="line"><span class="comment">/*</span></span><br><span class="line"><span class="comment">#cgo pkg-config: milvus_core</span></span><br><span class="line"><span class="comment"></span></span><br><span class="line"><span class="comment">#include &quot;segcore/collection_c.h&quot;</span></span><br><span class="line"><span class="comment">#include &quot;segcore/segment_c.h&quot;</span></span><br><span class="line"><span class="comment">#include &quot;common/type_c.h&quot;</span></span><br><span class="line"><span class="comment">*/</span></span><br><span class="line"><span class="keyword">import</span> <span class="string">&quot;C&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// Go 代码调用 C 函数</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">CreateCCollection</span><span class="params">(req *CreateCCollectionRequest)</span></span> (*CCollection, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="keyword">var</span> ptr C.CCollection</span><br><span class="line">    status := C.NewCollection(</span><br><span class="line">        unsafe.Pointer(&amp;schemaBlob[<span class="number">0</span>]), </span><br><span class="line">        (C.int64_t)(<span class="built_in">len</span>(schemaBlob)), </span><br><span class="line">        &amp;ptr)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="二、主要-C-功能模块"><a href="#二、主要-C-功能模块" class="headerlink" title="二、主要 C++ 功能模块"></a>二、主要 C++ 功能模块</h2><h3 id="2-1-索引构建（Index-Building）"><a href="#2-1-索引构建（Index-Building）" class="headerlink" title="2.1 索引构建（Index Building）"></a>2.1 索引构建（Index Building）</h3><p><strong>位置</strong>：<code>internal/core/src/indexbuilder/</code></p>
+<p><strong>CGO 接口</strong>：<code>indexbuilder/index_c.h</code></p>
+<p><strong>Go 包装</strong>：<code>internal/util/indexcgowrapper/</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 向量索引构建（IVF、HNSW、FLAT 等）</li>
+<li>✅ 标量索引构建（倒排索引、B+树等）</li>
+<li>✅ 文本索引构建（BM25、N-gram 等）</li>
+<li>✅ 索引序列化和反序列化</li>
+<li>✅ 索引文件管理</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/indexcgowrapper/index.go</span></span><br><span class="line"><span class="keyword">type</span> CgoIndex <span class="keyword">struct</span> &#123;</span><br><span class="line">    indexPtr C.CIndex</span><br><span class="line">    <span class="built_in">close</span>    <span class="type">bool</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">CreateIndex</span><span class="params">(ctx context.Context, buildIndexInfo *indexcgopb.BuildIndexInfo)</span></span> (CodecIndex, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="keyword">var</span> indexPtr C.CIndex</span><br><span class="line">    status := C.CreateIndex(&amp;indexPtr, </span><br><span class="line">        (*C.uint8_t)(unsafe.Pointer(&amp;buildIndexInfoBlob[<span class="number">0</span>])), </span><br><span class="line">        (C.uint64_t)(<span class="built_in">len</span>(buildIndexInfoBlob)))</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>index_c.cpp</code> - 索引创建和管理</li>
+<li><code>VecIndexCreator.cpp</code> - 向量索引创建</li>
+<li><code>ScalarIndexCreator.cpp</code> - 标量索引创建</li>
+</ul>
+<h3 id="2-2-段核心（Segcore）"><a href="#2-2-段核心（Segcore）" class="headerlink" title="2.2 段核心（Segcore）"></a>2.2 段核心（Segcore）</h3><p><strong>位置</strong>：<code>internal/core/src/segcore/</code></p>
+<p><strong>CGO 接口</strong>：多个 <code>*_c.h</code> 文件</p>
+<p><strong>Go 包装</strong>：<code>internal/util/segcore/</code></p>
+<p><strong>功能模块</strong>：</p>
+<h4 id="2-2-1-Collection-管理"><a href="#2-2-1-Collection-管理" class="headerlink" title="2.2.1 Collection 管理"></a>2.2.1 Collection 管理</h4><p><strong>CGO 接口</strong>：<code>segcore/collection_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ Collection 创建和销毁</li>
+<li>✅ Schema 管理</li>
+<li>✅ Index Meta 管理</li>
+<li>✅ 字段加载配置</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/segcore/collection.go</span></span><br><span class="line"><span class="keyword">type</span> CCollection <span class="keyword">struct</span> &#123;</span><br><span class="line">    ptr          C.CCollection</span><br><span class="line">    collectionID <span class="type">int64</span></span><br><span class="line">    schema       *schemapb.CollectionSchema</span><br><span class="line">    indexMeta    *segcorepb.CollectionIndexMeta</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">CreateCCollection</span><span class="params">(req *CreateCCollectionRequest)</span></span> (*CCollection, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="keyword">var</span> ptr C.CCollection</span><br><span class="line">    status := C.NewCollection(</span><br><span class="line">        unsafe.Pointer(&amp;schemaBlob[<span class="number">0</span>]), </span><br><span class="line">        (C.int64_t)(<span class="built_in">len</span>(schemaBlob)), </span><br><span class="line">        &amp;ptr)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-2-2-Segment-操作"><a href="#2-2-2-Segment-操作" class="headerlink" title="2.2.2 Segment 操作"></a>2.2.2 Segment 操作</h4><p><strong>CGO 接口</strong>：<code>segcore/segment_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ Segment 创建（Growing&#x2F;Sealed）</li>
+<li>✅ 数据插入（Insert）</li>
+<li>✅ 数据删除（Delete）</li>
+<li>✅ 字段数据加载（LoadFieldData）</li>
+<li>✅ 索引加载（LoadIndex）</li>
+<li>✅ 内存使用统计</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/segcore/segment.go</span></span><br><span class="line"><span class="keyword">type</span> cSegmentImpl <span class="keyword">struct</span> &#123;</span><br><span class="line">    id  <span class="type">int64</span></span><br><span class="line">    ptr C.CSegmentInterface</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(s *cSegmentImpl)</span></span> Insert(ctx context.Context, request *InsertRequest) (*InsertResult, <span class="type">error</span>) &#123;</span><br><span class="line">    status := C.Insert(s.ptr,</span><br><span class="line">        (*C.uint8_t)(unsafe.Pointer(&amp;insertBlob[<span class="number">0</span>])),</span><br><span class="line">        (C.int64_t)(<span class="built_in">len</span>(insertBlob)),</span><br><span class="line">        C.int64_t(request.NumRows),</span><br><span class="line">        C.int64_t(request.Timestamp))</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>segment_c.cpp</code> - Segment C 接口</li>
+<li><code>SegmentGrowingImpl.cpp</code> - Growing Segment 实现</li>
+<li><code>ChunkedSegmentSealedImpl.cpp</code> - Sealed Segment 实现</li>
+</ul>
+<h4 id="2-2-3-查询计划（Query-Plan）"><a href="#2-2-3-查询计划（Query-Plan）" class="headerlink" title="2.2.3 查询计划（Query Plan）"></a>2.2.3 查询计划（Query Plan）</h4><p><strong>CGO 接口</strong>：<code>segcore/plan_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 查询计划生成</li>
+<li>✅ 表达式解析</li>
+<li>✅ 查询优化</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/segcore/plan.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">CreatePlan</span><span class="params">(collection *CCollection, planBlob []<span class="type">byte</span>)</span></span> (CPlan, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="keyword">var</span> planPtr C.CPlan</span><br><span class="line">    status := C.CreatePlan(collection.rawPointer(),</span><br><span class="line">        (*C.uint8_t)(unsafe.Pointer(&amp;planBlob[<span class="number">0</span>])),</span><br><span class="line">        (C.int64_t)(<span class="built_in">len</span>(planBlob)),</span><br><span class="line">        &amp;planPtr)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-2-4-结果归并（Reduce）"><a href="#2-2-4-结果归并（Reduce）" class="headerlink" title="2.2.4 结果归并（Reduce）"></a>2.2.4 结果归并（Reduce）</h4><p><strong>CGO 接口</strong>：<code>segcore/reduce_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 多段查询结果归并</li>
+<li>✅ TopK 结果合并</li>
+<li>✅ 聚合操作</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/segcore/reduce.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">ReduceSearchResults</span><span class="params">(ctx context.Context, </span></span></span><br><span class="line"><span class="params"><span class="function">    plan CPlan, </span></span></span><br><span class="line"><span class="params"><span class="function">    searchResults []*SearchResult, </span></span></span><br><span class="line"><span class="params"><span class="function">    numSegments <span class="type">int64</span>)</span></span> (*SearchResult, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// 调用 C++ reduce 函数</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>reduce_c.cpp</code> - Reduce C 接口</li>
+<li><code>reduce/Reduce.cpp</code> - Reduce 实现</li>
+<li><code>reduce/GroupReduce.cpp</code> - 分组 Reduce</li>
+</ul>
+<h4 id="2-2-5-向量索引操作"><a href="#2-2-5-向量索引操作" class="headerlink" title="2.2.5 向量索引操作"></a>2.2.5 向量索引操作</h4><p><strong>CGO 接口</strong>：<code>segcore/vector_index_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 向量索引加载</li>
+<li>✅ 向量搜索</li>
+<li>✅ 索引管理</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/vecindexmgr/vector_index_mgr.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">LoadVectorIndex</span><span class="params">(ctx context.Context, </span></span></span><br><span class="line"><span class="params"><span class="function">    indexBlob []<span class="type">byte</span>, </span></span></span><br><span class="line"><span class="params"><span class="function">    indexParams <span class="keyword">map</span>[<span class="type">string</span>]<span class="type">string</span>)</span></span> (C.CVectorIndex, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// 调用 C++ 加载向量索引</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-2-6-字段数据加载"><a href="#2-2-6-字段数据加载" class="headerlink" title="2.2.6 字段数据加载"></a>2.2.6 字段数据加载</h4><p><strong>CGO 接口</strong>：<code>segcore/load_field_data_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 从存储加载字段数据</li>
+<li>✅ 数据格式转换</li>
+<li>✅ 内存管理</li>
+</ul>
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>load_field_data_c.cpp</code> - 字段数据加载 C 接口</li>
+</ul>
+<h4 id="2-2-7-索引加载"><a href="#2-2-7-索引加载" class="headerlink" title="2.2.7 索引加载"></a>2.2.7 索引加载</h4><p><strong>CGO 接口</strong>：<code>segcore/load_index_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 索引文件加载</li>
+<li>✅ 索引内存映射</li>
+<li>✅ 索引验证</li>
+</ul>
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>load_index_c.cpp</code> - 索引加载 C 接口</li>
+</ul>
+<h3 id="2-3-存储（Storage）"><a href="#2-3-存储（Storage）" class="headerlink" title="2.3 存储（Storage）"></a>2.3 存储（Storage）</h3><p><strong>位置</strong>：<code>internal/core/src/storage/</code></p>
+<p><strong>CGO 接口</strong>：<code>storage/storage_c.h</code>, <code>segcore/packed_writer_c.h</code>, <code>segcore/packed_reader_c.h</code></p>
+<p><strong>Go 包装</strong>：<code>internal/storagev2/packed/</code></p>
+<p><strong>功能</strong>：</p>
+<h4 id="2-3-1-Parquet-读写"><a href="#2-3-1-Parquet-读写" class="headerlink" title="2.3.1 Parquet 读写"></a>2.3.1 Parquet 读写</h4><p><strong>功能</strong>：</p>
+<ul>
+<li>✅ Arrow RecordBatch → Parquet 文件写入</li>
+<li>✅ Parquet 文件 → Arrow RecordBatch 读取</li>
+<li>✅ 列组（Column Group）管理</li>
+<li>✅ 压缩和编码</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/storagev2/packed/packed_writer.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(pw *PackedWriter)</span></span> WriteRecordBatch(recordBatch arrow.Record) <span class="type">error</span> &#123;</span><br><span class="line">    <span class="comment">// 导出 Arrow 数据到 C 结构</span></span><br><span class="line">    cArrays := <span class="built_in">make</span>([]CArrowArray, recordBatch.NumCols())</span><br><span class="line">    cSchemas := <span class="built_in">make</span>([]CArrowSchema, recordBatch.NumCols())</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> i := <span class="keyword">range</span> recordBatch.NumCols() &#123;</span><br><span class="line">        <span class="keyword">var</span> caa cdata.CArrowArray</span><br><span class="line">        <span class="keyword">var</span> cas cdata.CArrowSchema</span><br><span class="line">        cdata.ExportArrowArray(recordBatch.Column(<span class="type">int</span>(i)), &amp;caa, &amp;cas)</span><br><span class="line">        cArrays[i] = *(*CArrowArray)(unsafe.Pointer(&amp;caa))</span><br><span class="line">        cSchemas[i] = *(*CArrowSchema)(unsafe.Pointer(&amp;cas))</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 调用 C++ 写入 Parquet</span></span><br><span class="line">    status := C.WriteRecordBatch(pw.cPackedWriter, </span><br><span class="line">        &amp;cArrays[<span class="number">0</span>], </span><br><span class="line">        &amp;cSchemas[<span class="number">0</span>], </span><br><span class="line">        cSchema)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>packed_writer_c.cpp</code> - Parquet 写入 C 接口</li>
+<li><code>packed_reader_c.cpp</code> - Parquet 读取 C 接口</li>
+<li><code>loon_ffi/ffi_writer_c.cpp</code> - FFI 写入接口</li>
+<li><code>loon_ffi/ffi_reader_c.cpp</code> - FFI 读取接口</li>
+</ul>
+<h4 id="2-3-2-存储抽象"><a href="#2-3-2-存储抽象" class="headerlink" title="2.3.2 存储抽象"></a>2.3.2 存储抽象</h4><p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 文件系统抽象</li>
+<li>✅ 对象存储支持（S3、MinIO 等）</li>
+<li>✅ 本地文件系统支持</li>
+</ul>
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>storage_c.cpp</code> - 存储 C 接口</li>
+</ul>
+<h3 id="2-4-表达式执行（Expression-Execution）"><a href="#2-4-表达式执行（Expression-Execution）" class="headerlink" title="2.4 表达式执行（Expression Execution）"></a>2.4 表达式执行（Expression Execution）</h3><p><strong>位置</strong>：<code>internal/core/src/exec/expression/</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 表达式解析和编译</li>
+<li>✅ 标量函数执行</li>
+<li>✅ 向量函数执行</li>
+<li>✅ JSON 表达式处理</li>
+<li>✅ 过滤条件评估</li>
+</ul>
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>function/init_c.cpp</code> - 表达式函数初始化</li>
+</ul>
+<h3 id="2-5-聚类分析（Clustering）"><a href="#2-5-聚类分析（Clustering）" class="headerlink" title="2.5 聚类分析（Clustering）"></a>2.5 聚类分析（Clustering）</h3><p><strong>位置</strong>：<code>internal/core/src/clustering/</code></p>
+<p><strong>CGO 接口</strong>：<code>clustering/analyze_c.h</code></p>
+<p><strong>Go 包装</strong>：<code>internal/util/analyzecgowrapper/</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ K-means 聚类</li>
+<li>✅ 数据分析和统计</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/analyzecgowrapper/helper.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">Analyze</span><span class="params">(ctx context.Context, </span></span></span><br><span class="line"><span class="params"><span class="function">    analyzeInfo *indexcgopb.AnalyzeInfo)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">    <span class="comment">// 调用 C++ 聚类分析</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>analyze_c.cpp</code> - 聚类分析 C 接口</li>
+<li><code>KmeansClustering.cpp</code> - K-means 实现</li>
+</ul>
+<h3 id="2-6-监控（Monitor）"><a href="#2-6-监控（Monitor）" class="headerlink" title="2.6 监控（Monitor）"></a>2.6 监控（Monitor）</h3><p><strong>位置</strong>：<code>internal/core/src/monitor/</code></p>
+<p><strong>CGO 接口</strong>：<code>monitor/monitor_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 性能指标收集</li>
+<li>✅ 资源使用监控</li>
+<li>✅ 指标导出</li>
+</ul>
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>monitor_c.cpp</code> - 监控 C 接口</li>
+<li><code>Monitor.cpp</code> - 监控实现</li>
+</ul>
+<h3 id="2-7-Tokenizer"><a href="#2-7-Tokenizer" class="headerlink" title="2.7 Tokenizer"></a>2.7 Tokenizer</h3><p><strong>位置</strong>：<code>internal/core/src/segcore/</code></p>
+<p><strong>CGO 接口</strong>：<code>segcore/tokenizer_c.h</code>, <code>segcore/token_stream_c.h</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 文本分词</li>
+<li>✅ Token 流处理</li>
+<li>✅ 支持多种分词器</li>
+</ul>
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>tokenizer_c.cpp</code> - Tokenizer C 接口</li>
+<li><code>token_stream_c.cpp</code> - Token Stream C 接口</li>
+</ul>
+<h3 id="2-8-Future（异步操作）"><a href="#2-8-Future（异步操作）" class="headerlink" title="2.8 Future（异步操作）"></a>2.8 Future（异步操作）</h3><p><strong>位置</strong>：<code>internal/core/src/futures/</code></p>
+<p><strong>CGO 接口</strong>：<code>futures/future_c.h</code></p>
+<p><strong>Go 包装</strong>：<code>internal/util/cgo/futures.go</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 异步操作支持</li>
+<li>✅ Future&#x2F;Promise 模式</li>
+<li>✅ 异步查询和检索</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/util/cgo/futures.go</span></span><br><span class="line"><span class="keyword">type</span> CFuturePtr = C.CFuturePtr</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">WaitForFuture</span><span class="params">(future CFuturePtr)</span></span> (*C.CProto, <span class="type">error</span>) &#123;</span><br><span class="line">    result := C.WaitAndGetFuture(future)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>C++ 实现文件</strong>：</p>
+<ul>
+<li><code>future_c.cpp</code> - Future C 接口</li>
+<li><code>Future.cpp</code> - Future 实现</li>
+</ul>
+<h3 id="2-9-向量索引检查"><a href="#2-9-向量索引检查" class="headerlink" title="2.9 向量索引检查"></a>2.9 向量索引检查</h3><p><strong>位置</strong>：<code>internal/core/src/segcore/</code></p>
+<p><strong>CGO 接口</strong>：<code>segcore/check_vec_index_c.h</code></p>
+<p><strong>Go 包装</strong>：<code>internal/proxy/cgo_util.go</code></p>
+<p><strong>功能</strong>：</p>
+<ul>
+<li>✅ 向量索引存在性检查</li>
+<li>✅ 索引类型验证</li>
+</ul>
+<p><strong>关键代码</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/proxy/cgo_util.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">CheckVecIndexWithDataTypeExist</span><span class="params">(name <span class="type">string</span>, </span></span></span><br><span class="line"><span class="params"><span class="function">    dataType schemapb.DataType, </span></span></span><br><span class="line"><span class="params"><span class="function">    indexType <span class="type">string</span>)</span></span> (<span class="type">bool</span>, <span class="type">error</span>) &#123;</span><br><span class="line">    cName := C.CString(name)</span><br><span class="line">    <span class="keyword">defer</span> C.free(unsafe.Pointer(cName))</span><br><span class="line">    </span><br><span class="line">    cIndexType := C.CString(indexType)</span><br><span class="line">    <span class="keyword">defer</span> C.free(unsafe.Pointer(cIndexType))</span><br><span class="line">    </span><br><span class="line">    ret := C.CheckVecIndexWithDataTypeExist(cName, </span><br><span class="line">        C.int32_t(<span class="type">int32</span>(dataType)), </span><br><span class="line">        cIndexType)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="三、CGO-接口设计模式"><a href="#三、CGO-接口设计模式" class="headerlink" title="三、CGO 接口设计模式"></a>三、CGO 接口设计模式</h2><h3 id="3-1-错误处理"><a href="#3-1-错误处理" class="headerlink" title="3.1 错误处理"></a>3.1 错误处理</h3><p><strong>C 结构</strong>：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">CStatus</span> &#123;</span></span><br><span class="line">    <span class="type">int32_t</span> error_code;</span><br><span class="line">    <span class="type">char</span>* error_msg;</span><br><span class="line">&#125; CStatus;</span><br></pre></td></tr></table></figure>
+
+<p><strong>Go 处理</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">ConsumeCStatusIntoError</span><span class="params">(status *C.CStatus)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> status.error_code == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    errorCode := status.error_code</span><br><span class="line">    errorMsg := C.GoString(status.error_msg)</span><br><span class="line">    C.free(unsafe.Pointer(status.error_msg))</span><br><span class="line">    <span class="keyword">return</span> merr.SegcoreError(<span class="type">int32</span>(errorCode), errorMsg)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-内存管理"><a href="#3-2-内存管理" class="headerlink" title="3.2 内存管理"></a>3.2 内存管理</h3><p><strong>原则</strong>：</p>
+<ul>
+<li>C 分配的内存由 C 释放</li>
+<li>Go 传递的字符串需要转换为 C 字符串</li>
+<li>使用 <code>defer C.free()</code> 确保内存释放</li>
+</ul>
+<p><strong>示例</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">cStr := C.CString(goString)</span><br><span class="line"><span class="keyword">defer</span> C.free(unsafe.Pointer(cStr))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 调用 C 函数</span></span><br><span class="line">C.SomeFunction(cStr)</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-3-数据转换"><a href="#3-3-数据转换" class="headerlink" title="3.3 数据转换"></a>3.3 数据转换</h3><p><strong>Protobuf 转换</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Go Protobuf → C 内存</span></span><br><span class="line">schemaBlob, err := proto.Marshal(req.Schema)</span><br><span class="line">status := C.NewCollection(</span><br><span class="line">    unsafe.Pointer(&amp;schemaBlob[<span class="number">0</span>]), </span><br><span class="line">    (C.int64_t)(<span class="built_in">len</span>(schemaBlob)), </span><br><span class="line">    &amp;ptr)</span><br><span class="line"></span><br><span class="line"><span class="comment">// C 内存 → Go Protobuf</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">UnmarshalProtoLayout</span><span class="params">(protoLayout any, msg proto.Message)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">    layout := unsafe.Pointer(reflect.ValueOf(protoLayout).Pointer())</span><br><span class="line">    cProtoLayout := (*C.ProtoLayout)(layout)</span><br><span class="line">    blob := (*(*[math.MaxInt32]<span class="type">byte</span>)(cProtoLayout.blob))[:<span class="type">int</span>(cProtoLayout.size)]</span><br><span class="line">    <span class="keyword">return</span> proto.Unmarshal(blob, msg)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>Arrow 数据转换</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Arrow RecordBatch → C Arrow Array</span></span><br><span class="line"><span class="keyword">var</span> caa cdata.CArrowArray</span><br><span class="line"><span class="keyword">var</span> cas cdata.CArrowSchema</span><br><span class="line">cdata.ExportArrowArray(recordBatch.Column(i), &amp;caa, &amp;cas)</span><br><span class="line">cArray := (*CArrowArray)(unsafe.Pointer(&amp;caa))</span><br></pre></td></tr></table></figure>
+
+<h2 id="四、性能优化考虑"><a href="#四、性能优化考虑" class="headerlink" title="四、性能优化考虑"></a>四、性能优化考虑</h2><h3 id="4-1-CGO-调用开销"><a href="#4-1-CGO-调用开销" class="headerlink" title="4.1 CGO 调用开销"></a>4.1 CGO 调用开销</h3><p><strong>问题</strong>：</p>
+<ul>
+<li>CGO 调用有固定开销（约 50-100ns）</li>
+<li>跨语言边界数据拷贝</li>
+<li>线程切换开销</li>
+</ul>
+<p><strong>优化策略</strong>：</p>
+<ol>
+<li><strong>批量操作</strong>：减少 CGO 调用次数</li>
+<li><strong>零拷贝</strong>：使用 Arrow C Data Interface</li>
+<li><strong>异步操作</strong>：使用 Future 模式</li>
+<li><strong>线程池</strong>：复用 CGO 线程</li>
+</ol>
+<h3 id="4-2-线程管理"><a href="#4-2-线程管理" class="headerlink" title="4.2 线程管理"></a>4.2 线程管理</h3><p><strong>CGO 线程绑定</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// internal/proxy/cgo_util.go</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">initDynamicPool</span><span class="params">()</span></span> &#123;</span><br><span class="line">    pool := conc.NewPool[any](</span><br><span class="line">        hardware.GetCPUNum(),</span><br><span class="line">        conc.WithPreHandler(runtime.LockOSThread), <span class="comment">// 锁定 OS 线程</span></span><br><span class="line">    )</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>原因</strong>：</p>
+<ul>
+<li>CGO 调用需要在同一线程</li>
+<li>避免线程切换开销</li>
+<li>保证线程安全</li>
+</ul>
+<h3 id="4-3-内存管理优化"><a href="#4-3-内存管理优化" class="headerlink" title="4.3 内存管理优化"></a>4.3 内存管理优化</h3><p><strong>策略</strong>：</p>
+<ul>
+<li>使用对象池减少分配</li>
+<li>预分配缓冲区</li>
+<li>及时释放 C 内存</li>
+</ul>
+<h2 id="五、主要使用场景"><a href="#五、主要使用场景" class="headerlink" title="五、主要使用场景"></a>五、主要使用场景</h2><h3 id="5-1-QueryNode-中的使用"><a href="#5-1-QueryNode-中的使用" class="headerlink" title="5.1 QueryNode 中的使用"></a>5.1 QueryNode 中的使用</h3><p><strong>场景</strong>：</p>
+<ul>
+<li>Segment 加载和管理</li>
+<li>查询执行（Search&#x2F;Retrieve）</li>
+<li>结果归并</li>
+<li>索引加载</li>
+</ul>
+<p><strong>关键文件</strong>：</p>
+<ul>
+<li><code>internal/querynodev2/segments/segment.go</code></li>
+<li><code>internal/util/segcore/</code></li>
+</ul>
+<h3 id="5-2-DataNode-中的使用"><a href="#5-2-DataNode-中的使用" class="headerlink" title="5.2 DataNode 中的使用"></a>5.2 DataNode 中的使用</h3><p><strong>场景</strong>：</p>
+<ul>
+<li>索引构建</li>
+<li>字段数据加载</li>
+<li>存储读写</li>
+</ul>
+<p><strong>关键文件</strong>：</p>
+<ul>
+<li><code>internal/util/indexcgowrapper/</code></li>
+<li><code>internal/datanode/index/</code></li>
+</ul>
+<h3 id="5-3-Proxy-中的使用"><a href="#5-3-Proxy-中的使用" class="headerlink" title="5.3 Proxy 中的使用"></a>5.3 Proxy 中的使用</h3><p><strong>场景</strong>：</p>
+<ul>
+<li>向量索引检查</li>
+<li>参数验证</li>
+</ul>
+<p><strong>关键文件</strong>：</p>
+<ul>
+<li><code>internal/proxy/cgo_util.go</code></li>
+</ul>
+<h3 id="5-4-StorageV2-写入流程"><a href="#5-4-StorageV2-写入流程" class="headerlink" title="5.4 StorageV2 写入流程"></a>5.4 StorageV2 写入流程</h3><p><strong>场景</strong>：</p>
+<ul>
+<li>Arrow Record → Parquet 文件</li>
+<li>列组管理</li>
+<li>压缩和编码</li>
+</ul>
+<p><strong>关键文件</strong>：</p>
+<ul>
+<li><code>internal/storagev2/packed/packed_writer.go</code></li>
+<li><code>internal/core/src/segcore/packed_writer_c.cpp</code></li>
+</ul>
+<h2 id="六、C-核心模块总结"><a href="#六、C-核心模块总结" class="headerlink" title="六、C++ 核心模块总结"></a>六、C++ 核心模块总结</h2><table>
+<thead>
+<tr>
+<th>模块</th>
+<th>CGO 接口</th>
+<th>Go 包装</th>
+<th>主要功能</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><strong>索引构建</strong></td>
+<td><code>indexbuilder/index_c.h</code></td>
+<td><code>internal/util/indexcgowrapper/</code></td>
+<td>向量&#x2F;标量&#x2F;文本索引构建</td>
+</tr>
+<tr>
+<td><strong>Collection</strong></td>
+<td><code>segcore/collection_c.h</code></td>
+<td><code>internal/util/segcore/collection.go</code></td>
+<td>Collection 管理</td>
+</tr>
+<tr>
+<td><strong>Segment</strong></td>
+<td><code>segcore/segment_c.h</code></td>
+<td><code>internal/util/segcore/segment.go</code></td>
+<td>Segment 操作（Insert&#x2F;Delete&#x2F;Load）</td>
+</tr>
+<tr>
+<td><strong>查询计划</strong></td>
+<td><code>segcore/plan_c.h</code></td>
+<td><code>internal/util/segcore/plan.go</code></td>
+<td>查询计划生成</td>
+</tr>
+<tr>
+<td><strong>结果归并</strong></td>
+<td><code>segcore/reduce_c.h</code></td>
+<td><code>internal/util/segcore/reduce.go</code></td>
+<td>多段结果归并</td>
+</tr>
+<tr>
+<td><strong>向量索引</strong></td>
+<td><code>segcore/vector_index_c.h</code></td>
+<td><code>internal/util/vecindexmgr/</code></td>
+<td>向量索引操作</td>
+</tr>
+<tr>
+<td><strong>存储</strong></td>
+<td><code>storage/storage_c.h</code></td>
+<td><code>internal/storagev2/packed/</code></td>
+<td>Parquet 读写</td>
+</tr>
+<tr>
+<td><strong>Parquet 写入</strong></td>
+<td><code>segcore/packed_writer_c.h</code></td>
+<td><code>internal/storagev2/packed/packed_writer.go</code></td>
+<td>Arrow → Parquet</td>
+</tr>
+<tr>
+<td><strong>Parquet 读取</strong></td>
+<td><code>segcore/packed_reader_c.h</code></td>
+<td><code>internal/storagev2/packed/packed_reader.go</code></td>
+<td>Parquet → Arrow</td>
+</tr>
+<tr>
+<td><strong>聚类分析</strong></td>
+<td><code>clustering/analyze_c.h</code></td>
+<td><code>internal/util/analyzecgowrapper/</code></td>
+<td>K-means 聚类</td>
+</tr>
+<tr>
+<td><strong>监控</strong></td>
+<td><code>monitor/monitor_c.h</code></td>
+<td>-</td>
+<td>性能监控</td>
+</tr>
+<tr>
+<td><strong>Tokenizer</strong></td>
+<td><code>segcore/tokenizer_c.h</code></td>
+<td>-</td>
+<td>文本分词</td>
+</tr>
+<tr>
+<td><strong>Future</strong></td>
+<td><code>futures/future_c.h</code></td>
+<td><code>internal/util/cgo/futures.go</code></td>
+<td>异步操作</td>
+</tr>
+</tbody></table>
+<h2 id="七、总结"><a href="#七、总结" class="headerlink" title="七、总结"></a>七、总结</h2><h3 id="7-1-设计优势"><a href="#7-1-设计优势" class="headerlink" title="7.1 设计优势"></a>7.1 设计优势</h3><ol>
+<li>✅ <strong>性能</strong>：核心路径使用 C++，充分利用硬件优化</li>
+<li>✅ <strong>可维护性</strong>：Go 代码简洁，易于维护</li>
+<li>✅ <strong>生态</strong>：利用 C++ 生态（Arrow、Parquet、Knowhere 等）</li>
+<li>✅ <strong>灵活性</strong>：可以逐步迁移功能到 C++</li>
+</ol>
+<h3 id="7-2-关键设计原则"><a href="#7-2-关键设计原则" class="headerlink" title="7.2 关键设计原则"></a>7.2 关键设计原则</h3><ol>
+<li><strong>清晰的接口边界</strong>：C 接口封装 C++ 实现</li>
+<li><strong>统一错误处理</strong>：CStatus 统一错误格式</li>
+<li><strong>内存安全</strong>：明确的内存管理责任</li>
+<li><strong>性能优化</strong>：减少 CGO 调用，使用零拷贝</li>
+</ol>
+<h3 id="7-3-未来方向"><a href="#7-3-未来方向" class="headerlink" title="7.3 未来方向"></a>7.3 未来方向</h3><ul>
+<li>继续优化 CGO 调用开销</li>
+<li>更多功能迁移到 C++</li>
+<li>更好的异步支持</li>
+<li>改进内存管理策略</li>
+</ul>
+<p>Milvus 的 C++&#x2F;CGO 集成设计为系统提供了高性能和可维护性的良好平衡，是混合语言架构的优秀实践。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%80%E3%80%81CGO-%E9%9B%86%E6%88%90%E6%9E%B6%E6%9E%84"><span class="toc-number">2.</span> <span class="toc-text">一、CGO 集成架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-%E5%9F%BA%E6%9C%AC%E7%BB%93%E6%9E%84"><span class="toc-number">2.1.</span> <span class="toc-text">1.1 基本结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-CGO-%E4%BD%BF%E7%94%A8%E6%96%B9%E5%BC%8F"><span class="toc-number">2.2.</span> <span class="toc-text">1.2 CGO 使用方式</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%8C%E3%80%81%E4%B8%BB%E8%A6%81-C-%E5%8A%9F%E8%83%BD%E6%A8%A1%E5%9D%97"><span class="toc-number">3.</span> <span class="toc-text">二、主要 C++ 功能模块</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E7%B4%A2%E5%BC%95%E6%9E%84%E5%BB%BA%EF%BC%88Index-Building%EF%BC%89"><span class="toc-number">3.1.</span> <span class="toc-text">2.1 索引构建（Index Building）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-%E6%AE%B5%E6%A0%B8%E5%BF%83%EF%BC%88Segcore%EF%BC%89"><span class="toc-number">3.2.</span> <span class="toc-text">2.2 段核心（Segcore）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-1-Collection-%E7%AE%A1%E7%90%86"><span class="toc-number">3.2.1.</span> <span class="toc-text">2.2.1 Collection 管理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-2-Segment-%E6%93%8D%E4%BD%9C"><span class="toc-number">3.2.2.</span> <span class="toc-text">2.2.2 Segment 操作</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-3-%E6%9F%A5%E8%AF%A2%E8%AE%A1%E5%88%92%EF%BC%88Query-Plan%EF%BC%89"><span class="toc-number">3.2.3.</span> <span class="toc-text">2.2.3 查询计划（Query Plan）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-4-%E7%BB%93%E6%9E%9C%E5%BD%92%E5%B9%B6%EF%BC%88Reduce%EF%BC%89"><span class="toc-number">3.2.4.</span> <span class="toc-text">2.2.4 结果归并（Reduce）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-5-%E5%90%91%E9%87%8F%E7%B4%A2%E5%BC%95%E6%93%8D%E4%BD%9C"><span class="toc-number">3.2.5.</span> <span class="toc-text">2.2.5 向量索引操作</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-6-%E5%AD%97%E6%AE%B5%E6%95%B0%E6%8D%AE%E5%8A%A0%E8%BD%BD"><span class="toc-number">3.2.6.</span> <span class="toc-text">2.2.6 字段数据加载</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-2-7-%E7%B4%A2%E5%BC%95%E5%8A%A0%E8%BD%BD"><span class="toc-number">3.2.7.</span> <span class="toc-text">2.2.7 索引加载</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-%E5%AD%98%E5%82%A8%EF%BC%88Storage%EF%BC%89"><span class="toc-number">3.3.</span> <span class="toc-text">2.3 存储（Storage）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-1-Parquet-%E8%AF%BB%E5%86%99"><span class="toc-number">3.3.1.</span> <span class="toc-text">2.3.1 Parquet 读写</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-2-%E5%AD%98%E5%82%A8%E6%8A%BD%E8%B1%A1"><span class="toc-number">3.3.2.</span> <span class="toc-text">2.3.2 存储抽象</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-4-%E8%A1%A8%E8%BE%BE%E5%BC%8F%E6%89%A7%E8%A1%8C%EF%BC%88Expression-Execution%EF%BC%89"><span class="toc-number">3.4.</span> <span class="toc-text">2.4 表达式执行（Expression Execution）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-5-%E8%81%9A%E7%B1%BB%E5%88%86%E6%9E%90%EF%BC%88Clustering%EF%BC%89"><span class="toc-number">3.5.</span> <span class="toc-text">2.5 聚类分析（Clustering）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-6-%E7%9B%91%E6%8E%A7%EF%BC%88Monitor%EF%BC%89"><span class="toc-number">3.6.</span> <span class="toc-text">2.6 监控（Monitor）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-7-Tokenizer"><span class="toc-number">3.7.</span> <span class="toc-text">2.7 Tokenizer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-8-Future%EF%BC%88%E5%BC%82%E6%AD%A5%E6%93%8D%E4%BD%9C%EF%BC%89"><span class="toc-number">3.8.</span> <span class="toc-text">2.8 Future（异步操作）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-9-%E5%90%91%E9%87%8F%E7%B4%A2%E5%BC%95%E6%A3%80%E6%9F%A5"><span class="toc-number">3.9.</span> <span class="toc-text">2.9 向量索引检查</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%89%E3%80%81CGO-%E6%8E%A5%E5%8F%A3%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F"><span class="toc-number">4.</span> <span class="toc-text">三、CGO 接口设计模式</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.1.</span> <span class="toc-text">3.1 错误处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86"><span class="toc-number">4.2.</span> <span class="toc-text">3.2 内存管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E6%95%B0%E6%8D%AE%E8%BD%AC%E6%8D%A2"><span class="toc-number">4.3.</span> <span class="toc-text">3.3 数据转换</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%9B%9B%E3%80%81%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E8%80%83%E8%99%91"><span class="toc-number">5.</span> <span class="toc-text">四、性能优化考虑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-CGO-%E8%B0%83%E7%94%A8%E5%BC%80%E9%94%80"><span class="toc-number">5.1.</span> <span class="toc-text">4.1 CGO 调用开销</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-%E7%BA%BF%E7%A8%8B%E7%AE%A1%E7%90%86"><span class="toc-number">5.2.</span> <span class="toc-text">4.2 线程管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86%E4%BC%98%E5%8C%96"><span class="toc-number">5.3.</span> <span class="toc-text">4.3 内存管理优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BA%94%E3%80%81%E4%B8%BB%E8%A6%81%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-number">6.</span> <span class="toc-text">五、主要使用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-QueryNode-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">6.1.</span> <span class="toc-text">5.1 QueryNode 中的使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-DataNode-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">6.2.</span> <span class="toc-text">5.2 DataNode 中的使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-Proxy-%E4%B8%AD%E7%9A%84%E4%BD%BF%E7%94%A8"><span class="toc-number">6.3.</span> <span class="toc-text">5.3 Proxy 中的使用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-StorageV2-%E5%86%99%E5%85%A5%E6%B5%81%E7%A8%8B"><span class="toc-number">6.4.</span> <span class="toc-text">5.4 StorageV2 写入流程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%AD%E3%80%81C-%E6%A0%B8%E5%BF%83%E6%A8%A1%E5%9D%97%E6%80%BB%E7%BB%93"><span class="toc-number">7.</span> <span class="toc-text">六、C++ 核心模块总结</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%83%E3%80%81%E6%80%BB%E7%BB%93"><span class="toc-number">8.</span> <span class="toc-text">七、总结</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#7-1-%E8%AE%BE%E8%AE%A1%E4%BC%98%E5%8A%BF"><span class="toc-number">8.1.</span> <span class="toc-text">7.1 设计优势</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-2-%E5%85%B3%E9%94%AE%E8%AE%BE%E8%AE%A1%E5%8E%9F%E5%88%99"><span class="toc-number">8.2.</span> <span class="toc-text">7.2 关键设计原则</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-3-%E6%9C%AA%E6%9D%A5%E6%96%B9%E5%90%91"><span class="toc-number">8.3.</span> <span class="toc-text">7.3 未来方向</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&text=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&is_video=false&description=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus C++ 功能通过 CGO 集成分析&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&title=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&name=Milvus C++ 功能通过 CGO 集成分析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/&t=Milvus C++ 功能通过 CGO 集成分析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

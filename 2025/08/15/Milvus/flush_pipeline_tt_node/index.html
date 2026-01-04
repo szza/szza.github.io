@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="概述ttNode（TimeTick Node）是 FlowGraph 中的最后一个节点，负责管理和更新通道检查点（Checkpoint）。它定期或基于触发条件将检查点异步更新到 DataCoord，确保数据消费位置的持久化。 架构设计核心结构1234567891011type ttNode struct &amp;#123;    BaseNode        vChannelName       st">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus TTNode（时间戳节点）详解">
+<meta property="og:url" content="https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="概述ttNode（TimeTick Node）是 FlowGraph 中的最后一个节点，负责管理和更新通道检查点（Checkpoint）。它定期或基于触发条件将检查点异步更新到 DataCoord，确保数据消费位置的持久化。 架构设计核心结构1234567891011type ttNode struct &amp;#123;    BaseNode        vChannelName       st">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-04T13:33:47.281Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus TTNode（时间戳节点）详解</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/15/Milvus/milvus_timestamp_write_flow/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/15/Milvus/flush_pipeline_write_buffer/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&text=Milvus TTNode（时间戳节点）详解"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&is_video=false&description=Milvus TTNode（时间戳节点）详解"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus TTNode（时间戳节点）详解&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&name=Milvus TTNode（时间戳节点）详解&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&t=Milvus TTNode（时间戳节点）详解"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">2.</span> <span class="toc-text">架构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">2.1.</span> <span class="toc-text">核心结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86%E6%B5%81%E7%A8%8B"><span class="toc-number">3.</span> <span class="toc-text">消息处理流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Operate-%E6%96%B9%E6%B3%95"><span class="toc-number">3.1.</span> <span class="toc-text">Operate 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9B%B4%E6%96%B0%E6%9C%BA%E5%88%B6"><span class="toc-number">4.</span> <span class="toc-text">检查点更新机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#updateChannelCP-%E6%96%B9%E6%B3%95"><span class="toc-number">4.1.</span> <span class="toc-text">updateChannelCP 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ChannelCheckpointUpdater-%E8%AF%A6%E8%A7%A3"><span class="toc-number">5.</span> <span class="toc-text">ChannelCheckpointUpdater 详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84-1"><span class="toc-number">5.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%AF%E5%8A%A8%E5%BE%AA%E7%8E%AF"><span class="toc-number">5.2.</span> <span class="toc-text">启动循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B7%BB%E5%8A%A0%E4%BB%BB%E5%8A%A1"><span class="toc-number">5.3.</span> <span class="toc-text">添加任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9B%B4%E6%96%B0%E6%A3%80%E6%9F%A5%E7%82%B9"><span class="toc-number">5.4.</span> <span class="toc-text">更新检查点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9B%B4%E6%96%B0%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6"><span class="toc-number">6.</span> <span class="toc-text">检查点更新触发条件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%AE%9A%E6%9C%9F%E6%9B%B4%E6%96%B0"><span class="toc-number">6.1.</span> <span class="toc-text">1. 定期更新</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%88%B7%E6%96%B0%E8%A7%A6%E5%8F%91"><span class="toc-number">6.2.</span> <span class="toc-text">2. 刷新触发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E5%A4%B1%E8%B4%A5%E5%A4%84%E7%90%86"><span class="toc-number">7.</span> <span class="toc-text">检查点失败处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%B1%E8%B4%A5%E9%87%8D%E8%AF%95%E6%9C%BA%E5%88%B6"><span class="toc-number">7.1.</span> <span class="toc-text">失败重试机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E5%90%88%E5%B9%B6"><span class="toc-number">7.2.</span> <span class="toc-text">任务合并</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">8.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%BC%82%E6%AD%A5%E6%9B%B4%E6%96%B0"><span class="toc-number">8.1.</span> <span class="toc-text">1. 异步更新</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%89%B9%E9%87%8F%E5%A4%84%E7%90%86"><span class="toc-number">8.2.</span> <span class="toc-text">2. 批量处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%B9%B6%E8%A1%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">8.3.</span> <span class="toc-text">3. 并行执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E5%A4%B1%E8%B4%A5%E9%87%8D%E8%AF%95"><span class="toc-number">8.4.</span> <span class="toc-text">4. 失败重试</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%88%B7%E6%96%B0%E5%8A%A0%E9%80%9F"><span class="toc-number">8.5.</span> <span class="toc-text">5. 刷新加速</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">9.</span> <span class="toc-text">配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">10.</span> <span class="toc-text">相关文档</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus TTNode（时间戳节点）详解
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-15T02:20:00.000Z" itemprop="datePublished">2025-08-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p><code>ttNode</code>（TimeTick Node）是 FlowGraph 中的最后一个节点，负责管理和更新通道检查点（Checkpoint）。它定期或基于触发条件将检查点异步更新到 DataCoord，确保数据消费位置的持久化。</p>
+<h2 id="架构设计"><a href="#架构设计" class="headerlink" title="架构设计"></a>架构设计</h2><h3 id="核心结构"><a href="#核心结构" class="headerlink" title="核心结构"></a>核心结构</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ttNode <span class="keyword">struct</span> &#123;</span><br><span class="line">    BaseNode</span><br><span class="line">    </span><br><span class="line">    vChannelName       <span class="type">string</span></span><br><span class="line">    metacache          metacache.MetaCache</span><br><span class="line">    writeBufferManager writebuffer.BufferManager</span><br><span class="line">    lastUpdateTime     *atomic.Time</span><br><span class="line">    cpUpdater          *util.ChannelCheckpointUpdater</span><br><span class="line">    dropMode           *atomic.Bool</span><br><span class="line">    dropCallback       <span class="function"><span class="keyword">func</span><span class="params">()</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键字段说明：</strong></p>
+<ul>
+<li><code>writeBufferManager</code>: WriteBuffer 管理器，用于获取检查点</li>
+<li><code>lastUpdateTime</code>: 上次更新时间，用于控制更新频率</li>
+<li><code>cpUpdater</code>: 检查点更新器，异步更新检查点</li>
+<li><code>dropMode</code>: 删除模式标志</li>
+</ul>
+<h2 id="消息处理流程"><a href="#消息处理流程" class="headerlink" title="消息处理流程"></a>消息处理流程</h2><h3 id="Operate-方法"><a href="#Operate-方法" class="headerlink" title="Operate 方法"></a>Operate 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ttn *ttNode)</span></span> Operate(in []Msg) []Msg &#123;</span><br><span class="line">    fgMsg := in[<span class="number">0</span>].(*FlowGraphMsg)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 处理删除集合消息</span></span><br><span class="line">    <span class="keyword">if</span> fgMsg.dropCollection &#123;</span><br><span class="line">        ttn.dropMode.Store(<span class="literal">true</span>)</span><br><span class="line">        <span class="keyword">if</span> ttn.dropCallback != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">defer</span> ttn.dropCallback()</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 删除模式下跳过检查点更新</span></span><br><span class="line">    <span class="keyword">if</span> ttn.dropMode.Load() &#123;</span><br><span class="line">        <span class="keyword">return</span> []Msg&#123;&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 处理关闭消息</span></span><br><span class="line">    <span class="keyword">if</span> fgMsg.IsCloseMsg() &#123;</span><br><span class="line">        <span class="keyword">if</span> ttn.dropMode.Load() &#123;</span><br><span class="line">            <span class="keyword">return</span> in</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// 强制更新检查点</span></span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(fgMsg.EndPositions) &gt; <span class="number">0</span> &#123;</span><br><span class="line">            channelPos, _, err := ttn.writeBufferManager.GetCheckpoint(ttn.vChannelName)</span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> []Msg&#123;&#125;</span><br><span class="line">            &#125;</span><br><span class="line">            ttn.updateChannelCP(channelPos, curTs, <span class="literal">false</span>)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> in</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    curTs, _ := tsoutil.ParseTS(fgMsg.TimeRange.TimestampMax)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 4. 获取检查点</span></span><br><span class="line">    channelPos, needUpdate, err := ttn.writeBufferManager.GetCheckpoint(ttn.vChannelName)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> []Msg&#123;&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 5. 定期更新（基于时间间隔）</span></span><br><span class="line">    <span class="keyword">if</span> curTs.Sub(ttn.lastUpdateTime.Load()) &gt;= paramtable.Get().DataNodeCfg.UpdateChannelCheckpointInterval.GetAsDuration(time.Second) &#123;</span><br><span class="line">        ttn.updateChannelCP(channelPos, curTs, <span class="literal">false</span>)</span><br><span class="line">        <span class="keyword">return</span> []Msg&#123;&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 6. 触发更新（基于 flushTs 条件）</span></span><br><span class="line">    <span class="keyword">if</span> needUpdate &#123;</span><br><span class="line">        ttn.updateChannelCP(channelPos, curTs, <span class="literal">true</span>)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> []Msg&#123;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="检查点更新机制"><a href="#检查点更新机制" class="headerlink" title="检查点更新机制"></a>检查点更新机制</h2><h3 id="updateChannelCP-方法"><a href="#updateChannelCP-方法" class="headerlink" title="updateChannelCP 方法"></a>updateChannelCP 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ttn *ttNode)</span></span> updateChannelCP(channelPos *msgpb.MsgPosition, curTs time.Time, flush <span class="type">bool</span>) &#123;</span><br><span class="line">    callBack := <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        channelCPTs, _ := tsoutil.ParseTS(channelPos.GetTimestamp())</span><br><span class="line">        <span class="comment">// 重置 flushTs，防止频繁刷新</span></span><br><span class="line">        ttn.writeBufferManager.NotifyCheckpointUpdated(ttn.vChannelName, channelPos.GetTimestamp())</span><br><span class="line">        log.Debug(<span class="string">&quot;UpdateChannelCheckpoint success&quot;</span>,</span><br><span class="line">            zap.String(<span class="string">&quot;channel&quot;</span>, ttn.vChannelName),</span><br><span class="line">            zap.Uint64(<span class="string">&quot;cpTs&quot;</span>, channelPos.GetTimestamp()),</span><br><span class="line">            zap.Time(<span class="string">&quot;cpTime&quot;</span>, channelCPTs))</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 添加到更新器</span></span><br><span class="line">    ttn.cpUpdater.AddTask(channelPos, flush, callBack)</span><br><span class="line">    ttn.lastUpdateTime.Store(curTs)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键逻辑：</strong></p>
+<ul>
+<li><code>flush</code> 参数：标记是否由刷新操作触发</li>
+<li><code>callBack</code>：更新成功后的回调，用于重置 <code>flushTs</code></li>
+</ul>
+<h2 id="ChannelCheckpointUpdater-详解"><a href="#ChannelCheckpointUpdater-详解" class="headerlink" title="ChannelCheckpointUpdater 详解"></a>ChannelCheckpointUpdater 详解</h2><h3 id="核心结构-1"><a href="#核心结构-1" class="headerlink" title="核心结构"></a>核心结构</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ChannelCheckpointUpdater <span class="keyword">struct</span> &#123;</span><br><span class="line">    broker broker.Broker</span><br><span class="line">    </span><br><span class="line">    mu         sync.RWMutex</span><br><span class="line">    tasks      <span class="keyword">map</span>[<span class="type">string</span>]*channelCPUpdateTask</span><br><span class="line">    notifyChan <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">    </span><br><span class="line">    closeCh            <span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;</span><br><span class="line">    closeOnce          sync.Once</span><br><span class="line">    updateDoneCallback <span class="function"><span class="keyword">func</span><span class="params">(*msgpb.MsgPosition)</span></span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">type</span> channelCPUpdateTask <span class="keyword">struct</span> &#123;</span><br><span class="line">    pos      *msgpb.MsgPosition</span><br><span class="line">    callback <span class="function"><span class="keyword">func</span><span class="params">()</span></span></span><br><span class="line">    flush    <span class="type">bool</span>  <span class="comment">// 是否由刷新触发</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="启动循环"><a href="#启动循环" class="headerlink" title="启动循环"></a>启动循环</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ccu *ChannelCheckpointUpdater)</span></span> Start() &#123;</span><br><span class="line">    ticker := time.NewTicker(paramtable.Get().DataNodeCfg.ChannelCheckpointUpdateTickInSeconds.GetAsDuration(time.Second))</span><br><span class="line">    <span class="keyword">defer</span> ticker.Stop()</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> &#123;</span><br><span class="line">        <span class="keyword">select</span> &#123;</span><br><span class="line">        <span class="keyword">case</span> &lt;-ccu.closeCh:</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        <span class="keyword">case</span> &lt;-ccu.notifyChan:</span><br><span class="line">            <span class="comment">// 处理刷新触发的更新</span></span><br><span class="line">            <span class="keyword">var</span> tasks []*channelCPUpdateTask</span><br><span class="line">            ccu.mu.Lock()</span><br><span class="line">            <span class="keyword">for</span> _, task := <span class="keyword">range</span> ccu.tasks &#123;</span><br><span class="line">                <span class="keyword">if</span> task.flush &#123;</span><br><span class="line">                    task.flush = <span class="literal">false</span>  <span class="comment">// 重置标志</span></span><br><span class="line">                    tasks = <span class="built_in">append</span>(tasks, task)</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            ccu.mu.Unlock()</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(tasks) &gt; <span class="number">0</span> &#123;</span><br><span class="line">                ccu.updateCheckpoints(tasks)</span><br><span class="line">            &#125;</span><br><span class="line">        <span class="keyword">case</span> &lt;-ticker.C:</span><br><span class="line">            <span class="comment">// 定期执行更新</span></span><br><span class="line">            ccu.execute()</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="添加任务"><a href="#添加任务" class="headerlink" title="添加任务"></a>添加任务</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ccu *ChannelCheckpointUpdater)</span></span> AddTask(channelPos *msgpb.MsgPosition, flush <span class="type">bool</span>, callback <span class="function"><span class="keyword">func</span><span class="params">()</span></span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> flush &#123;</span><br><span class="line">        <span class="comment">// 刷新触发时，立即触发更新尝试</span></span><br><span class="line">        <span class="keyword">defer</span> ccu.trigger()</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    channel := channelPos.GetChannelName()</span><br><span class="line">    task, ok := ccu.getTask(channel)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> !ok &#123;</span><br><span class="line">        <span class="comment">// 新任务</span></span><br><span class="line">        ccu.mu.Lock()</span><br><span class="line">        <span class="keyword">defer</span> ccu.mu.Unlock()</span><br><span class="line">        ccu.tasks[channel] = &amp;channelCPUpdateTask&#123;</span><br><span class="line">            pos:      channelPos,</span><br><span class="line">            callback: callback,</span><br><span class="line">            flush:    flush,</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 合并任务</span></span><br><span class="line">    max := <span class="function"><span class="keyword">func</span><span class="params">(a, b *msgpb.MsgPosition)</span></span> *msgpb.MsgPosition &#123;</span><br><span class="line">        <span class="keyword">if</span> a.GetTimestamp() &gt; b.GetTimestamp() &#123;</span><br><span class="line">            <span class="keyword">return</span> a</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> b</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 更新条件：</span></span><br><span class="line">    <span class="comment">// 1. 位置更新了（时间戳更大）</span></span><br><span class="line">    <span class="comment">// 2. 刷新触发但任务未标记为刷新</span></span><br><span class="line">    <span class="keyword">if</span> task.pos.GetTimestamp() &lt; channelPos.GetTimestamp() || (flush &amp;&amp; !task.flush) &#123;</span><br><span class="line">        ccu.mu.Lock()</span><br><span class="line">        <span class="keyword">defer</span> ccu.mu.Unlock()</span><br><span class="line">        ccu.tasks[channel] = &amp;channelCPUpdateTask&#123;</span><br><span class="line">            pos:      max(channelPos, task.pos),  <span class="comment">// 取最大时间戳</span></span><br><span class="line">            callback: callback,</span><br><span class="line">            flush:    flush || task.flush,  <span class="comment">// 保留刷新标志</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="更新检查点"><a href="#更新检查点" class="headerlink" title="更新检查点"></a>更新检查点</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ccu *ChannelCheckpointUpdater)</span></span> updateCheckpoints(tasks []*channelCPUpdateTask) &#123;</span><br><span class="line">    <span class="comment">// 1. 分批处理（每批最大数量限制）</span></span><br><span class="line">    taskGroups := lo.Chunk(tasks, paramtable.Get().DataNodeCfg.MaxChannelCheckpointsPerRPC.GetAsInt())</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 并行处理（最大并行数限制）</span></span><br><span class="line">    updateChanCPMaxParallel := paramtable.Get().DataNodeCfg.UpdateChannelCheckpointMaxParallel.GetAsInt()</span><br><span class="line">    rpcGroups := lo.Chunk(taskGroups, updateChanCPMaxParallel)</span><br><span class="line">    </span><br><span class="line">    finished := typeutil.NewConcurrentMap[<span class="type">string</span>, *channelCPUpdateTask]()</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> _, groups := <span class="keyword">range</span> rpcGroups &#123;</span><br><span class="line">        wg := &amp;sync.WaitGroup&#123;&#125;</span><br><span class="line">        <span class="keyword">for</span> _, tasks := <span class="keyword">range</span> groups &#123;</span><br><span class="line">            wg.Add(<span class="number">1</span>)</span><br><span class="line">            <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">(tasks []*channelCPUpdateTask)</span></span> &#123;</span><br><span class="line">                <span class="keyword">defer</span> wg.Done()</span><br><span class="line">                </span><br><span class="line">                <span class="comment">// 3. 构建 RPC 请求</span></span><br><span class="line">                timeout := paramtable.Get().DataNodeCfg.UpdateChannelCheckpointRPCTimeout.GetAsDuration(time.Second)</span><br><span class="line">                ctx, cancel := context.WithTimeout(context.Background(), timeout)</span><br><span class="line">                <span class="keyword">defer</span> cancel()</span><br><span class="line">                </span><br><span class="line">                channelCPs := lo.Map(tasks, <span class="function"><span class="keyword">func</span><span class="params">(t *channelCPUpdateTask, _ <span class="type">int</span>)</span></span> *msgpb.MsgPosition &#123;</span><br><span class="line">                    <span class="keyword">return</span> t.pos</span><br><span class="line">                &#125;)</span><br><span class="line">                </span><br><span class="line">                <span class="comment">// 4. 发送 RPC</span></span><br><span class="line">                err := ccu.broker.UpdateChannelCheckpoint(ctx, channelCPs)</span><br><span class="line">                <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                    log.Warn(<span class="string">&quot;update channel checkpoint failed&quot;</span>, zap.Error(err))</span><br><span class="line">                    <span class="keyword">return</span>  <span class="comment">// 失败时不删除任务，等待重试</span></span><br><span class="line">                &#125;</span><br><span class="line">                </span><br><span class="line">                <span class="comment">// 5. 执行回调</span></span><br><span class="line">                <span class="keyword">for</span> _, task := <span class="keyword">range</span> tasks &#123;</span><br><span class="line">                    task.callback()</span><br><span class="line">                    finished.Insert(task.pos.GetChannelName(), task)</span><br><span class="line">                    <span class="keyword">if</span> ccu.updateDoneCallback != <span class="literal">nil</span> &#123;</span><br><span class="line">                        ccu.updateDoneCallback(task.pos)</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;(tasks)</span><br><span class="line">        &#125;</span><br><span class="line">        wg.Wait()</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 6. 清理已完成的任务</span></span><br><span class="line">    ccu.mu.Lock()</span><br><span class="line">    <span class="keyword">defer</span> ccu.mu.Unlock()</span><br><span class="line">    finished.Range(<span class="function"><span class="keyword">func</span><span class="params">(_ <span class="type">string</span>, task *channelCPUpdateTask)</span></span> <span class="type">bool</span> &#123;</span><br><span class="line">        channel := task.pos.GetChannelName()</span><br><span class="line">        <span class="comment">// 只有当任务位置 &gt;= 当前任务位置时才删除（避免删除更新的任务）</span></span><br><span class="line">        <span class="keyword">if</span> ccu.tasks[channel].pos.GetTimestamp() &lt;= task.pos.GetTimestamp() &#123;</span><br><span class="line">            <span class="built_in">delete</span>(ccu.tasks, channel)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="检查点更新触发条件"><a href="#检查点更新触发条件" class="headerlink" title="检查点更新触发条件"></a>检查点更新触发条件</h2><h3 id="1-定期更新"><a href="#1-定期更新" class="headerlink" title="1. 定期更新"></a>1. 定期更新</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> curTs.Sub(ttn.lastUpdateTime.Load()) &gt;= UpdateChannelCheckpointInterval &#123;</span><br><span class="line">    ttn.updateChannelCP(channelPos, curTs, <span class="literal">false</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>触发条件：</strong> 距离上次更新时间超过配置的间隔</p>
+<h3 id="2-刷新触发"><a href="#2-刷新触发" class="headerlink" title="2. 刷新触发"></a>2. 刷新触发</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">channelPos, needUpdate, err := ttn.writeBufferManager.GetCheckpoint(ttn.vChannelName)</span><br><span class="line"><span class="keyword">if</span> needUpdate &#123;</span><br><span class="line">    ttn.updateChannelCP(channelPos, curTs, <span class="literal">true</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>触发条件：</strong> <code>GetCheckpoint</code> 返回 <code>needUpdate = true</code></p>
+<p><strong>needUpdate 的计算：</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flushTs := buf.GetFlushTimestamp()</span><br><span class="line"><span class="keyword">return</span> cp, flushTs != nonFlushTS &amp;&amp; cp.GetTimestamp() &gt;= flushTs, <span class="literal">nil</span></span><br></pre></td></tr></table></figure>
+
+<p><strong>含义：</strong> 当检查点时间戳 &gt;&#x3D; flushTs 时，需要更新检查点</p>
+<h2 id="检查点失败处理"><a href="#检查点失败处理" class="headerlink" title="检查点失败处理"></a>检查点失败处理</h2><h3 id="失败重试机制"><a href="#失败重试机制" class="headerlink" title="失败重试机制"></a>失败重试机制</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">err := ccu.broker.UpdateChannelCheckpoint(ctx, channelCPs)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Warn(<span class="string">&quot;update channel checkpoint failed&quot;</span>, zap.Error(err))</span><br><span class="line">    <span class="keyword">return</span>  <span class="comment">// 不删除任务，等待下次重试</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>特点：</strong></p>
+<ul>
+<li>失败时不删除任务</li>
+<li>任务保留在 <code>ccu.tasks</code> 中</li>
+<li>下次 <code>execute()</code> 或 <code>notifyChan</code> 触发时会重试</li>
+</ul>
+<h3 id="任务合并"><a href="#任务合并" class="headerlink" title="任务合并"></a>任务合并</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 合并逻辑：取最大时间戳，保留刷新标志</span></span><br><span class="line">ccu.tasks[channel] = &amp;channelCPUpdateTask&#123;</span><br><span class="line">    pos:      max(channelPos, task.pos),</span><br><span class="line">    callback: callback,</span><br><span class="line">    flush:    flush || task.flush,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>优势：</strong></p>
+<ul>
+<li>避免重复更新</li>
+<li>确保使用最新的检查点</li>
+<li>保留刷新触发标志</li>
+</ul>
+<h2 id="设计特点"><a href="#设计特点" class="headerlink" title="设计特点"></a>设计特点</h2><h3 id="1-异步更新"><a href="#1-异步更新" class="headerlink" title="1. 异步更新"></a>1. 异步更新</h3><p>通过 <code>ChannelCheckpointUpdater</code> 实现异步更新，不阻塞 FlowGraph。</p>
+<h3 id="2-批量处理"><a href="#2-批量处理" class="headerlink" title="2. 批量处理"></a>2. 批量处理</h3><p>支持批量更新多个通道的检查点，提高效率。</p>
+<h3 id="3-并行执行"><a href="#3-并行执行" class="headerlink" title="3. 并行执行"></a>3. 并行执行</h3><p>支持并行处理多个批次，充分利用系统资源。</p>
+<h3 id="4-失败重试"><a href="#4-失败重试" class="headerlink" title="4. 失败重试"></a>4. 失败重试</h3><p>失败的任务保留在队列中，自动重试。</p>
+<h3 id="5-刷新加速"><a href="#5-刷新加速" class="headerlink" title="5. 刷新加速"></a>5. 刷新加速</h3><p>刷新触发的更新会立即尝试，不等待定时器。</p>
+<h2 id="配置参数"><a href="#配置参数" class="headerlink" title="配置参数"></a>配置参数</h2><ul>
+<li><code>UpdateChannelCheckpointInterval</code>: 定期更新间隔</li>
+<li><code>ChannelCheckpointUpdateTickInSeconds</code>: 更新器定时器间隔</li>
+<li><code>MaxChannelCheckpointsPerRPC</code>: 每次 RPC 最大检查点数</li>
+<li><code>UpdateChannelCheckpointMaxParallel</code>: 最大并行数</li>
+<li><code>UpdateChannelCheckpointRPCTimeout</code>: RPC 超时时间</li>
+</ul>
+<h2 id="相关文档"><a href="#相关文档" class="headerlink" title="相关文档"></a>相关文档</h2><ul>
+<li><a href="./flush_pipeline_write_buffer_manager.md">WriteBuffer 管理器</a></li>
+<li><a href="./flush_pipeline_flush_checkpoint.md">Flush 与 Checkpoint 机制</a></li>
+<li><a href="./flush_pipeline_overview.md">总览文档</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">2.</span> <span class="toc-text">架构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">2.1.</span> <span class="toc-text">核心结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86%E6%B5%81%E7%A8%8B"><span class="toc-number">3.</span> <span class="toc-text">消息处理流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Operate-%E6%96%B9%E6%B3%95"><span class="toc-number">3.1.</span> <span class="toc-text">Operate 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9B%B4%E6%96%B0%E6%9C%BA%E5%88%B6"><span class="toc-number">4.</span> <span class="toc-text">检查点更新机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#updateChannelCP-%E6%96%B9%E6%B3%95"><span class="toc-number">4.1.</span> <span class="toc-text">updateChannelCP 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#ChannelCheckpointUpdater-%E8%AF%A6%E8%A7%A3"><span class="toc-number">5.</span> <span class="toc-text">ChannelCheckpointUpdater 详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84-1"><span class="toc-number">5.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%AF%E5%8A%A8%E5%BE%AA%E7%8E%AF"><span class="toc-number">5.2.</span> <span class="toc-text">启动循环</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B7%BB%E5%8A%A0%E4%BB%BB%E5%8A%A1"><span class="toc-number">5.3.</span> <span class="toc-text">添加任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%9B%B4%E6%96%B0%E6%A3%80%E6%9F%A5%E7%82%B9"><span class="toc-number">5.4.</span> <span class="toc-text">更新检查点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9B%B4%E6%96%B0%E8%A7%A6%E5%8F%91%E6%9D%A1%E4%BB%B6"><span class="toc-number">6.</span> <span class="toc-text">检查点更新触发条件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%AE%9A%E6%9C%9F%E6%9B%B4%E6%96%B0"><span class="toc-number">6.1.</span> <span class="toc-text">1. 定期更新</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%88%B7%E6%96%B0%E8%A7%A6%E5%8F%91"><span class="toc-number">6.2.</span> <span class="toc-text">2. 刷新触发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E5%A4%B1%E8%B4%A5%E5%A4%84%E7%90%86"><span class="toc-number">7.</span> <span class="toc-text">检查点失败处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%B1%E8%B4%A5%E9%87%8D%E8%AF%95%E6%9C%BA%E5%88%B6"><span class="toc-number">7.1.</span> <span class="toc-text">失败重试机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E5%90%88%E5%B9%B6"><span class="toc-number">7.2.</span> <span class="toc-text">任务合并</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">8.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%BC%82%E6%AD%A5%E6%9B%B4%E6%96%B0"><span class="toc-number">8.1.</span> <span class="toc-text">1. 异步更新</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%89%B9%E9%87%8F%E5%A4%84%E7%90%86"><span class="toc-number">8.2.</span> <span class="toc-text">2. 批量处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%B9%B6%E8%A1%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">8.3.</span> <span class="toc-text">3. 并行执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E5%A4%B1%E8%B4%A5%E9%87%8D%E8%AF%95"><span class="toc-number">8.4.</span> <span class="toc-text">4. 失败重试</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%88%B7%E6%96%B0%E5%8A%A0%E9%80%9F"><span class="toc-number">8.5.</span> <span class="toc-text">5. 刷新加速</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">9.</span> <span class="toc-text">配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">10.</span> <span class="toc-text">相关文档</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&text=Milvus TTNode（时间戳节点）详解"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&is_video=false&description=Milvus TTNode（时间戳节点）详解"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus TTNode（时间戳节点）详解&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&title=Milvus TTNode（时间戳节点）详解"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&name=Milvus TTNode（时间戳节点）详解&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/&t=Milvus TTNode（时间戳节点）详解"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

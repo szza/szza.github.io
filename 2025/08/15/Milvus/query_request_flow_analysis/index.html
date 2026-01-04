@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本文档详细分析了 Milvus 中 Query Request 从接收到返回的完整处理流程。 1. 请求入口层1.1 HTTP 接口入口文件: internal&#x2F;distributed&#x2F;proxy&#x2F;httpserver&#x2F;handler_v1.go, handler_v2.go  V1 API: HandlersV1.query() (line 496)  接收 HTTP JSON 请求 解析参数：">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus Query Request 处理流程分析">
+<meta property="og:url" content="https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本文档详细分析了 Milvus 中 Query Request 从接收到返回的完整处理流程。 1. 请求入口层1.1 HTTP 接口入口文件: internal&#x2F;distributed&#x2F;proxy&#x2F;httpserver&#x2F;handler_v1.go, handler_v2.go  V1 API: HandlersV1.query() (line 496)  接收 HTTP JSON 请求 解析参数：">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-04T13:33:58.123Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus Query Request 处理流程分析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/15/Milvus/organize_subtask_analysis/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/15/Milvus/why_reduce_search_results/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&text=Milvus Query Request 处理流程分析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&is_video=false&description=Milvus Query Request 处理流程分析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus Query Request 处理流程分析&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&name=Milvus Query Request 处理流程分析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&t=Milvus Query Request 处理流程分析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E8%AF%B7%E6%B1%82%E5%85%A5%E5%8F%A3%E5%B1%82"><span class="toc-number">1.</span> <span class="toc-text">1. 请求入口层</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-HTTP-%E6%8E%A5%E5%8F%A3%E5%85%A5%E5%8F%A3"><span class="toc-number">1.1.</span> <span class="toc-text">1.1 HTTP 接口入口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-gRPC-%E6%8E%A5%E5%8F%A3%E5%85%A5%E5%8F%A3"><span class="toc-number">1.2.</span> <span class="toc-text">1.2 gRPC 接口入口</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-Proxy-%E5%B1%82%E5%A4%84%E7%90%86"><span class="toc-number">2.</span> <span class="toc-text">2. Proxy 层处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-Query-%E6%96%B9%E6%B3%95%E5%85%A5%E5%8F%A3"><span class="toc-number">2.1.</span> <span class="toc-text">2.1 Query 方法入口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-query-%E6%96%B9%E6%B3%95%E6%89%A7%E8%A1%8C"><span class="toc-number">2.2.</span> <span class="toc-text">2.2 query 方法执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-QueryTask-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">2.3.</span> <span class="toc-text">2.3 QueryTask 执行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-1-PreExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">2.3.1.</span> <span class="toc-text">2.3.1 PreExecute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-2-Execute-%E9%98%B6%E6%AE%B5"><span class="toc-number">2.3.2.</span> <span class="toc-text">2.3.2 Execute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-3-PostExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">2.3.3.</span> <span class="toc-text">2.3.3 PostExecute 阶段</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-QueryNode-%E5%B1%82%E5%A4%84%E7%90%86"><span class="toc-number">3.</span> <span class="toc-text">3. QueryNode 层处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Query-%E6%96%B9%E6%B3%95%E5%85%A5%E5%8F%A3"><span class="toc-number">3.1.</span> <span class="toc-text">3.1 Query 方法入口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-queryChannel-%E6%96%B9%E6%B3%95"><span class="toc-number">3.2.</span> <span class="toc-text">3.2 queryChannel 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Delegator-Query-%E6%96%B9%E6%B3%95"><span class="toc-number">3.3.</span> <span class="toc-text">3.3 Delegator Query 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E6%95%B0%E6%8D%AE%E6%B5%81%E5%9B%BE"><span class="toc-number">4.</span> <span class="toc-text">4. 数据流图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E5%85%B3%E9%94%AE%E7%BB%84%E4%BB%B6%E8%AF%B4%E6%98%8E"><span class="toc-number">5.</span> <span class="toc-text">5. 关键组件说明</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-Load-Balancer"><span class="toc-number">5.1.</span> <span class="toc-text">5.1 Load Balancer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-Query-Plan-Parser"><span class="toc-number">5.2.</span> <span class="toc-text">5.2 Query Plan Parser</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-Reducer"><span class="toc-number">5.3.</span> <span class="toc-text">5.3 Reducer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-Delegator"><span class="toc-number">5.4.</span> <span class="toc-text">5.4 Delegator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-5-Segment-Manager"><span class="toc-number">5.5.</span> <span class="toc-text">5.5 Segment Manager</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">6.</span> <span class="toc-text">6. 关键配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%82%B9"><span class="toc-number">7.</span> <span class="toc-text">7. 性能优化点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">8.</span> <span class="toc-text">8. 错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">9.</span> <span class="toc-text">9. 监控指标</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus Query Request 处理流程分析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-15T02:20:00.000Z" itemprop="datePublished">2025-08-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文档详细分析了 Milvus 中 Query Request 从接收到返回的完整处理流程。</p>
+<h2 id="1-请求入口层"><a href="#1-请求入口层" class="headerlink" title="1. 请求入口层"></a>1. 请求入口层</h2><h3 id="1-1-HTTP-接口入口"><a href="#1-1-HTTP-接口入口" class="headerlink" title="1.1 HTTP 接口入口"></a>1.1 HTTP 接口入口</h3><p><strong>文件</strong>: <code>internal/distributed/proxy/httpserver/handler_v1.go</code>, <code>handler_v2.go</code></p>
+<ul>
+<li><p><strong>V1 API</strong>: <code>HandlersV1.query()</code> (line 496)</p>
+<ul>
+<li>接收 HTTP JSON 请求</li>
+<li>解析参数：<code>collectionName</code>, <code>filter</code>, <code>outputFields</code>, <code>limit</code>, <code>offset</code></li>
+<li>转换为 <code>milvuspb.QueryRequest</code></li>
+<li>调用 <code>proxy.Query()</code></li>
+</ul>
+</li>
+<li><p><strong>V2 API</strong>: <code>HandlersV2.query()</code> (line 912)</p>
+<ul>
+<li>支持更多参数：<code>partitionNames</code>, <code>consistencyLevel</code>, <code>exprParams</code></li>
+<li>处理时区转换和表达式模板</li>
+</ul>
+</li>
+</ul>
+<h3 id="1-2-gRPC-接口入口"><a href="#1-2-gRPC-接口入口" class="headerlink" title="1.2 gRPC 接口入口"></a>1.2 gRPC 接口入口</h3><p><strong>文件</strong>: <code>internal/distributed/proxy/httpserver/handler.go</code></p>
+<ul>
+<li><code>handleQuery()</code> (line 384)<ul>
+<li>直接接收 <code>milvuspb.QueryRequest</code></li>
+<li>调用 <code>proxy.Query()</code></li>
+</ul>
+</li>
+</ul>
+<h2 id="2-Proxy-层处理"><a href="#2-Proxy-层处理" class="headerlink" title="2. Proxy 层处理"></a>2. Proxy 层处理</h2><h3 id="2-1-Query-方法入口"><a href="#2-1-Query-方法入口" class="headerlink" title="2.1 Query 方法入口"></a>2.1 Query 方法入口</h3><p><strong>文件</strong>: <code>internal/proxy/impl.go</code></p>
+<p><strong>方法</strong>: <code>Proxy.Query()</code> (line 3554)</p>
+<p><strong>主要步骤</strong>:</p>
+<ol>
+<li>创建 <code>queryTask</code> 对象</li>
+<li>初始化 <code>RetrieveRequest</code> 基础信息</li>
+<li>记录指标（metrics）</li>
+<li>调用 <code>query()</code> 方法执行实际查询</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">qt := &amp;queryTask&#123;</span><br><span class="line">    ctx:       ctx,</span><br><span class="line">    Condition: NewTaskCondition(ctx),</span><br><span class="line">    RetrieveRequest: &amp;internalpb.RetrieveRequest&#123;...&#125;,</span><br><span class="line">    request:   request,</span><br><span class="line">    ...</span><br><span class="line">&#125;</span><br><span class="line">res, storageCost, err := node.query(ctx, qt, sp)</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-2-query-方法执行"><a href="#2-2-query-方法执行" class="headerlink" title="2.2 query 方法执行"></a>2.2 query 方法执行</h3><p><strong>文件</strong>: <code>internal/proxy/impl.go</code></p>
+<p><strong>方法</strong>: <code>Proxy.query()</code> (line 3447)</p>
+<p><strong>主要步骤</strong>:</p>
+<ol>
+<li>健康检查</li>
+<li>记录日志和追踪信息</li>
+<li><strong>将任务加入队列</strong>: <code>node.sched.dqQueue.Enqueue(qt)</code></li>
+<li><strong>等待任务完成</strong>: <code>qt.WaitToFinish()</code></li>
+<li>记录慢查询和指标</li>
+</ol>
+<h3 id="2-3-QueryTask-执行流程"><a href="#2-3-QueryTask-执行流程" class="headerlink" title="2.3 QueryTask 执行流程"></a>2.3 QueryTask 执行流程</h3><p><strong>文件</strong>: <code>internal/proxy/task_query.go</code></p>
+<p>QueryTask 遵循标准的任务执行模式：<strong>PreExecute → Execute → PostExecute</strong></p>
+<h4 id="2-3-1-PreExecute-阶段"><a href="#2-3-1-PreExecute-阶段" class="headerlink" title="2.3.1 PreExecute 阶段"></a>2.3.1 PreExecute 阶段</h4><p><strong>方法</strong>: <code>queryTask.PreExecute()</code> (line 369)</p>
+<p><strong>主要职责</strong>:</p>
+<ol>
+<li><p><strong>验证和获取元数据</strong></p>
+<ul>
+<li>验证 collection 名称</li>
+<li>获取 collection ID 和 schema</li>
+<li>验证 partition 名称</li>
+<li>检查 partition key 模式</li>
+</ul>
+</li>
+<li><p><strong>解析查询参数</strong></p>
+<ul>
+<li>解析 <code>limit</code>, <code>offset</code>, <code>timezone</code>, <code>extractTimeFields</code></li>
+<li>处理 iterator 模式</li>
+<li>验证最大查询窗口</li>
+</ul>
+</li>
+<li><p><strong>创建查询计划</strong></p>
+<ul>
+<li>调用 <code>createPlanArgs()</code> (line 299)</li>
+<li>解析表达式：<code>planparserv2.CreateRetrievePlanArgs()</code></li>
+<li>处理 count(*) 特殊逻辑</li>
+<li>转换输出字段名称为字段 ID</li>
+</ul>
+</li>
+<li><p><strong>设置时间戳</strong></p>
+<ul>
+<li>根据一致性级别计算 <code>guaranteeTimestamp</code></li>
+<li>处理 <code>mvccTimestamp</code></li>
+<li>处理 collection TTL</li>
+<li>设置超时时间戳</li>
+</ul>
+</li>
+<li><p><strong>序列化查询计划</strong></p>
+<ul>
+<li>将 PlanNode 序列化为 <code>SerializedExprPlan</code></li>
+</ul>
+</li>
+</ol>
+<h4 id="2-3-2-Execute-阶段"><a href="#2-3-2-Execute-阶段" class="headerlink" title="2.3.2 Execute 阶段"></a>2.3.2 Execute 阶段</h4><p><strong>方法</strong>: <code>queryTask.Execute()</code> (line 587)</p>
+<p><strong>主要职责</strong>:</p>
+<ol>
+<li><p><strong>初始化结果缓冲区</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">t.resultBuf = typeutil.NewConcurrentSet[*internalpb.RetrieveResults]()</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>负载均衡执行</strong></p>
+<ul>
+<li>调用 <code>t.lb.Execute()</code> (line 595)</li>
+<li>对每个 shard 调用 <code>queryShard()</code> 方法</li>
+<li>使用 <code>shardclient.CollectionWorkLoad</code> 管理负载</li>
+</ul>
+</li>
+<li><p><strong>queryShard 方法</strong> (line 704)</p>
+<ul>
+<li>构建 <code>querypb.QueryRequest</code></li>
+<li>设置目标节点 ID</li>
+<li>处理 MVCC 时间戳覆盖</li>
+<li>调用 <code>qn.Query()</code> 发送到 QueryNode</li>
+<li>收集结果到 <code>resultBuf</code></li>
+</ul>
+</li>
+</ol>
+<h4 id="2-3-3-PostExecute-阶段"><a href="#2-3-3-PostExecute-阶段" class="headerlink" title="2.3.3 PostExecute 阶段"></a>2.3.3 PostExecute 阶段</h4><p><strong>方法</strong>: <code>queryTask.PostExecute()</code> (line 611)</p>
+<p><strong>主要职责</strong>:</p>
+<ol>
+<li><p><strong>收集所有结果</strong></p>
+<ul>
+<li>从 <code>resultBuf</code> 收集所有 <code>RetrieveResults</code></li>
+<li>统计总查询数量和数据大小</li>
+</ul>
+</li>
+<li><p><strong>结果合并（Reduce）</strong></p>
+<ul>
+<li>创建 reducer: <code>createMilvusReducer()</code></li>
+<li>调用 <code>reducer.Reduce()</code> 合并多个 shard 的结果</li>
+<li>应用 limit 和 offset</li>
+<li>处理排序</li>
+</ul>
+</li>
+<li><p><strong>结果后处理</strong></p>
+<ul>
+<li>验证 geometry 字段</li>
+<li>重构 struct 字段数据</li>
+<li>时区转换（timestamp 转 ISO 字符串）</li>
+<li>提取时间字段（如果指定）</li>
+</ul>
+</li>
+<li><p><strong>设置最终结果</strong></p>
+<ul>
+<li>设置输出字段名称</li>
+<li>设置主键字段名称</li>
+<li>处理 iterator session timestamp</li>
+</ul>
+</li>
+</ol>
+<h2 id="3-QueryNode-层处理"><a href="#3-QueryNode-层处理" class="headerlink" title="3. QueryNode 层处理"></a>3. QueryNode 层处理</h2><h3 id="3-1-Query-方法入口"><a href="#3-1-Query-方法入口" class="headerlink" title="3.1 Query 方法入口"></a>3.1 Query 方法入口</h3><p><strong>文件</strong>: <code>internal/querynodev2/services.go</code></p>
+<p><strong>方法</strong>: <code>QueryNode.Query()</code> (line 972)</p>
+<p><strong>主要步骤</strong>:</p>
+<ol>
+<li><p><strong>健康检查</strong></p>
+<ul>
+<li>检查节点生命周期状态</li>
+<li>检查 collection 是否已加载</li>
+</ul>
+</li>
+<li><p><strong>并发处理多个 Channel</strong></p>
+<ul>
+<li>为每个 DML channel 创建独立的 goroutine</li>
+<li>调用 <code>queryChannel()</code> 处理每个 channel</li>
+<li>使用 <code>errgroup</code> 管理并发</li>
+</ul>
+</li>
+<li><p><strong>结果合并</strong></p>
+<ul>
+<li>收集所有 channel 的结果</li>
+<li>使用 <code>segments.CreateInternalReducer</code> 合并结果</li>
+<li>返回最终结果</li>
+</ul>
+</li>
+</ol>
+<h3 id="3-2-queryChannel-方法"><a href="#3-2-queryChannel-方法" class="headerlink" title="3.2 queryChannel 方法"></a>3.2 queryChannel 方法</h3><p><strong>文件</strong>: <code>internal/querynodev2/handlers.go</code></p>
+<p><strong>方法</strong>: <code>QueryNode.queryChannel()</code> (line 218)</p>
+<p><strong>主要步骤</strong>:</p>
+<ol>
+<li><p><strong>获取 Shard Delegator</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">sd, ok := node.delegators.Get(channel)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>调用 Delegator 查询</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">results, err := sd.Query(queryCtx, req)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>结果合并</strong></p>
+<ul>
+<li>使用 <code>segments.ReduceRetrieveResults()</code> 合并结果</li>
+<li>处理 collection 引用计数</li>
+</ul>
+</li>
+</ol>
+<h3 id="3-3-Delegator-Query-方法"><a href="#3-3-Delegator-Query-方法" class="headerlink" title="3.3 Delegator Query 方法"></a>3.3 Delegator Query 方法</h3><p><strong>文件</strong>: <code>internal/querynodev2/delegator/delegator.go</code></p>
+<p><strong>方法</strong>: <code>shardDelegator.Query()</code> (line 577)</p>
+<p><strong>主要步骤</strong>:</p>
+<ol>
+<li><p><strong>验证请求</strong></p>
+<ul>
+<li>检查 channel 是否匹配</li>
+<li>检查 delegator 是否可用</li>
+</ul>
+</li>
+<li><p><strong>处理时间戳</strong></p>
+<ul>
+<li>调用 <code>speedupGuranteeTS()</code> 优化 guarantee timestamp</li>
+<li>等待 tSafe（根据 <code>partialResultRequiredDataRatio</code> 配置）</li>
+<li>设置 MVCC timestamp</li>
+</ul>
+</li>
+<li><p><strong>获取可读 Segment</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">sealed, growing, sealedRowCount, version, err := </span><br><span class="line">    sd.distribution.PinReadableSegments(partialResultRequiredDataRatio, ...)</span><br></pre></td></tr></table></figure>
+<ul>
+<li>获取 sealed segments 和 growing segments</li>
+<li>Pin 操作防止 segment 被卸载</li>
+</ul>
+</li>
+<li><p><strong>Segment 剪枝</strong>（可选）</p>
+<ul>
+<li>如果启用 <code>EnableSegmentPrune</code></li>
+<li>根据统计信息剪枝不相关的 segments</li>
+</ul>
+</li>
+<li><p><strong>组织子任务</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tasks, err := organizeSubTask(ctx, req, sealed, growing, sd, ...)</span><br></pre></td></tr></table></figure>
+<ul>
+<li>将 segments 组织成查询任务</li>
+<li>分配任务到不同的 worker</li>
+</ul>
+</li>
+<li><p><strong>执行子任务</strong></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">results, err := executeSubTasks(ctx, tasks, evaluator, </span><br><span class="line">    <span class="function"><span class="keyword">func</span><span class="params">(ctx, req, worker)</span></span> &#123; worker.QuerySegments(ctx, req) &#125;, ...)</span><br></pre></td></tr></table></figure>
+<ul>
+<li>并发执行所有子任务</li>
+<li>使用 <code>RowCountBasedEvaluator</code> 评估部分结果</li>
+<li>处理失败情况（部分结果模式）</li>
+</ul>
+</li>
+<li><p><strong>返回结果</strong></p>
+<ul>
+<li>返回所有成功的查询结果</li>
+<li>Unpin segments</li>
+</ul>
+</li>
+</ol>
+<h2 id="4-数据流图"><a href="#4-数据流图" class="headerlink" title="4. 数据流图"></a>4. 数据流图</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line">Client Request (HTTP/gRPC)</span><br><span class="line">    ↓</span><br><span class="line">Proxy Handler (handler.go/handler_v1.go/handler_v2.go)</span><br><span class="line">    ↓</span><br><span class="line">Proxy.Query() [impl.go:3554]</span><br><span class="line">    ↓</span><br><span class="line">Proxy.query() [impl.go:3447]</span><br><span class="line">    ↓</span><br><span class="line">Enqueue to dqQueue</span><br><span class="line">    ↓</span><br><span class="line">QueryTask.PreExecute() [task_query.go:369]</span><br><span class="line">    ├─ 验证请求</span><br><span class="line">    ├─ 获取元数据</span><br><span class="line">    ├─ 创建查询计划</span><br><span class="line">    └─ 设置时间戳</span><br><span class="line">    ↓</span><br><span class="line">QueryTask.Execute() [task_query.go:587]</span><br><span class="line">    ├─ Load Balancer 选择节点</span><br><span class="line">    └─ queryShard() [task_query.go:704]</span><br><span class="line">        ↓</span><br><span class="line">        QueryNode.Query() [services.go:972]</span><br><span class="line">            ├─ 并发处理多个 Channel</span><br><span class="line">            └─ queryChannel() [handlers.go:218]</span><br><span class="line">                ↓</span><br><span class="line">                Delegator.Query() [delegator.go:577]</span><br><span class="line">                    ├─ 等待 tSafe</span><br><span class="line">                    ├─ Pin Readable Segments</span><br><span class="line">                    ├─ 组织子任务</span><br><span class="line">                    └─ executeSubTasks()</span><br><span class="line">                        ↓</span><br><span class="line">                        Worker.QuerySegments()</span><br><span class="line">                            ↓</span><br><span class="line">                            实际查询 Segment 数据</span><br><span class="line">    ↓</span><br><span class="line">QueryTask.PostExecute() [task_query.go:611]</span><br><span class="line">    ├─ 收集结果</span><br><span class="line">    ├─ Reduce 合并结果</span><br><span class="line">    └─ 后处理（时区转换等）</span><br><span class="line">    ↓</span><br><span class="line">返回结果给 Client</span><br></pre></td></tr></table></figure>
+
+<h2 id="5-关键组件说明"><a href="#5-关键组件说明" class="headerlink" title="5. 关键组件说明"></a>5. 关键组件说明</h2><h3 id="5-1-Load-Balancer"><a href="#5-1-Load-Balancer" class="headerlink" title="5.1 Load Balancer"></a>5.1 Load Balancer</h3><p><strong>位置</strong>: <code>internal/proxy/shardclient</code></p>
+<ul>
+<li>负责选择 QueryNode 节点</li>
+<li>支持多种负载均衡策略</li>
+<li>管理 shard client 连接</li>
+</ul>
+<h3 id="5-2-Query-Plan-Parser"><a href="#5-2-Query-Plan-Parser" class="headerlink" title="5.2 Query Plan Parser"></a>5.2 Query Plan Parser</h3><p><strong>位置</strong>: <code>internal/parser/planparserv2</code></p>
+<ul>
+<li>解析查询表达式（如 <code>id &gt; 100</code>）</li>
+<li>生成执行计划（PlanNode）</li>
+<li>优化查询计划</li>
+</ul>
+<h3 id="5-3-Reducer"><a href="#5-3-Reducer" class="headerlink" title="5.3 Reducer"></a>5.3 Reducer</h3><p><strong>位置</strong>: <code>internal/util/reduce</code></p>
+<ul>
+<li>合并多个 shard 的查询结果</li>
+<li>应用 limit 和 offset</li>
+<li>处理排序和去重</li>
+</ul>
+<h3 id="5-4-Delegator"><a href="#5-4-Delegator" class="headerlink" title="5.4 Delegator"></a>5.4 Delegator</h3><p><strong>位置</strong>: <code>internal/querynodev2/delegator</code></p>
+<ul>
+<li>管理 shard 级别的查询逻辑</li>
+<li>组织 segment 查询任务</li>
+<li>处理部分结果和容错</li>
+</ul>
+<h3 id="5-5-Segment-Manager"><a href="#5-5-Segment-Manager" class="headerlink" title="5.5 Segment Manager"></a>5.5 Segment Manager</h3><p><strong>位置</strong>: <code>internal/querynodev2/segments</code></p>
+<ul>
+<li>管理 segment 的生命周期</li>
+<li>提供 segment 查询接口</li>
+<li>处理 segment 的加载和卸载</li>
+</ul>
+<h2 id="6-关键配置参数"><a href="#6-关键配置参数" class="headerlink" title="6. 关键配置参数"></a>6. 关键配置参数</h2><ul>
+<li><code>ProxyCfg.SlowLogSpanInSeconds</code>: 慢查询阈值</li>
+<li><code>QueryNodeCfg.PartialResultRequiredDataRatio</code>: 部分结果所需数据比例</li>
+<li><code>QueryNodeCfg.EnableSegmentPrune</code>: 是否启用 segment 剪枝</li>
+<li><code>QueryNodeCfg.DefaultSegmentFilterRatio</code>: 默认 segment 过滤比例</li>
+</ul>
+<h2 id="7-性能优化点"><a href="#7-性能优化点" class="headerlink" title="7. 性能优化点"></a>7. 性能优化点</h2><ol>
+<li><strong>并发处理</strong>: 多个 channel 和 segment 并发查询</li>
+<li><strong>Segment 剪枝</strong>: 根据统计信息跳过不相关的 segments</li>
+<li><strong>部分结果</strong>: 支持返回部分结果以降低延迟</li>
+<li><strong>负载均衡</strong>: 智能选择 QueryNode 节点</li>
+<li><strong>结果缓存</strong>: 某些场景下可以缓存查询结果</li>
+</ol>
+<h2 id="8-错误处理"><a href="#8-错误处理" class="headerlink" title="8. 错误处理"></a>8. 错误处理</h2><ul>
+<li><strong>Collection 未加载</strong>: 返回 <code>CollectionNotLoaded</code> 错误</li>
+<li><strong>Channel 不匹配</strong>: Delegator 验证 channel 是否属于自己</li>
+<li><strong>Segment 未加载</strong>: 标记 segment 为 offline，可能触发重试</li>
+<li><strong>部分失败</strong>: 根据 <code>partialResultRequiredDataRatio</code> 决定是否返回部分结果</li>
+</ul>
+<h2 id="9-监控指标"><a href="#9-监控指标" class="headerlink" title="9. 监控指标"></a>9. 监控指标</h2><ul>
+<li><code>ProxyReceivedNQ</code>: Proxy 接收的查询请求数</li>
+<li><code>ProxySQLatency</code>: Proxy 查询延迟</li>
+<li><code>QueryNodeSQCount</code>: QueryNode 查询计数</li>
+<li><code>QueryNodeSQLatencyWaitTSafe</code>: 等待 tSafe 的延迟</li>
+<li><code>ProxyReduceResultLatency</code>: 结果合并延迟</li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E8%AF%B7%E6%B1%82%E5%85%A5%E5%8F%A3%E5%B1%82"><span class="toc-number">1.</span> <span class="toc-text">1. 请求入口层</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-1-HTTP-%E6%8E%A5%E5%8F%A3%E5%85%A5%E5%8F%A3"><span class="toc-number">1.1.</span> <span class="toc-text">1.1 HTTP 接口入口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#1-2-gRPC-%E6%8E%A5%E5%8F%A3%E5%85%A5%E5%8F%A3"><span class="toc-number">1.2.</span> <span class="toc-text">1.2 gRPC 接口入口</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-Proxy-%E5%B1%82%E5%A4%84%E7%90%86"><span class="toc-number">2.</span> <span class="toc-text">2. Proxy 层处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-Query-%E6%96%B9%E6%B3%95%E5%85%A5%E5%8F%A3"><span class="toc-number">2.1.</span> <span class="toc-text">2.1 Query 方法入口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-query-%E6%96%B9%E6%B3%95%E6%89%A7%E8%A1%8C"><span class="toc-number">2.2.</span> <span class="toc-text">2.2 query 方法执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-QueryTask-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">2.3.</span> <span class="toc-text">2.3 QueryTask 执行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-1-PreExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">2.3.1.</span> <span class="toc-text">2.3.1 PreExecute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-2-Execute-%E9%98%B6%E6%AE%B5"><span class="toc-number">2.3.2.</span> <span class="toc-text">2.3.2 Execute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-3-3-PostExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">2.3.3.</span> <span class="toc-text">2.3.3 PostExecute 阶段</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-QueryNode-%E5%B1%82%E5%A4%84%E7%90%86"><span class="toc-number">3.</span> <span class="toc-text">3. QueryNode 层处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Query-%E6%96%B9%E6%B3%95%E5%85%A5%E5%8F%A3"><span class="toc-number">3.1.</span> <span class="toc-text">3.1 Query 方法入口</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-queryChannel-%E6%96%B9%E6%B3%95"><span class="toc-number">3.2.</span> <span class="toc-text">3.2 queryChannel 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-Delegator-Query-%E6%96%B9%E6%B3%95"><span class="toc-number">3.3.</span> <span class="toc-text">3.3 Delegator Query 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E6%95%B0%E6%8D%AE%E6%B5%81%E5%9B%BE"><span class="toc-number">4.</span> <span class="toc-text">4. 数据流图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E5%85%B3%E9%94%AE%E7%BB%84%E4%BB%B6%E8%AF%B4%E6%98%8E"><span class="toc-number">5.</span> <span class="toc-text">5. 关键组件说明</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-Load-Balancer"><span class="toc-number">5.1.</span> <span class="toc-text">5.1 Load Balancer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-Query-Plan-Parser"><span class="toc-number">5.2.</span> <span class="toc-text">5.2 Query Plan Parser</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-Reducer"><span class="toc-number">5.3.</span> <span class="toc-text">5.3 Reducer</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-4-Delegator"><span class="toc-number">5.4.</span> <span class="toc-text">5.4 Delegator</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-5-Segment-Manager"><span class="toc-number">5.5.</span> <span class="toc-text">5.5 Segment Manager</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">6.</span> <span class="toc-text">6. 关键配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%82%B9"><span class="toc-number">7.</span> <span class="toc-text">7. 性能优化点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">8.</span> <span class="toc-text">8. 错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">9.</span> <span class="toc-text">9. 监控指标</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&text=Milvus Query Request 处理流程分析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&is_video=false&description=Milvus Query Request 处理流程分析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus Query Request 处理流程分析&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&title=Milvus Query Request 处理流程分析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&name=Milvus Query Request 处理流程分析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/query_request_flow_analysis/&t=Milvus Query Request 处理流程分析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>
