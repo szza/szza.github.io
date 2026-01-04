@@ -2,9 +2,198 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/why_reduce_search_results/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/tso_generation_and_usage_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/storagev2_write_flow_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/search_flow_comprehensive_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/query_request_flow_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/organize_subtask_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/milvus_timestamp_write_flow/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/index_sync_flow_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_write_buffer/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_write_buffer_manager/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_tt_node/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_overview/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flush_checkpoint/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_dd_node/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/flush_pipeline_data_sync_service/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/cgo_cpp_integration_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/06/15/Milvus/arrow_parquet_advantages_analysis/</loc>
+    
+    <lastmod>2026-01-04</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
     <loc>https://szza.github.io/2025/06/15/Juicefs/cached_store/</loc>
     
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -787,7 +976,7 @@
 
   <url>
     <loc>https://szza.github.io/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -795,63 +984,70 @@
   
   <url>
     <loc>https://szza.github.io/tags/Modern-C/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Papers/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Redis6-0/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/StarRocks/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/tidb-v6-1/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/RocksDb/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/ETCD/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/CRDT/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Juicefs/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.2</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/tags/Milvus/</loc>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
@@ -860,28 +1056,28 @@
   
   <url>
     <loc>https://szza.github.io/categories/SIMD/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/CBO/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/Pipeline/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/CRDT/</loc>
-    <lastmod>2025-11-18</lastmod>
+    <lastmod>2026-01-04</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>

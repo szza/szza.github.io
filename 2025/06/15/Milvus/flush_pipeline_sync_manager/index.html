@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="SyncManager 与 SyncTask 详解概述SyncManager 是 Milvus DataNode 中管理异步数据同步的核心组件，负责将内存中的数据持久化到对象存储。SyncTask 是执行同步的具体任务单元，封装了数据写入、元数据更新等完整流程。 SyncManager 架构核心结构12345678type syncManager struct &amp;#123;    *keyLock">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus SyncManager 与 SyncTask 详解">
+<meta property="og:url" content="https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="SyncManager 与 SyncTask 详解概述SyncManager 是 Milvus DataNode 中管理异步数据同步的核心组件，负责将内存中的数据持久化到对象存储。SyncTask 是执行同步的具体任务单元，封装了数据写入、元数据更新等完整流程。 SyncManager 架构核心结构12345678type syncManager struct &amp;#123;    *keyLock">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-06-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-04T12:57:05.080Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus SyncManager 与 SyncTask 详解</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/flush_pipeline_overview/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/index_sync_flow_analysis/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&text=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&is_video=false&description=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus SyncManager 与 SyncTask 详解&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&name=Milvus SyncManager 与 SyncTask 详解&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&t=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#SyncManager-%E4%B8%8E-SyncTask-%E8%AF%A6%E8%A7%A3"><span class="toc-number">1.</span> <span class="toc-text">SyncManager 与 SyncTask 详解</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncManager-%E6%9E%B6%E6%9E%84"><span class="toc-number">1.2.</span> <span class="toc-text">SyncManager 架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">1.2.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89"><span class="toc-number">1.2.2.</span> <span class="toc-text">接口定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncManager-%E5%88%9D%E5%A7%8B%E5%8C%96"><span class="toc-number">1.3.</span> <span class="toc-text">SyncManager 初始化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E6%8F%90%E4%BA%A4%E6%B5%81%E7%A8%8B"><span class="toc-number">1.4.</span> <span class="toc-text">任务提交流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#SyncData-%E6%96%B9%E6%B3%95"><span class="toc-number">1.4.1.</span> <span class="toc-text">SyncData 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#safeSubmitTask-%E6%96%B9%E6%B3%95"><span class="toc-number">1.4.2.</span> <span class="toc-text">safeSubmitTask 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#submit-%E6%96%B9%E6%B3%95"><span class="toc-number">1.4.3.</span> <span class="toc-text">submit 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncTask-%E8%AF%A6%E8%A7%A3"><span class="toc-number">1.5.</span> <span class="toc-text">SyncTask 详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84-1"><span class="toc-number">1.5.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SyncPack%EF%BC%88%E6%95%B0%E6%8D%AE%E5%8C%85%EF%BC%89"><span class="toc-number">1.5.2.</span> <span class="toc-text">SyncPack（数据包）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncTask-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">1.6.</span> <span class="toc-text">SyncTask 执行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Run-%E6%96%B9%E6%B3%95"><span class="toc-number">1.6.1.</span> <span class="toc-text">Run 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-number">1.6.2.</span> <span class="toc-text">执行流程图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%83%E6%95%B0%E6%8D%AE%E6%9B%B4%E6%96%B0%EF%BC%88writeMeta%EF%BC%89"><span class="toc-number">1.7.</span> <span class="toc-text">元数据更新（writeMeta）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MetaWriter-%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.7.1.</span> <span class="toc-text">MetaWriter 实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">1.8.</span> <span class="toc-text">错误处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#HandleError-%E6%96%B9%E6%B3%95"><span class="toc-number">1.8.1.</span> <span class="toc-text">HandleError 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Builder-%E6%A8%A1%E5%BC%8F%E5%88%9B%E5%BB%BA"><span class="toc-number">1.9.</span> <span class="toc-text">Builder 模式创建</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">1.10.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%BC%82%E6%AD%A5%E6%89%A7%E8%A1%8C"><span class="toc-number">1.10.1.</span> <span class="toc-text">1. 异步执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E4%B8%B2%E8%A1%8C%E4%BF%9D%E8%AF%81"><span class="toc-number">1.10.2.</span> <span class="toc-text">2. 串行保证</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%AD%98%E5%82%A8%E7%89%88%E6%9C%AC%E6%94%AF%E6%8C%81"><span class="toc-number">1.10.3.</span> <span class="toc-text">3. 存储版本支持</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E5%88%97%E5%88%86%E7%BB%84%E4%BC%98%E5%8C%96%EF%BC%88StorageV2%EF%BC%89"><span class="toc-number">1.10.4.</span> <span class="toc-text">4. 列分组优化（StorageV2）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%AE%8C%E5%96%84%E7%9A%84%E7%9B%91%E6%8E%A7"><span class="toc-number">1.10.5.</span> <span class="toc-text">5. 完善的监控</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">1.11.</span> <span class="toc-text">相关文档</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus SyncManager 与 SyncTask 详解
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-06-15T02:20:00.000Z" itemprop="datePublished">2025-06-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="SyncManager-与-SyncTask-详解"><a href="#SyncManager-与-SyncTask-详解" class="headerlink" title="SyncManager 与 SyncTask 详解"></a>SyncManager 与 SyncTask 详解</h1><h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p><code>SyncManager</code> 是 Milvus DataNode 中管理异步数据同步的核心组件，负责将内存中的数据持久化到对象存储。<code>SyncTask</code> 是执行同步的具体任务单元，封装了数据写入、元数据更新等完整流程。</p>
+<h2 id="SyncManager-架构"><a href="#SyncManager-架构" class="headerlink" title="SyncManager 架构"></a>SyncManager 架构</h2><h3 id="核心结构"><a href="#核心结构" class="headerlink" title="核心结构"></a>核心结构</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> syncManager <span class="keyword">struct</span> &#123;</span><br><span class="line">    *keyLockDispatcher[<span class="type">int64</span>]</span><br><span class="line">    chunkManager storage.ChunkManager</span><br><span class="line">    </span><br><span class="line">    tasks     *typeutil.ConcurrentMap[<span class="type">string</span>, Task]</span><br><span class="line">    taskStats *expirable.LRU[<span class="type">string</span>, Task]</span><br><span class="line">    handler   config.EventHandler</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键字段说明：</strong></p>
+<ul>
+<li><code>keyLockDispatcher</code>: 基于段 ID 的任务分发器，确保同一段的任务串行执行</li>
+<li><code>chunkManager</code>: 对象存储管理器</li>
+<li><code>tasks</code>: 当前执行中的任务映射</li>
+<li><code>taskStats</code>: 任务统计信息（LRU 缓存，15分钟过期）</li>
+</ul>
+<h3 id="接口定义"><a href="#接口定义" class="headerlink" title="接口定义"></a>接口定义</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> SyncManager <span class="keyword">interface</span> &#123;</span><br><span class="line">    SyncData(ctx context.Context, task Task, callbacks ...<span class="keyword">func</span>(<span class="type">error</span>) <span class="type">error</span>) (*conc.Future[<span class="keyword">struct</span>&#123;&#125;], <span class="type">error</span>)</span><br><span class="line">    SyncDataWithChunkManager(ctx context.Context, task Task, chunkManager storage.ChunkManager, callbacks ...<span class="keyword">func</span>(<span class="type">error</span>) <span class="type">error</span>) (*conc.Future[<span class="keyword">struct</span>&#123;&#125;], <span class="type">error</span>)</span><br><span class="line">    Close() <span class="type">error</span></span><br><span class="line">    TaskStatsJSON() <span class="type">string</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="SyncManager-初始化"><a href="#SyncManager-初始化" class="headerlink" title="SyncManager 初始化"></a>SyncManager 初始化</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">NewSyncManager</span><span class="params">(chunkManager storage.ChunkManager)</span></span> SyncManager &#123;</span><br><span class="line">    params := paramtable.Get()</span><br><span class="line">    cpuNum := hardware.GetCPUNum()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 初始化工作池大小：CPU 核心数 × 每核心任务数</span></span><br><span class="line">    initPoolSize := cpuNum * params.DataNodeCfg.MaxParallelSyncMgrTasksPerCPUCore.GetAsInt()</span><br><span class="line">    dispatcher := newKeyLockDispatcher[<span class="type">int64</span>](initPoolSize)</span><br><span class="line">    </span><br><span class="line">    syncMgr := &amp;syncManager&#123;</span><br><span class="line">        keyLockDispatcher: dispatcher,</span><br><span class="line">        chunkManager:      chunkManager,</span><br><span class="line">        tasks:             typeutil.NewConcurrentMap[<span class="type">string</span>, Task](),</span><br><span class="line">        taskStats:         expirable.NewLRU[<span class="type">string</span>, Task](<span class="number">64</span>, <span class="literal">nil</span>, time.Minute*<span class="number">15</span>),</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 监听配置变更，动态调整工作池大小</span></span><br><span class="line">    handler := config.NewHandler(<span class="string">&quot;datanode.syncmgr.poolsize&quot;</span>, syncMgr.resizeHandler)</span><br><span class="line">    syncMgr.handler = handler</span><br><span class="line">    params.Watch(params.DataNodeCfg.MaxParallelSyncMgrTasksPerCPUCore.Key, handler)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> syncMgr</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="任务提交流程"><a href="#任务提交流程" class="headerlink" title="任务提交流程"></a>任务提交流程</h2><h3 id="SyncData-方法"><a href="#SyncData-方法" class="headerlink" title="SyncData 方法"></a>SyncData 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(mgr *syncManager)</span></span> SyncData(ctx context.Context, task Task, callbacks ...<span class="keyword">func</span>(<span class="type">error</span>) <span class="type">error</span>) (*conc.Future[<span class="keyword">struct</span>&#123;&#125;], <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> mgr.workerPool.IsClosed() &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, errors.New(<span class="string">&quot;sync manager is closed&quot;</span>)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 为 SyncTask 设置 ChunkManager</span></span><br><span class="line">    <span class="keyword">switch</span> t := task.(<span class="keyword">type</span>) &#123;</span><br><span class="line">    <span class="keyword">case</span> *SyncTask:</span><br><span class="line">        t.WithChunkManager(mgr.chunkManager)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> mgr.safeSubmitTask(ctx, task, callbacks...), <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="safeSubmitTask-方法"><a href="#safeSubmitTask-方法" class="headerlink" title="safeSubmitTask 方法"></a>safeSubmitTask 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(mgr *syncManager)</span></span> safeSubmitTask(ctx context.Context, task Task, callbacks ...<span class="keyword">func</span>(<span class="type">error</span>) <span class="type">error</span>) *conc.Future[<span class="keyword">struct</span>&#123;&#125;] &#123;</span><br><span class="line">    <span class="comment">// 生成任务键：segmentID-timestamp</span></span><br><span class="line">    taskKey := fmt.Sprintf(<span class="string">&quot;%d-%d&quot;</span>, task.SegmentID(), task.Checkpoint().GetTimestamp())</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 记录任务</span></span><br><span class="line">    mgr.tasks.Insert(taskKey, task)</span><br><span class="line">    mgr.taskStats.Add(taskKey, task)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 使用段 ID 作为分发键，确保同一段的任务串行执行</span></span><br><span class="line">    key := task.SegmentID()</span><br><span class="line">    <span class="keyword">return</span> mgr.submit(ctx, key, task, callbacks...)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="submit-方法"><a href="#submit-方法" class="headerlink" title="submit 方法"></a>submit 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(mgr *syncManager)</span></span> submit(ctx context.Context, key <span class="type">int64</span>, task Task, callbacks ...<span class="keyword">func</span>(<span class="type">error</span>) <span class="type">error</span>) *conc.Future[<span class="keyword">struct</span>&#123;&#125;] &#123;</span><br><span class="line">    handler := <span class="function"><span class="keyword">func</span><span class="params">(err <span class="type">error</span>)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">        taskKey := fmt.Sprintf(<span class="string">&quot;%d-%d&quot;</span>, task.SegmentID(), task.Checkpoint().GetTimestamp())</span><br><span class="line">        <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">            mgr.tasks.Remove(taskKey)  <span class="comment">// 任务完成后移除</span></span><br><span class="line">        &#125;()</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">if</span> err == <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        task.HandleError(err)  <span class="comment">// 处理错误</span></span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    callbacks = <span class="built_in">append</span>([]<span class="function"><span class="keyword">func</span><span class="params">(<span class="type">error</span>)</span></span> <span class="type">error</span>&#123;handler&#125;, callbacks...)</span><br><span class="line">    <span class="keyword">return</span> mgr.Submit(ctx, key, task, callbacks...)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="SyncTask-详解"><a href="#SyncTask-详解" class="headerlink" title="SyncTask 详解"></a>SyncTask 详解</h2><h3 id="核心结构-1"><a href="#核心结构-1" class="headerlink" title="核心结构"></a>核心结构</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> SyncTask <span class="keyword">struct</span> &#123;</span><br><span class="line">    chunkManager storage.ChunkManager</span><br><span class="line">    allocator    allocator.Interface</span><br><span class="line">    </span><br><span class="line">    collectionID  <span class="type">int64</span></span><br><span class="line">    partitionID   <span class="type">int64</span></span><br><span class="line">    segmentID     <span class="type">int64</span></span><br><span class="line">    channelName   <span class="type">string</span></span><br><span class="line">    startPosition *msgpb.MsgPosition</span><br><span class="line">    checkpoint    *msgpb.MsgPosition</span><br><span class="line">    dataSource    <span class="type">string</span></span><br><span class="line">    batchRows     <span class="type">int64</span></span><br><span class="line">    level         datapb.SegmentLevel</span><br><span class="line">    </span><br><span class="line">    tsFrom typeutil.Timestamp</span><br><span class="line">    tsTo   typeutil.Timestamp</span><br><span class="line">    </span><br><span class="line">    metacache  metacache.MetaCache</span><br><span class="line">    metaWriter MetaWriter</span><br><span class="line">    schema     *schemapb.CollectionSchema</span><br><span class="line">    </span><br><span class="line">    pack *SyncPack</span><br><span class="line">    </span><br><span class="line">    insertBinlogs <span class="keyword">map</span>[<span class="type">int64</span>]*datapb.FieldBinlog</span><br><span class="line">    statsBinlogs  <span class="keyword">map</span>[<span class="type">int64</span>]*datapb.FieldBinlog</span><br><span class="line">    bm25Binlogs   <span class="keyword">map</span>[<span class="type">int64</span>]*datapb.FieldBinlog</span><br><span class="line">    deltaBinlog   *datapb.FieldBinlog</span><br><span class="line">    </span><br><span class="line">    manifestPath <span class="type">string</span></span><br><span class="line">    </span><br><span class="line">    writeRetryOpts []retry.Option</span><br><span class="line">    failureCallback <span class="function"><span class="keyword">func</span><span class="params">(err <span class="type">error</span>)</span></span></span><br><span class="line">    </span><br><span class="line">    tr *timerecord.TimeRecorder</span><br><span class="line">    </span><br><span class="line">    flushedSize <span class="type">int64</span></span><br><span class="line">    execTime    time.Duration</span><br><span class="line">    </span><br><span class="line">    storageConfig *indexpb.StorageConfig</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="SyncPack（数据包）"><a href="#SyncPack（数据包）" class="headerlink" title="SyncPack（数据包）"></a>SyncPack（数据包）</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> SyncPack <span class="keyword">struct</span> &#123;</span><br><span class="line">    metacache  metacache.MetaCache</span><br><span class="line">    metawriter MetaWriter</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 数据</span></span><br><span class="line">    insertData []*storage.InsertData</span><br><span class="line">    deltaData  *storage.DeleteData</span><br><span class="line">    bm25Stats  <span class="keyword">map</span>[<span class="type">int64</span>]*storage.BM25Stats</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 统计信息</span></span><br><span class="line">    tsFrom        typeutil.Timestamp</span><br><span class="line">    tsTo          typeutil.Timestamp</span><br><span class="line">    startPosition *msgpb.MsgPosition</span><br><span class="line">    checkpoint    *msgpb.MsgPosition</span><br><span class="line">    batchRows     <span class="type">int64</span></span><br><span class="line">    dataSource    <span class="type">string</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 标志</span></span><br><span class="line">    isFlush <span class="type">bool</span></span><br><span class="line">    isDrop  <span class="type">bool</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 元数据</span></span><br><span class="line">    collectionID <span class="type">int64</span></span><br><span class="line">    partitionID  <span class="type">int64</span></span><br><span class="line">    segmentID    <span class="type">int64</span></span><br><span class="line">    channelName  <span class="type">string</span></span><br><span class="line">    level        datapb.SegmentLevel</span><br><span class="line">    </span><br><span class="line">    errHandler <span class="function"><span class="keyword">func</span><span class="params">(err <span class="type">error</span>)</span></span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="SyncTask-执行流程"><a href="#SyncTask-执行流程" class="headerlink" title="SyncTask 执行流程"></a>SyncTask 执行流程</h2><h3 id="Run-方法"><a href="#Run-方法" class="headerlink" title="Run 方法"></a>Run 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *SyncTask)</span></span> Run(ctx context.Context) (err <span class="type">error</span>) &#123;</span><br><span class="line">    t.tr = timerecord.NewTimeRecorder(<span class="string">&quot;syncTask&quot;</span>)</span><br><span class="line">    log := t.getLogger()</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">defer</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            t.HandleError(err)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 检查段是否存在</span></span><br><span class="line">    segmentInfo, has := t.metacache.GetSegmentByID(t.segmentID)</span><br><span class="line">    <span class="keyword">if</span> !has &#123;</span><br><span class="line">        <span class="keyword">if</span> t.pack.isDrop &#123;</span><br><span class="line">            log.Info(<span class="string">&quot;segment dropped, discard sync task&quot;</span>)</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">        &#125;</span><br><span class="line">        log.Warn(<span class="string">&quot;segment not found in metacache, may be already synced&quot;</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 获取列分组信息（StorageV2）</span></span><br><span class="line">    columnGroups := t.getColumnGroups(segmentInfo)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 写入数据到对象存储</span></span><br><span class="line">    <span class="keyword">switch</span> segmentInfo.GetStorageVersion() &#123;</span><br><span class="line">    <span class="keyword">case</span> storage.StorageV2:</span><br><span class="line">        writer := NewBulkPackWriterV2(...)</span><br><span class="line">        t.insertBinlogs, t.deltaBinlog, t.statsBinlogs, t.bm25Binlogs, </span><br><span class="line">            t.manifestPath, t.flushedSize, err = writer.Write(ctx, t.pack)</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">        writer := NewBulkPackWriter(...)</span><br><span class="line">        t.insertBinlogs, t.deltaBinlog, t.statsBinlogs, t.bm25Binlogs, </span><br><span class="line">            t.flushedSize, err = writer.Write(ctx, t.pack)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> err</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 4. 记录监控指标</span></span><br><span class="line">    metrics.DataNodeWriteDataCount.Add(<span class="type">float64</span>(t.batchRows))</span><br><span class="line">    metrics.DataNodeFlushedSize.Add(<span class="type">float64</span>(t.flushedSize))</span><br><span class="line">    metrics.DataNodeSave2StorageLatency.Observe(<span class="type">float64</span>(t.tr.RecordSpan().Milliseconds()))</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 5. 更新元数据</span></span><br><span class="line">    <span class="keyword">if</span> t.metaWriter != <span class="literal">nil</span> &#123;</span><br><span class="line">        err = t.writeMeta(ctx)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> err</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 6. 释放数据</span></span><br><span class="line">    t.pack.ReleaseData()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 7. 更新 MetaCache</span></span><br><span class="line">    actions := []metacache.SegmentAction&#123;metacache.FinishSyncing(t.batchRows)&#125;</span><br><span class="line">    <span class="keyword">if</span> columnGroups != <span class="literal">nil</span> &#123;</span><br><span class="line">        actions = <span class="built_in">append</span>(actions, metacache.UpdateCurrentSplit(columnGroups))</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> t.pack.isFlush &#123;</span><br><span class="line">        actions = <span class="built_in">append</span>(actions, metacache.UpdateState(commonpb.SegmentState_Flushed))</span><br><span class="line">    &#125;</span><br><span class="line">    t.metacache.UpdateSegments(metacache.MergeSegmentAction(actions...), </span><br><span class="line">        metacache.WithSegmentIDs(t.segmentID))</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 8. 处理删除段</span></span><br><span class="line">    <span class="keyword">if</span> t.pack.isDrop &#123;</span><br><span class="line">        t.metacache.RemoveSegments(metacache.WithSegmentIDs(t.segmentID))</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    t.execTime = t.tr.ElapseSpan()</span><br><span class="line">    log.Info(<span class="string">&quot;task done&quot;</span>, zap.Int64(<span class="string">&quot;flushedSize&quot;</span>, t.flushedSize), </span><br><span class="line">        zap.Duration(<span class="string">&quot;timeTaken&quot;</span>, t.execTime))</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="执行流程图"><a href="#执行流程图" class="headerlink" title="执行流程图"></a>执行流程图</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────┐</span><br><span class="line">│         SyncTask.Run()                  │</span><br><span class="line">└──────────────┬──────────────────────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 检查段是否存在        │</span><br><span class="line">    └──────────┬───────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 获取列分组信息        │</span><br><span class="line">    └──────────┬───────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 写入数据到对象存储    │</span><br><span class="line">    │ (BulkPackWriter)     │</span><br><span class="line">    └──────────┬───────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 记录监控指标         │</span><br><span class="line">    └──────────┬───────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 更新元数据到 DataCoord│</span><br><span class="line">    │ (MetaWriter)        │</span><br><span class="line">    └──────────┬───────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 释放数据包           │</span><br><span class="line">    └──────────┬───────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 更新本地 MetaCache    │</span><br><span class="line">    └──────────┬───────────┘</span><br><span class="line">               │</span><br><span class="line">               ▼</span><br><span class="line">    ┌──────────────────────┐</span><br><span class="line">    │ 任务完成             │</span><br><span class="line">    └──────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h2 id="元数据更新（writeMeta）"><a href="#元数据更新（writeMeta）" class="headerlink" title="元数据更新（writeMeta）"></a>元数据更新（writeMeta）</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *SyncTask)</span></span> writeMeta(ctx context.Context) <span class="type">error</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> t.metaWriter.UpdateSync(ctx, t)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="MetaWriter-实现"><a href="#MetaWriter-实现" class="headerlink" title="MetaWriter 实现"></a>MetaWriter 实现</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(b *brokerMetaWriter)</span></span> UpdateSync(ctx context.Context, pack *SyncTask) <span class="type">error</span> &#123;</span><br><span class="line">    <span class="comment">// 1. 构建 SaveBinlogPathsRequest</span></span><br><span class="line">    req := &amp;datapb.SaveBinlogPathsRequest&#123;</span><br><span class="line">        Base: &amp;commonpb.MsgBase&#123;</span><br><span class="line">            MsgType: commonpb.MsgType_SaveBinlogPaths,</span><br><span class="line">        &#125;,</span><br><span class="line">        SegmentID:     pack.segmentID,</span><br><span class="line">        CollectionID:  pack.collectionID,</span><br><span class="line">        Field2BinlogPaths: pack.insertBinlogs,</span><br><span class="line">        Field2StatslogPaths: pack.statsBinlogs,</span><br><span class="line">        Field2BM25StatslogPaths: pack.bm25Binlogs,</span><br><span class="line">        Deltalogs:     []*datapb.FieldBinlog&#123;pack.deltaBinlog&#125;,</span><br><span class="line">        CheckPoints:   checkPoints,</span><br><span class="line">        Flushed:       pack.pack.isFlush,  <span class="comment">// 刷新标志</span></span><br><span class="line">        Dropped:       pack.pack.isDrop,    <span class="comment">// 删除标志</span></span><br><span class="line">        <span class="comment">// ...</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 重试机制发送 RPC</span></span><br><span class="line">    err := retry.Handle(ctx, <span class="function"><span class="keyword">func</span><span class="params">()</span></span> (<span class="type">bool</span>, <span class="type">error</span>) &#123;</span><br><span class="line">        err := b.broker.SaveBinlogPaths(ctx, req)</span><br><span class="line">        <span class="keyword">return</span> err != <span class="literal">nil</span>, err</span><br><span class="line">    &#125;)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="错误处理"><a href="#错误处理" class="headerlink" title="错误处理"></a>错误处理</h2><h3 id="HandleError-方法"><a href="#HandleError-方法" class="headerlink" title="HandleError 方法"></a>HandleError 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(t *SyncTask)</span></span> HandleError(err <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// 调用失败回调</span></span><br><span class="line">    <span class="keyword">if</span> t.failureCallback != <span class="literal">nil</span> &#123;</span><br><span class="line">        t.failureCallback(err)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 记录失败指标</span></span><br><span class="line">    metrics.DataNodeFlushBufferCount.WithLabelValues(metrics.FailLabel, t.level.String()).Inc()</span><br><span class="line">    <span class="keyword">if</span> !t.pack.isFlush &#123;</span><br><span class="line">        metrics.DataNodeAutoFlushBufferCount.WithLabelValues(metrics.FailLabel, t.level.String()).Inc()</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Builder-模式创建"><a href="#Builder-模式创建" class="headerlink" title="Builder 模式创建"></a>Builder 模式创建</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 创建 SyncPack</span></span><br><span class="line">pack := &amp;syncmgr.SyncPack&#123;&#125;</span><br><span class="line">pack.WithInsertData(insertData).</span><br><span class="line">    WithDeleteData(deltaData).</span><br><span class="line">    WithCollectionID(collectionID).</span><br><span class="line">    WithSegmentID(segmentID).</span><br><span class="line">    WithCheckpoint(checkpoint).</span><br><span class="line">    WithFlush()  <span class="comment">// 标记为刷新</span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 创建 SyncTask</span></span><br><span class="line">task := syncmgr.NewSyncTask().</span><br><span class="line">    WithSyncPack(pack).</span><br><span class="line">    WithAllocator(allocator).</span><br><span class="line">    WithMetaWriter(metaWriter).</span><br><span class="line">    WithMetaCache(metaCache).</span><br><span class="line">    WithSchema(schema)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 提交到 SyncManager</span></span><br><span class="line">future, err := syncMgr.SyncData(ctx, task, callback)</span><br></pre></td></tr></table></figure>
+
+<h2 id="设计特点"><a href="#设计特点" class="headerlink" title="设计特点"></a>设计特点</h2><h3 id="1-异步执行"><a href="#1-异步执行" class="headerlink" title="1. 异步执行"></a>1. 异步执行</h3><p>通过工作池实现异步任务执行，不阻塞主流程。</p>
+<h3 id="2-串行保证"><a href="#2-串行保证" class="headerlink" title="2. 串行保证"></a>2. 串行保证</h3><p>使用 <code>keyLockDispatcher</code> 确保同一段的任务串行执行，避免并发冲突。</p>
+<h3 id="3-存储版本支持"><a href="#3-存储版本支持" class="headerlink" title="3. 存储版本支持"></a>3. 存储版本支持</h3><p>支持 StorageV1 和 StorageV2 两种存储格式。</p>
+<h3 id="4-列分组优化（StorageV2）"><a href="#4-列分组优化（StorageV2）" class="headerlink" title="4. 列分组优化（StorageV2）"></a>4. 列分组优化（StorageV2）</h3><p>根据列统计信息动态分组，优化查询性能。</p>
+<h3 id="5-完善的监控"><a href="#5-完善的监控" class="headerlink" title="5. 完善的监控"></a>5. 完善的监控</h3><p>记录详细的执行指标和性能数据。</p>
+<h2 id="相关文档"><a href="#相关文档" class="headerlink" title="相关文档"></a>相关文档</h2><ul>
+<li><a href="./flush_pipeline_write_buffer.md">WriteBuffer 实现</a></li>
+<li><a href="./flush_pipeline_tt_node.md">TT Node 详解</a></li>
+<li><a href="./flush_pipeline_flush_checkpoint.md">Flush 与 Checkpoint 机制</a></li>
+<li><a href="./flush_pipeline_overview.md">总览文档</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#SyncManager-%E4%B8%8E-SyncTask-%E8%AF%A6%E8%A7%A3"><span class="toc-number">1.</span> <span class="toc-text">SyncManager 与 SyncTask 详解</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncManager-%E6%9E%B6%E6%9E%84"><span class="toc-number">1.2.</span> <span class="toc-text">SyncManager 架构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">1.2.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89"><span class="toc-number">1.2.2.</span> <span class="toc-text">接口定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncManager-%E5%88%9D%E5%A7%8B%E5%8C%96"><span class="toc-number">1.3.</span> <span class="toc-text">SyncManager 初始化</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E6%8F%90%E4%BA%A4%E6%B5%81%E7%A8%8B"><span class="toc-number">1.4.</span> <span class="toc-text">任务提交流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#SyncData-%E6%96%B9%E6%B3%95"><span class="toc-number">1.4.1.</span> <span class="toc-text">SyncData 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#safeSubmitTask-%E6%96%B9%E6%B3%95"><span class="toc-number">1.4.2.</span> <span class="toc-text">safeSubmitTask 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#submit-%E6%96%B9%E6%B3%95"><span class="toc-number">1.4.3.</span> <span class="toc-text">submit 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncTask-%E8%AF%A6%E8%A7%A3"><span class="toc-number">1.5.</span> <span class="toc-text">SyncTask 详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84-1"><span class="toc-number">1.5.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SyncPack%EF%BC%88%E6%95%B0%E6%8D%AE%E5%8C%85%EF%BC%89"><span class="toc-number">1.5.2.</span> <span class="toc-text">SyncPack（数据包）</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SyncTask-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">1.6.</span> <span class="toc-text">SyncTask 执行流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Run-%E6%96%B9%E6%B3%95"><span class="toc-number">1.6.1.</span> <span class="toc-text">Run 方法</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-number">1.6.2.</span> <span class="toc-text">执行流程图</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%83%E6%95%B0%E6%8D%AE%E6%9B%B4%E6%96%B0%EF%BC%88writeMeta%EF%BC%89"><span class="toc-number">1.7.</span> <span class="toc-text">元数据更新（writeMeta）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#MetaWriter-%E5%AE%9E%E7%8E%B0"><span class="toc-number">1.7.1.</span> <span class="toc-text">MetaWriter 实现</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">1.8.</span> <span class="toc-text">错误处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#HandleError-%E6%96%B9%E6%B3%95"><span class="toc-number">1.8.1.</span> <span class="toc-text">HandleError 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Builder-%E6%A8%A1%E5%BC%8F%E5%88%9B%E5%BB%BA"><span class="toc-number">1.9.</span> <span class="toc-text">Builder 模式创建</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">1.10.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%BC%82%E6%AD%A5%E6%89%A7%E8%A1%8C"><span class="toc-number">1.10.1.</span> <span class="toc-text">1. 异步执行</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E4%B8%B2%E8%A1%8C%E4%BF%9D%E8%AF%81"><span class="toc-number">1.10.2.</span> <span class="toc-text">2. 串行保证</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%AD%98%E5%82%A8%E7%89%88%E6%9C%AC%E6%94%AF%E6%8C%81"><span class="toc-number">1.10.3.</span> <span class="toc-text">3. 存储版本支持</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E5%88%97%E5%88%86%E7%BB%84%E4%BC%98%E5%8C%96%EF%BC%88StorageV2%EF%BC%89"><span class="toc-number">1.10.4.</span> <span class="toc-text">4. 列分组优化（StorageV2）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E5%AE%8C%E5%96%84%E7%9A%84%E7%9B%91%E6%8E%A7"><span class="toc-number">1.10.5.</span> <span class="toc-text">5. 完善的监控</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">1.11.</span> <span class="toc-text">相关文档</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&text=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&is_video=false&description=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus SyncManager 与 SyncTask 详解&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&title=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&name=Milvus SyncManager 与 SyncTask 详解&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_sync_manager/&t=Milvus SyncManager 与 SyncTask 详解"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

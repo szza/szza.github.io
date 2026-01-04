@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="FlowGraph 管理器（fgManagerImpl）概述fgManagerImpl 是 Milvus DataNode 中管理多个数据同步服务（DataSyncService）的核心组件。它负责按通道（Channel）组织和管理 FlowGraph 实例，实现多通道并发数据处理。 架构设计核心结构12345type fgManagerImpl struct &amp;#123;    ctx">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus FlowGraph 管理器（fgManagerImpl）">
+<meta property="og:url" content="https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="FlowGraph 管理器（fgManagerImpl）概述fgManagerImpl 是 Milvus DataNode 中管理多个数据同步服务（DataSyncService）的核心组件。它负责按通道（Channel）组织和管理 FlowGraph 实例，实现多通道并发数据处理。 架构设计核心结构12345type fgManagerImpl struct &amp;#123;    ctx">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-06-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-04T12:56:47.554Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus FlowGraph 管理器（fgManagerImpl）</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/flush_pipeline_dd_node/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/flush_pipeline_index/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&text=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&is_video=false&description=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus FlowGraph 管理器（fgManagerImpl）&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&name=Milvus FlowGraph 管理器（fgManagerImpl）&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&t=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#FlowGraph-%E7%AE%A1%E7%90%86%E5%99%A8%EF%BC%88fgManagerImpl%EF%BC%89"><span class="toc-number">1.</span> <span class="toc-text">FlowGraph 管理器（fgManagerImpl）</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.2.</span> <span class="toc-text">架构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">1.2.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89"><span class="toc-number">1.2.2.</span> <span class="toc-text">接口定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8A%9F%E8%83%BD"><span class="toc-number">1.3.</span> <span class="toc-text">核心功能</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-FlowGraph-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E7%AE%A1%E7%90%86"><span class="toc-number">1.3.1.</span> <span class="toc-text">1. FlowGraph 生命周期管理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%B7%BB%E5%8A%A0-FlowGraph"><span class="toc-number">1.3.1.1.</span> <span class="toc-text">添加 FlowGraph</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%A7%BB%E9%99%A4-FlowGraph"><span class="toc-number">1.3.1.2.</span> <span class="toc-text">移除 FlowGraph</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%B8%85%E7%A9%BA%E6%89%80%E6%9C%89-FlowGraph"><span class="toc-number">1.3.1.3.</span> <span class="toc-text">清空所有 FlowGraph</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%9F%A5%E8%AF%A2%E5%8A%9F%E8%83%BD"><span class="toc-number">1.3.2.</span> <span class="toc-text">2. 查询功能</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96-FlowGraph-%E6%9C%8D%E5%8A%A1"><span class="toc-number">1.3.2.1.</span> <span class="toc-text">获取 FlowGraph 服务</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5-FlowGraph-%E6%98%AF%E5%90%A6%E5%AD%98%E5%9C%A8"><span class="toc-number">1.3.2.2.</span> <span class="toc-text">检查 FlowGraph 是否存在</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%8C%89%E6%93%8D%E4%BD%9C-ID-%E6%A3%80%E6%9F%A5"><span class="toc-number">1.3.2.3.</span> <span class="toc-text">按操作 ID 检查</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF"><span class="toc-number">1.3.3.</span> <span class="toc-text">3. 统计信息</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E9%9B%86%E5%90%88-ID-%E5%88%97%E8%A1%A8"><span class="toc-number">1.3.3.1.</span> <span class="toc-text">获取集合 ID 列表</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E9%80%9A%E9%81%93-JSON"><span class="toc-number">1.3.3.2.</span> <span class="toc-text">获取通道 JSON</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E6%AE%B5-JSON"><span class="toc-number">1.3.3.3.</span> <span class="toc-text">获取段 JSON</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">1.4.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8"><span class="toc-number">1.4.1.</span> <span class="toc-text">1. 线程安全</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E8%B5%84%E6%BA%90%E7%AE%A1%E7%90%86"><span class="toc-number">1.4.2.</span> <span class="toc-text">2. 资源管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E7%9B%91%E6%8E%A7%E9%9B%86%E6%88%90"><span class="toc-number">1.4.3.</span> <span class="toc-text">3. 监控集成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-number">1.5.</span> <span class="toc-text">使用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF-1-%E9%80%9A%E9%81%93%E6%B3%A8%E5%86%8C"><span class="toc-number">1.5.1.</span> <span class="toc-text">场景 1: 通道注册</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF-2-%E9%80%9A%E9%81%93%E9%87%8A%E6%94%BE"><span class="toc-number">1.5.2.</span> <span class="toc-text">场景 2: 通道释放</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF-3-%E8%8A%82%E7%82%B9%E5%85%B3%E9%97%AD"><span class="toc-number">1.5.3.</span> <span class="toc-text">场景 3: 节点关闭</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8E%E5%85%B6%E4%BB%96%E7%BB%84%E4%BB%B6%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="toc-number">1.6.</span> <span class="toc-text">与其他组件的关系</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">1.7.</span> <span class="toc-text">相关文档</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus FlowGraph 管理器（fgManagerImpl）
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-06-15T02:20:00.000Z" itemprop="datePublished">2025-06-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="FlowGraph-管理器（fgManagerImpl）"><a href="#FlowGraph-管理器（fgManagerImpl）" class="headerlink" title="FlowGraph 管理器（fgManagerImpl）"></a>FlowGraph 管理器（fgManagerImpl）</h1><h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p><code>fgManagerImpl</code> 是 Milvus DataNode 中管理多个数据同步服务（DataSyncService）的核心组件。它负责按通道（Channel）组织和管理 FlowGraph 实例，实现多通道并发数据处理。</p>
+<h2 id="架构设计"><a href="#架构设计" class="headerlink" title="架构设计"></a>架构设计</h2><h3 id="核心结构"><a href="#核心结构" class="headerlink" title="核心结构"></a>核心结构</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> fgManagerImpl <span class="keyword">struct</span> &#123;</span><br><span class="line">    ctx        context.Context</span><br><span class="line">    cancelFunc context.CancelFunc</span><br><span class="line">    flowgraphs *typeutil.ConcurrentMap[<span class="type">string</span>, *DataSyncService]</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键字段说明：</strong></p>
+<ul>
+<li><code>ctx</code>: 上下文，用于控制生命周期</li>
+<li><code>cancelFunc</code>: 取消函数，用于优雅关闭</li>
+<li><code>flowgraphs</code>: 线程安全的映射表，key 为通道名，value 为对应的 DataSyncService</li>
+</ul>
+<h3 id="接口定义"><a href="#接口定义" class="headerlink" title="接口定义"></a>接口定义</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> FlowgraphManager <span class="keyword">interface</span> &#123;</span><br><span class="line">    AddFlowgraph(ds *DataSyncService)</span><br><span class="line">    RemoveFlowgraph(channel <span class="type">string</span>)</span><br><span class="line">    ClearFlowgraphs()</span><br><span class="line">    </span><br><span class="line">    GetFlowgraphService(channel <span class="type">string</span>) (*DataSyncService, <span class="type">bool</span>)</span><br><span class="line">    HasFlowgraph(channel <span class="type">string</span>) <span class="type">bool</span></span><br><span class="line">    HasFlowgraphWithOpID(channel <span class="type">string</span>, opID <span class="type">int64</span>) <span class="type">bool</span></span><br><span class="line">    GetFlowgraphCount() <span class="type">int</span></span><br><span class="line">    GetCollectionIDs() []<span class="type">int64</span></span><br><span class="line">    </span><br><span class="line">    GetChannelsJSON(collectionID <span class="type">int64</span>) <span class="type">string</span></span><br><span class="line">    GetSegmentsJSON(collectionID <span class="type">int64</span>) <span class="type">string</span></span><br><span class="line">    Close()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="核心功能"><a href="#核心功能" class="headerlink" title="核心功能"></a>核心功能</h2><h3 id="1-FlowGraph-生命周期管理"><a href="#1-FlowGraph-生命周期管理" class="headerlink" title="1. FlowGraph 生命周期管理"></a>1. FlowGraph 生命周期管理</h3><h4 id="添加-FlowGraph"><a href="#添加-FlowGraph" class="headerlink" title="添加 FlowGraph"></a>添加 FlowGraph</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> AddFlowgraph(ds *DataSyncService) &#123;</span><br><span class="line">    fm.flowgraphs.Insert(ds.vchannelName, ds)</span><br><span class="line">    metrics.DataNodeNumFlowGraphs.WithLabelValues(fmt.Sprint(paramtable.GetNodeID())).Inc()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>功能：</strong></p>
+<ul>
+<li>将 DataSyncService 注册到管理器</li>
+<li>更新监控指标</li>
+</ul>
+<h4 id="移除-FlowGraph"><a href="#移除-FlowGraph" class="headerlink" title="移除 FlowGraph"></a>移除 FlowGraph</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> RemoveFlowgraph(channel <span class="type">string</span>) &#123;</span><br><span class="line">    <span class="keyword">if</span> fg, loaded := fm.flowgraphs.Get(channel); loaded &#123;</span><br><span class="line">        fg.<span class="built_in">close</span>()</span><br><span class="line">        fm.flowgraphs.Remove(channel)</span><br><span class="line">        </span><br><span class="line">        metrics.DataNodeNumFlowGraphs.WithLabelValues(fmt.Sprint(paramtable.GetNodeID())).Dec()</span><br><span class="line">        util.GetRateCollector().RemoveFlowGraphChannel(channel)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>功能：</strong></p>
+<ul>
+<li>关闭 DataSyncService</li>
+<li>从管理器中移除</li>
+<li>清理相关资源（指标、速率收集器）</li>
+</ul>
+<h4 id="清空所有-FlowGraph"><a href="#清空所有-FlowGraph" class="headerlink" title="清空所有 FlowGraph"></a>清空所有 FlowGraph</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> ClearFlowgraphs() &#123;</span><br><span class="line">    log.Info(<span class="string">&quot;start drop all flowgraph resources in DataNode&quot;</span>)</span><br><span class="line">    fm.flowgraphs.Range(<span class="function"><span class="keyword">func</span><span class="params">(key <span class="type">string</span>, value *DataSyncService)</span></span> <span class="type">bool</span> &#123;</span><br><span class="line">        value.GracefullyClose()</span><br><span class="line">        fm.flowgraphs.GetAndRemove(key)</span><br><span class="line">        </span><br><span class="line">        log.Info(<span class="string">&quot;successfully dropped flowgraph&quot;</span>, zap.String(<span class="string">&quot;vChannelName&quot;</span>, key))</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>功能：</strong></p>
+<ul>
+<li>优雅关闭所有 FlowGraph</li>
+<li>清理所有资源</li>
+</ul>
+<h3 id="2-查询功能"><a href="#2-查询功能" class="headerlink" title="2. 查询功能"></a>2. 查询功能</h3><h4 id="获取-FlowGraph-服务"><a href="#获取-FlowGraph-服务" class="headerlink" title="获取 FlowGraph 服务"></a>获取 FlowGraph 服务</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> GetFlowgraphService(channel <span class="type">string</span>) (*DataSyncService, <span class="type">bool</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> fm.flowgraphs.Get(channel)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="检查-FlowGraph-是否存在"><a href="#检查-FlowGraph-是否存在" class="headerlink" title="检查 FlowGraph 是否存在"></a>检查 FlowGraph 是否存在</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> HasFlowgraph(channel <span class="type">string</span>) <span class="type">bool</span> &#123;</span><br><span class="line">    _, exist := fm.flowgraphs.Get(channel)</span><br><span class="line">    <span class="keyword">return</span> exist</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="按操作-ID-检查"><a href="#按操作-ID-检查" class="headerlink" title="按操作 ID 检查"></a>按操作 ID 检查</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> HasFlowgraphWithOpID(channel <span class="type">string</span>, opID typeutil.UniqueID) <span class="type">bool</span> &#123;</span><br><span class="line">    ds, exist := fm.flowgraphs.Get(channel)</span><br><span class="line">    <span class="keyword">return</span> exist &amp;&amp; ds.opID == opID</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>用途：</strong> 确保 FlowGraph 的操作 ID 匹配，避免使用过期的 FlowGraph</p>
+<h3 id="3-统计信息"><a href="#3-统计信息" class="headerlink" title="3. 统计信息"></a>3. 统计信息</h3><h4 id="获取集合-ID-列表"><a href="#获取集合-ID-列表" class="headerlink" title="获取集合 ID 列表"></a>获取集合 ID 列表</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> GetCollectionIDs() []<span class="type">int64</span> &#123;</span><br><span class="line">    collectionSet := typeutil.UniqueSet&#123;&#125;</span><br><span class="line">    fm.flowgraphs.Range(<span class="function"><span class="keyword">func</span><span class="params">(key <span class="type">string</span>, value *DataSyncService)</span></span> <span class="type">bool</span> &#123;</span><br><span class="line">        collectionSet.Insert(value.metacache.Collection())</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;)</span><br><span class="line">    <span class="keyword">return</span> collectionSet.Collect()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="获取通道-JSON"><a href="#获取通道-JSON" class="headerlink" title="获取通道 JSON"></a>获取通道 JSON</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> GetChannelsJSON(collectionID <span class="type">int64</span>) <span class="type">string</span> &#123;</span><br><span class="line">    <span class="keyword">var</span> channels []*metricsinfo.Channel</span><br><span class="line">    fm.flowgraphs.Range(<span class="function"><span class="keyword">func</span><span class="params">(ch <span class="type">string</span>, ds *DataSyncService)</span></span> <span class="type">bool</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> collectionID &gt; <span class="number">0</span> &amp;&amp; ds.metacache.Collection() != collectionID &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">        &#125;</span><br><span class="line">        latestTimeTick := ds.timetickSender.GetLatestTimestamp(ch)</span><br><span class="line">        channels = <span class="built_in">append</span>(channels, &amp;metricsinfo.Channel&#123;</span><br><span class="line">            Name:           ch,</span><br><span class="line">            WatchState:     ds.fg.Status(),</span><br><span class="line">            LatestTimeTick: tsoutil.PhysicalTimeFormat(latestTimeTick),</span><br><span class="line">            NodeID:         paramtable.GetNodeID(),</span><br><span class="line">            CollectionID:   ds.metacache.Collection(),</span><br><span class="line">        &#125;)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;)</span><br><span class="line">    <span class="comment">// ... 序列化为 JSON</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>返回信息：</strong></p>
+<ul>
+<li>通道名称</li>
+<li>FlowGraph 状态</li>
+<li>最新时间戳</li>
+<li>节点 ID</li>
+<li>集合 ID</li>
+</ul>
+<h4 id="获取段-JSON"><a href="#获取段-JSON" class="headerlink" title="获取段 JSON"></a>获取段 JSON</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(fm *fgManagerImpl)</span></span> GetSegmentsJSON(collectionID <span class="type">int64</span>) <span class="type">string</span> &#123;</span><br><span class="line">    <span class="keyword">var</span> segments []*metricsinfo.Segment</span><br><span class="line">    fm.flowgraphs.Range(<span class="function"><span class="keyword">func</span><span class="params">(ch <span class="type">string</span>, ds *DataSyncService)</span></span> <span class="type">bool</span> &#123;</span><br><span class="line">        <span class="keyword">if</span> collectionID &gt; <span class="number">0</span> &amp;&amp; ds.metacache.Collection() != collectionID &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        meta := ds.metacache</span><br><span class="line">        <span class="keyword">for</span> _, segment := <span class="keyword">range</span> meta.GetSegmentsBy() &#123;</span><br><span class="line">            segments = <span class="built_in">append</span>(segments, &amp;metricsinfo.Segment&#123;</span><br><span class="line">                SegmentID:      segment.SegmentID(),</span><br><span class="line">                CollectionID:   meta.Collection(),</span><br><span class="line">                PartitionID:    segment.PartitionID(),</span><br><span class="line">                Channel:        ch,</span><br><span class="line">                State:          segment.State().String(),</span><br><span class="line">                Level:          segment.Level().String(),</span><br><span class="line">                NodeID:         paramtable.GetNodeID(),</span><br><span class="line">                NumOfRows:      segment.NumOfRows(),</span><br><span class="line">                FlushedRows:    segment.FlushedRows(),</span><br><span class="line">                SyncBufferRows: segment.BufferRows(),</span><br><span class="line">                SyncingRows:    segment.SyncingRows(),</span><br><span class="line">            &#125;)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;)</span><br><span class="line">    <span class="comment">// ... 序列化为 JSON</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="设计特点"><a href="#设计特点" class="headerlink" title="设计特点"></a>设计特点</h2><h3 id="1-线程安全"><a href="#1-线程安全" class="headerlink" title="1. 线程安全"></a>1. 线程安全</h3><p>使用 <code>typeutil.ConcurrentMap</code> 实现线程安全的并发访问，支持多 goroutine 同时操作。</p>
+<h3 id="2-资源管理"><a href="#2-资源管理" class="headerlink" title="2. 资源管理"></a>2. 资源管理</h3><ul>
+<li>通过 <code>context.Context</code> 统一管理生命周期</li>
+<li>提供优雅关闭机制（<code>GracefullyClose</code>）</li>
+<li>自动清理监控指标和资源</li>
+</ul>
+<h3 id="3-监控集成"><a href="#3-监控集成" class="headerlink" title="3. 监控集成"></a>3. 监控集成</h3><ul>
+<li>集成 Prometheus 指标</li>
+<li>提供 JSON 格式的统计信息</li>
+<li>支持按集合过滤</li>
+</ul>
+<h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景"></a>使用场景</h2><h3 id="场景-1-通道注册"><a href="#场景-1-通道注册" class="headerlink" title="场景 1: 通道注册"></a>场景 1: 通道注册</h3><p>当 DataCoord 分配新通道给 DataNode 时：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 创建 DataSyncService</span></span><br><span class="line">ds, err := NewDataSyncService(ctx, params, watchInfo, tickler)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 注册到管理器</span></span><br><span class="line">fgManager.AddFlowgraph(ds)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 启动 FlowGraph</span></span><br><span class="line">ds.Start()</span><br></pre></td></tr></table></figure>
+
+<h3 id="场景-2-通道释放"><a href="#场景-2-通道释放" class="headerlink" title="场景 2: 通道释放"></a>场景 2: 通道释放</h3><p>当通道需要迁移到其他节点时：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 移除 FlowGraph</span></span><br><span class="line">fgManager.RemoveFlowgraph(channelName)</span><br></pre></td></tr></table></figure>
+
+<h3 id="场景-3-节点关闭"><a href="#场景-3-节点关闭" class="headerlink" title="场景 3: 节点关闭"></a>场景 3: 节点关闭</h3><p>当 DataNode 关闭时：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 清空所有 FlowGraph</span></span><br><span class="line">fgManager.ClearFlowgraphs()</span><br><span class="line"></span><br><span class="line"><span class="comment">// 关闭管理器</span></span><br><span class="line">fgManager.Close()</span><br></pre></td></tr></table></figure>
+
+<h2 id="与其他组件的关系"><a href="#与其他组件的关系" class="headerlink" title="与其他组件的关系"></a>与其他组件的关系</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">fgManagerImpl</span><br><span class="line">    │</span><br><span class="line">    ├── DataSyncService (按通道组织)</span><br><span class="line">    │       │</span><br><span class="line">    │       ├── FlowGraph (消息处理管道)</span><br><span class="line">    │       ├── MetaCache (段元数据缓存)</span><br><span class="line">    │       ├── WriteBufferManager (数据缓冲管理器)</span><br><span class="line">    │       └── Broker (与 DataCoord 通信)</span><br><span class="line">    │</span><br><span class="line">    └── Metrics (监控指标)</span><br></pre></td></tr></table></figure>
+
+<h2 id="相关文档"><a href="#相关文档" class="headerlink" title="相关文档"></a>相关文档</h2><ul>
+<li><a href="./flush_pipeline_data_sync_service.md">DataSyncService 详解</a></li>
+<li><a href="./flush_pipeline_write_buffer_manager.md">WriteBuffer 管理器</a></li>
+<li><a href="./flush_pipeline_overview.md">总览文档</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#FlowGraph-%E7%AE%A1%E7%90%86%E5%99%A8%EF%BC%88fgManagerImpl%EF%BC%89"><span class="toc-number">1.</span> <span class="toc-text">FlowGraph 管理器（fgManagerImpl）</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">1.2.</span> <span class="toc-text">架构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">1.2.1.</span> <span class="toc-text">核心结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8E%A5%E5%8F%A3%E5%AE%9A%E4%B9%89"><span class="toc-number">1.2.2.</span> <span class="toc-text">接口定义</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8A%9F%E8%83%BD"><span class="toc-number">1.3.</span> <span class="toc-text">核心功能</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-FlowGraph-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E7%AE%A1%E7%90%86"><span class="toc-number">1.3.1.</span> <span class="toc-text">1. FlowGraph 生命周期管理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%B7%BB%E5%8A%A0-FlowGraph"><span class="toc-number">1.3.1.1.</span> <span class="toc-text">添加 FlowGraph</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%A7%BB%E9%99%A4-FlowGraph"><span class="toc-number">1.3.1.2.</span> <span class="toc-text">移除 FlowGraph</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%B8%85%E7%A9%BA%E6%89%80%E6%9C%89-FlowGraph"><span class="toc-number">1.3.1.3.</span> <span class="toc-text">清空所有 FlowGraph</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%9F%A5%E8%AF%A2%E5%8A%9F%E8%83%BD"><span class="toc-number">1.3.2.</span> <span class="toc-text">2. 查询功能</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96-FlowGraph-%E6%9C%8D%E5%8A%A1"><span class="toc-number">1.3.2.1.</span> <span class="toc-text">获取 FlowGraph 服务</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5-FlowGraph-%E6%98%AF%E5%90%A6%E5%AD%98%E5%9C%A8"><span class="toc-number">1.3.2.2.</span> <span class="toc-text">检查 FlowGraph 是否存在</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%8C%89%E6%93%8D%E4%BD%9C-ID-%E6%A3%80%E6%9F%A5"><span class="toc-number">1.3.2.3.</span> <span class="toc-text">按操作 ID 检查</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF"><span class="toc-number">1.3.3.</span> <span class="toc-text">3. 统计信息</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E9%9B%86%E5%90%88-ID-%E5%88%97%E8%A1%A8"><span class="toc-number">1.3.3.1.</span> <span class="toc-text">获取集合 ID 列表</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E9%80%9A%E9%81%93-JSON"><span class="toc-number">1.3.3.2.</span> <span class="toc-text">获取通道 JSON</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%8E%B7%E5%8F%96%E6%AE%B5-JSON"><span class="toc-number">1.3.3.3.</span> <span class="toc-text">获取段 JSON</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">1.4.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8"><span class="toc-number">1.4.1.</span> <span class="toc-text">1. 线程安全</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E8%B5%84%E6%BA%90%E7%AE%A1%E7%90%86"><span class="toc-number">1.4.2.</span> <span class="toc-text">2. 资源管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E7%9B%91%E6%8E%A7%E9%9B%86%E6%88%90"><span class="toc-number">1.4.3.</span> <span class="toc-text">3. 监控集成</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-number">1.5.</span> <span class="toc-text">使用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF-1-%E9%80%9A%E9%81%93%E6%B3%A8%E5%86%8C"><span class="toc-number">1.5.1.</span> <span class="toc-text">场景 1: 通道注册</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF-2-%E9%80%9A%E9%81%93%E9%87%8A%E6%94%BE"><span class="toc-number">1.5.2.</span> <span class="toc-text">场景 2: 通道释放</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%9C%BA%E6%99%AF-3-%E8%8A%82%E7%82%B9%E5%85%B3%E9%97%AD"><span class="toc-number">1.5.3.</span> <span class="toc-text">场景 3: 节点关闭</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%B8%8E%E5%85%B6%E4%BB%96%E7%BB%84%E4%BB%B6%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="toc-number">1.6.</span> <span class="toc-text">与其他组件的关系</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">1.7.</span> <span class="toc-text">相关文档</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&text=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&is_video=false&description=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus FlowGraph 管理器（fgManagerImpl）&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&title=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&name=Milvus FlowGraph 管理器（fgManagerImpl）&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/&t=Milvus FlowGraph 管理器（fgManagerImpl）"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

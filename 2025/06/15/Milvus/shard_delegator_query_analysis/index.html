@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="shardDelegator.Query 方法详细分析本文档深入分析 shardDelegator.Query 方法的实现细节，这是 QueryNode 中处理查询请求的核心方法。 方法签名1func (sd *shardDelegator) Query(ctx context.Context, req *querypb.QueryRequest) ([]*internalpb.RetrieveR">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus ShardDelegator.Query 方法详细分析">
+<meta property="og:url" content="https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="shardDelegator.Query 方法详细分析本文档深入分析 shardDelegator.Query 方法的实现细节，这是 QueryNode 中处理查询请求的核心方法。 方法签名1func (sd *shardDelegator) Query(ctx context.Context, req *querypb.QueryRequest) ([]*internalpb.RetrieveR">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-06-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-04T12:57:52.480Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus ShardDelegator.Query 方法详细分析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/why_reduce_search_results/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/storagev2_write_flow_analysis/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&text=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&is_video=false&description=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus ShardDelegator.Query 方法详细分析&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&name=Milvus ShardDelegator.Query 方法详细分析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&t=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#shardDelegator-Query-%E6%96%B9%E6%B3%95%E8%AF%A6%E7%BB%86%E5%88%86%E6%9E%90"><span class="toc-number">1.</span> <span class="toc-text">shardDelegator.Query 方法详细分析</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%B3%95%E7%AD%BE%E5%90%8D"><span class="toc-number">1.1.</span> <span class="toc-text">方法签名</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%B3%95%E8%81%8C%E8%B4%A3"><span class="toc-number">1.2.</span> <span class="toc-text">方法职责</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-number">1.3.</span> <span class="toc-text">执行流程详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E7%AE%A1%E7%90%86-Lines-579-582"><span class="toc-number">1.3.1.</span> <span class="toc-text">1. 生命周期管理 (Lines 579-582)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Channel-%E9%AA%8C%E8%AF%81-Lines-584-589"><span class="toc-number">1.3.2.</span> <span class="toc-text">2. Channel 验证 (Lines 584-589)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E4%BC%98%E5%8C%96-Guarantee-Timestamp-Lines-591-597"><span class="toc-number">1.3.3.</span> <span class="toc-text">3. 优化 Guarantee Timestamp (Lines 591-597)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E7%AD%89%E5%BE%85-tSafe-Lines-599-621"><span class="toc-number">1.3.4.</span> <span class="toc-text">4. 等待 tSafe (Lines 599-621)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-Pin-Readable-Segments-Lines-623-628"><span class="toc-number">1.3.5.</span> <span class="toc-text">5. Pin Readable Segments (Lines 623-628)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-%E5%A4%84%E7%90%86-IgnoreGrowing-%E6%A0%87%E5%BF%97-Lines-630-632"><span class="toc-number">1.3.6.</span> <span class="toc-text">6. 处理 IgnoreGrowing 标志 (Lines 630-632)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-Segment-%E5%89%AA%E6%9E%9D-Lines-634-640"><span class="toc-number">1.3.7.</span> <span class="toc-text">7. Segment 剪枝 (Lines 634-640)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-%E7%BB%84%E7%BB%87%E5%AD%90%E4%BB%BB%E5%8A%A1-Lines-648-652"><span class="toc-number">1.3.8.</span> <span class="toc-text">8. 组织子任务 (Lines 648-652)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#9-%E6%89%A7%E8%A1%8C%E5%AD%90%E4%BB%BB%E5%8A%A1-Lines-654-661"><span class="toc-number">1.3.9.</span> <span class="toc-text">9. 执行子任务 (Lines 654-661)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#10-%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C-Lines-667-685"><span class="toc-number">1.3.10.</span> <span class="toc-text">10. 返回结果 (Lines 667-685)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">1.4.</span> <span class="toc-text">关键数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#subTask"><span class="toc-number">1.4.1.</span> <span class="toc-text">subTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SnapshotItem"><span class="toc-number">1.4.2.</span> <span class="toc-text">SnapshotItem</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SegmentEntry"><span class="toc-number">1.4.3.</span> <span class="toc-text">SegmentEntry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%82%B9"><span class="toc-number">1.5.</span> <span class="toc-text">性能优化点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">1.6.</span> <span class="toc-text">错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">1.7.</span> <span class="toc-text">配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B0%83%E7%94%A8%E9%93%BE"><span class="toc-number">1.8.</span> <span class="toc-text">调用链</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">1.9.</span> <span class="toc-text">总结</span></a></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus ShardDelegator.Query 方法详细分析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-06-15T02:20:00.000Z" itemprop="datePublished">2025-06-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="shardDelegator-Query-方法详细分析"><a href="#shardDelegator-Query-方法详细分析" class="headerlink" title="shardDelegator.Query 方法详细分析"></a>shardDelegator.Query 方法详细分析</h1><p>本文档深入分析 <code>shardDelegator.Query</code> 方法的实现细节，这是 QueryNode 中处理查询请求的核心方法。</p>
+<h2 id="方法签名"><a href="#方法签名" class="headerlink" title="方法签名"></a>方法签名</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sd *shardDelegator)</span></span> Query(ctx context.Context, req *querypb.QueryRequest) ([]*internalpb.RetrieveResults, <span class="type">error</span>)</span><br></pre></td></tr></table></figure>
+
+<p><strong>位置</strong>: <code>internal/querynodev2/delegator/delegator.go:577</code></p>
+<h2 id="方法职责"><a href="#方法职责" class="headerlink" title="方法职责"></a>方法职责</h2><p><code>shardDelegator.Query</code> 负责在 shard 级别执行查询操作，它协调多个 segment 的查询，处理时间戳同步、segment 管理、任务分发和结果收集。</p>
+<h2 id="执行流程详解"><a href="#执行流程详解" class="headerlink" title="执行流程详解"></a>执行流程详解</h2><h3 id="1-生命周期管理-Lines-579-582"><a href="#1-生命周期管理-Lines-579-582" class="headerlink" title="1. 生命周期管理 (Lines 579-582)"></a>1. 生命周期管理 (Lines 579-582)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> err := sd.lifetime.Add(sd.IsWorking); err != <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">defer</span> sd.lifetime.Done()</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>目的</strong>: 确保 delegator 处于工作状态</li>
+<li><strong>机制</strong>: 使用 lifetime 管理器跟踪组件状态</li>
+<li><strong>作用</strong>: 防止在 delegator 关闭或不可用时执行查询</li>
+</ul>
+<h3 id="2-Channel-验证-Lines-584-589"><a href="#2-Channel-验证-Lines-584-589" class="headerlink" title="2. Channel 验证 (Lines 584-589)"></a>2. Channel 验证 (Lines 584-589)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> !funcutil.SliceContain(req.GetDmlChannels(), sd.vchannelName) &#123;</span><br><span class="line">    log.Warn(<span class="string">&quot;delegator received query request not belongs to it&quot;</span>, ...)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">&quot;dml channel not match, ...&quot;</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>目的</strong>: 验证请求的 channel 是否属于当前 delegator</li>
+<li><strong>原因</strong>: 每个 delegator 只负责一个特定的 virtual channel</li>
+<li><strong>错误处理</strong>: 如果不匹配，立即返回错误</li>
+</ul>
+<h3 id="3-优化-Guarantee-Timestamp-Lines-591-597"><a href="#3-优化-Guarantee-Timestamp-Lines-591-597" class="headerlink" title="3. 优化 Guarantee Timestamp (Lines 591-597)"></a>3. 优化 Guarantee Timestamp (Lines 591-597)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">req.Req.GuaranteeTimestamp = sd.speedupGuranteeTS(</span><br><span class="line">    ctx,</span><br><span class="line">    req.Req.GetConsistencyLevel(),</span><br><span class="line">    req.Req.GetGuaranteeTimestamp(),</span><br><span class="line">    req.Req.GetMvccTimestamp(),</span><br><span class="line">    req.Req.GetIsIterator(),</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+
+<p><strong>speedupGuranteeTS 方法</strong> (line 918):</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sd *shardDelegator)</span></span> speedupGuranteeTS(...) <span class="type">uint64</span> &#123;</span><br><span class="line">    <span class="comment">// 如果不是 Strong 一致性或已设置 mvccTS，直接返回原值</span></span><br><span class="line">    <span class="keyword">if</span> isIterator || cl != commonpb.ConsistencyLevel_Strong || mvccTS != <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> guaranteeTS</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 使用 WAL 的 MVCC timestamp 来加速 Strong 一致性查询</span></span><br><span class="line">    <span class="keyword">if</span> mvcc, err := streaming.WAL().Local().GetLatestMVCCTimestampIfLocal(ctx, sd.vchannelName); </span><br><span class="line">       err == <span class="literal">nil</span> &amp;&amp; mvcc &lt; guaranteeTS &#123;</span><br><span class="line">        <span class="keyword">return</span> mvcc</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> guaranteeTS</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>优化原理</strong>: 对于 Strong 一致性查询，如果 WAL 的 MVCC timestamp 小于 guarantee timestamp，可以使用更小的值来加速查询</li>
+<li><strong>适用场景</strong>: <ul>
+<li>一致性级别为 <code>Strong</code></li>
+<li>不是 iterator 模式</li>
+<li>未设置 mvccTS</li>
+</ul>
+</li>
+<li><strong>效果</strong>: 减少等待时间，提高查询性能</li>
+</ul>
+<h3 id="4-等待-tSafe-Lines-599-621"><a href="#4-等待-tSafe-Lines-599-621" class="headerlink" title="4. 等待 tSafe (Lines 599-621)"></a>4. 等待 tSafe (Lines 599-621)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">partialResultRequiredDataRatio := paramtable.Get().QueryNodeCfg.PartialResultRequiredDataRatio.GetAsFloat()</span><br><span class="line">waitTr := timerecord.NewTimeRecorder(<span class="string">&quot;wait tSafe&quot;</span>)</span><br><span class="line"><span class="keyword">var</span> tSafe <span class="type">uint64</span></span><br><span class="line"><span class="keyword">var</span> err <span class="type">error</span></span><br><span class="line"><span class="keyword">if</span> partialResultRequiredDataRatio &gt;= <span class="number">1.0</span> &#123;</span><br><span class="line">    <span class="comment">// 需要完整结果，必须等待 tSafe</span></span><br><span class="line">    tSafe, err = sd.waitTSafe(ctx, req.Req.GuaranteeTimestamp)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> req.GetReq().GetMvccTimestamp() == <span class="number">0</span> &#123;</span><br><span class="line">        req.Req.MvccTimestamp = tSafe</span><br><span class="line">    &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="comment">// 允许部分结果，使用当前 tSafe 即可</span></span><br><span class="line">    <span class="keyword">if</span> req.GetReq().GetMvccTimestamp() == <span class="number">0</span> &#123;</span><br><span class="line">        req.Req.MvccTimestamp = sd.GetTSafe()</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>waitTSafe 方法</strong> (line 939):</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sd *shardDelegator)</span></span> waitTSafe(ctx context.Context, ts <span class="type">uint64</span>) (<span class="type">uint64</span>, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// 如果已经满足条件，直接返回</span></span><br><span class="line">    latestTSafe := sd.latestTsafe.Load()</span><br><span class="line">    <span class="keyword">if</span> latestTSafe &gt;= ts &#123;</span><br><span class="line">        <span class="keyword">return</span> latestTSafe, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 检查是否启用降级模式</span></span><br><span class="line">    <span class="keyword">if</span> paramtable.Get().QueryNodeCfg.DowngradeTsafe.GetAsBool() &#123;</span><br><span class="line">        <span class="keyword">return</span> latestTSafe, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 检查时间戳延迟是否过大</span></span><br><span class="line">    lag := gt.Sub(st)</span><br><span class="line">    maxLag := paramtable.Get().QueryNodeCfg.MaxTimestampLag.GetAsDuration(time.Second)</span><br><span class="line">    <span class="keyword">if</span> lag &gt; maxLag &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>, WrapErrTsLagTooLarge(lag, maxLag)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 等待 tSafe 更新</span></span><br><span class="line">    ch := <span class="built_in">make</span>(<span class="keyword">chan</span> <span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line">    <span class="keyword">go</span> <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        sd.tsCond.L.Lock()</span><br><span class="line">        <span class="keyword">defer</span> sd.tsCond.L.Unlock()</span><br><span class="line">        <span class="keyword">for</span> sd.latestTsafe.Load() &lt; ts &amp;&amp; ctx.Err() == <span class="literal">nil</span> &amp;&amp; sd.Serviceable() &#123;</span><br><span class="line">            sd.tsCond.Wait()</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">close</span>(ch)</span><br><span class="line">    &#125;()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 监听超时或完成信号</span></span><br><span class="line">    <span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> &lt;-ctx.Done():</span><br><span class="line">        sd.tsCond.Broadcast()</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>, ctx.Err()</span><br><span class="line">    <span class="keyword">case</span> &lt;-ch:</span><br><span class="line">        <span class="keyword">return</span> sd.latestTsafe.Load(), <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>:</p>
+<ul>
+<li><strong>tSafe (Time Safe)</strong>: 表示数据已经安全可读的时间戳</li>
+<li><strong>等待机制</strong>: 使用条件变量 (<code>tsCond</code>) 等待 tSafe 更新</li>
+<li><strong>部分结果模式</strong>: <ul>
+<li><code>partialResultRequiredDataRatio &gt;= 1.0</code>: 必须等待完整数据，保证强一致性</li>
+<li><code>partialResultRequiredDataRatio &lt; 1.0</code>: 允许部分结果，使用当前 tSafe，降低延迟</li>
+</ul>
+</li>
+<li><strong>超时处理</strong>: 检查时间戳延迟，如果超过 <code>MaxTimestampLag</code> 则返回错误</li>
+<li><strong>降级模式</strong>: 如果启用 <code>DowngradeTsafe</code>，直接返回当前 tSafe，不等待</li>
+</ul>
+<h3 id="5-Pin-Readable-Segments-Lines-623-628"><a href="#5-Pin-Readable-Segments-Lines-623-628" class="headerlink" title="5. Pin Readable Segments (Lines 623-628)"></a>5. Pin Readable Segments (Lines 623-628)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">sealed, growing, sealedRowCount, version, err := sd.distribution.PinReadableSegments(</span><br><span class="line">    partialResultRequiredDataRatio, </span><br><span class="line">    req.GetReq().GetPartitionIDs()...)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">defer</span> sd.distribution.Unpin(version)</span><br></pre></td></tr></table></figure>
+
+<p><strong>PinReadableSegments 方法</strong> (distribution.go:162):</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(d *distribution)</span></span> PinReadableSegments(requiredLoadRatio <span class="type">float64</span>, partitions ...<span class="type">int64</span>) </span><br><span class="line">    (sealed []SnapshotItem, growing []SegmentEntry, sealedRowCount <span class="keyword">map</span>[<span class="type">int64</span>]<span class="type">int64</span>, version <span class="type">int64</span>, err <span class="type">error</span>) &#123;</span><br><span class="line">    </span><br><span class="line">    requireFullResult := requiredLoadRatio &gt;= <span class="number">1.0</span></span><br><span class="line">    loadRatioSatisfy := d.queryView.GetLoadedRatio() &gt;= requiredLoadRatio</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">var</span> isServiceable <span class="type">bool</span></span><br><span class="line">    <span class="keyword">if</span> requireFullResult &#123;</span><br><span class="line">        isServiceable = d.queryView.Serviceable()</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        isServiceable = loadRatioSatisfy</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">if</span> !isServiceable &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">nil</span>, <span class="literal">nil</span>, <span class="number">-1</span>, merr.WrapErrChannelNotAvailable(...)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 验证 partition 是否已加载</span></span><br><span class="line">    <span class="keyword">for</span> _, partition := <span class="keyword">range</span> partitions &#123;</span><br><span class="line">        <span class="keyword">if</span> !current.partitions.Contain(partition) &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span>, <span class="literal">nil</span>, <span class="literal">nil</span>, <span class="number">-1</span>, merr.WrapErrPartitionNotLoaded(partition)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 获取 segments</span></span><br><span class="line">    sealed, growing = current.Get(partitions...)</span><br><span class="line">    version = current.version</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 根据加载比例过滤 segments</span></span><br><span class="line">    <span class="keyword">if</span> d.queryView.GetLoadedRatio() == <span class="number">1.0</span> &#123;</span><br><span class="line">        <span class="comment">// 完全加载：使用 target version 过滤</span></span><br><span class="line">        targetVersion := current.GetTargetVersion()</span><br><span class="line">        filterReadable := d.readableFilter(targetVersion)</span><br><span class="line">        sealed, growing = d.filterSegments(sealed, growing, filterReadable)</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        <span class="comment">// 部分加载：只返回已加载的 segments</span></span><br><span class="line">        sealed = lo.Map(sealed, <span class="function"><span class="keyword">func</span><span class="params">(item SnapshotItem, _ <span class="type">int</span>)</span></span> SnapshotItem &#123;</span><br><span class="line">            <span class="keyword">return</span> SnapshotItem&#123;</span><br><span class="line">                NodeID: item.NodeID,</span><br><span class="line">                Segments: lo.Filter(item.Segments, <span class="function"><span class="keyword">func</span><span class="params">(entry SegmentEntry, _ <span class="type">int</span>)</span></span> <span class="type">bool</span> &#123;</span><br><span class="line">                    <span class="keyword">return</span> d.queryView.sealedSegmentRowCount[entry.SegmentID] &gt; <span class="number">0</span></span><br><span class="line">                &#125;),</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;)</span><br><span class="line">        <span class="comment">// 类似处理 growing segments</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// Pin snapshot，防止被卸载</span></span><br><span class="line">    snapshot, _ := d.snapshots.GetOrInsert(version, <span class="function"><span class="keyword">func</span><span class="params">()</span></span> *snapshot &#123;</span><br><span class="line">        <span class="keyword">return</span> current.Clone()</span><br><span class="line">    &#125;)</span><br><span class="line">    snapshot.AddRef()</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> sealed, growing, sealedRowCount, version, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键概念</strong>:</p>
+<ul>
+<li><strong>Pin 操作</strong>: 增加 snapshot 的引用计数，防止 segment 在查询过程中被卸载</li>
+<li><strong>Snapshot</strong>: 某个时间点的 segment 分布快照</li>
+<li><strong>Sealed Segments</strong>: 已封存的 segments，数据不再变化</li>
+<li><strong>Growing Segments</strong>: 正在增长的 segments，数据可能还在变化</li>
+<li><strong>Serviceable</strong>: 检查 channel 是否可服务（所有必需的 segments 都已加载）</li>
+<li><strong>Load Ratio</strong>: 已加载的 segments 比例，用于部分结果模式</li>
+</ul>
+<h3 id="6-处理-IgnoreGrowing-标志-Lines-630-632"><a href="#6-处理-IgnoreGrowing-标志-Lines-630-632" class="headerlink" title="6. 处理 IgnoreGrowing 标志 (Lines 630-632)"></a>6. 处理 IgnoreGrowing 标志 (Lines 630-632)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> req.Req.IgnoreGrowing &#123;</span><br><span class="line">    growing = []SegmentEntry&#123;&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>目的</strong>: 如果请求指定忽略 growing segments，则清空 growing 列表</li>
+<li><strong>场景</strong>: 某些查询只需要查询历史数据，不需要最新的增量数据</li>
+</ul>
+<h3 id="7-Segment-剪枝-Lines-634-640"><a href="#7-Segment-剪枝-Lines-634-640" class="headerlink" title="7. Segment 剪枝 (Lines 634-640)"></a>7. Segment 剪枝 (Lines 634-640)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> paramtable.Get().QueryNodeCfg.EnableSegmentPrune.GetAsBool() &#123;</span><br><span class="line">    <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">        sd.partitionStatsMut.RLock()</span><br><span class="line">        <span class="keyword">defer</span> sd.partitionStatsMut.RUnlock()</span><br><span class="line">        PruneSegments(ctx, sd.partitionStats, <span class="literal">nil</span>, req.GetReq(), </span><br><span class="line">            sd.collection.Schema(), sealed, </span><br><span class="line">            PruneInfo&#123;paramtable.Get().QueryNodeCfg.DefaultSegmentFilterRatio.GetAsFloat()&#125;)</span><br><span class="line">    &#125;()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>目的</strong>: 根据统计信息剪枝不相关的 segments</li>
+<li><strong>原理</strong>: 使用 partition 统计信息（min&#x2F;max 值）判断 segment 是否可能包含查询结果</li>
+<li><strong>效果</strong>: 减少不必要的 segment 查询，提高性能</li>
+<li><strong>线程安全</strong>: 使用读锁保护 partitionStats</li>
+</ul>
+<h3 id="8-组织子任务-Lines-648-652"><a href="#8-组织子任务-Lines-648-652" class="headerlink" title="8. 组织子任务 (Lines 648-652)"></a>8. 组织子任务 (Lines 648-652)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tasks, err := organizeSubTask(ctx, req, sealed, growing, sd, <span class="literal">true</span>, sd.modifyQueryRequest)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>organizeSubTask 方法</strong> (line 751):</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">organizeSubTask</span>[<span class="title">T</span> <span class="title">any</span>]<span class="params">(ctx context.Context,</span></span></span><br><span class="line"><span class="params"><span class="function">    req T,</span></span></span><br><span class="line"><span class="params"><span class="function">    sealed []SnapshotItem,</span></span></span><br><span class="line"><span class="params"><span class="function">    growing []SegmentEntry,</span></span></span><br><span class="line"><span class="params"><span class="function">    sd *shardDelegator,</span></span></span><br><span class="line"><span class="params"><span class="function">    skipEmpty <span class="type">bool</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">    modify <span class="keyword">func</span>(T, querypb.DataScope, []<span class="type">int64</span>, <span class="type">int64</span>)</span></span> T,</span><br><span class="line">) ([]subTask[T], <span class="type">error</span>) &#123;</span><br><span class="line">    </span><br><span class="line">    result := <span class="built_in">make</span>([]subTask[T], <span class="number">0</span>, <span class="built_in">len</span>(sealed)+<span class="number">1</span>)</span><br><span class="line">    </span><br><span class="line">    packSubTask := <span class="function"><span class="keyword">func</span><span class="params">(segments []SegmentEntry, workerID <span class="type">int64</span>, scope querypb.DataScope)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">        segmentIDs := lo.Map(segments, <span class="function"><span class="keyword">func</span><span class="params">(item SegmentEntry, _ <span class="type">int</span>)</span></span> <span class="type">int64</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> item.SegmentID</span><br><span class="line">        &#125;)</span><br><span class="line">        <span class="keyword">if</span> skipEmpty &amp;&amp; <span class="built_in">len</span>(segmentIDs) == <span class="number">0</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// 修改请求，设置 scope、segmentIDs、targetID</span></span><br><span class="line">        req := modify(req, scope, segmentIDs, workerID)</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// 获取 worker</span></span><br><span class="line">        worker, err := sd.workerManager.GetWorker(ctx, workerID)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            log.Warn(<span class="string">&quot;failed to get worker for sub task&quot;</span>, ...)</span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        result = <span class="built_in">append</span>(result, subTask[T]&#123;</span><br><span class="line">            req:      req,</span><br><span class="line">            targetID: workerID,</span><br><span class="line">            worker:   worker,</span><br><span class="line">        &#125;)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 为每个 sealed snapshot 创建任务</span></span><br><span class="line">    <span class="keyword">for</span> _, entry := <span class="keyword">range</span> sealed &#123;</span><br><span class="line">        packSubTask(entry.Segments, entry.NodeID, querypb.DataScope_Historical)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 为 growing segments 创建任务（本地节点）</span></span><br><span class="line">    packSubTask(growing, paramtable.GetNodeID(), querypb.DataScope_Streaming)</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> result, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>modifyQueryRequest 方法</strong> (line 292):</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sd *shardDelegator)</span></span> modifyQueryRequest(req *querypb.QueryRequest, </span><br><span class="line">    scope querypb.DataScope, segmentIDs []<span class="type">int64</span>, targetID <span class="type">int64</span>) *querypb.QueryRequest &#123;</span><br><span class="line">    nodeReq := proto.Clone(req).(*querypb.QueryRequest)</span><br><span class="line">    nodeReq.Scope = scope                    <span class="comment">// Historical 或 Streaming</span></span><br><span class="line">    nodeReq.Req.Base.TargetID = targetID      <span class="comment">// 目标节点 ID</span></span><br><span class="line">    nodeReq.SegmentIDs = segmentIDs           <span class="comment">// 要查询的 segment IDs</span></span><br><span class="line">    nodeReq.DmlChannels = []<span class="type">string</span>&#123;sd.vchannelName&#125;</span><br><span class="line">    <span class="keyword">return</span> nodeReq</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>:</p>
+<ul>
+<li><strong>任务分组</strong>: 将 segments 按节点分组，每个节点一个任务</li>
+<li><strong>Scope 区分</strong>: <ul>
+<li><code>DataScope_Historical</code>: sealed segments</li>
+<li><code>DataScope_Streaming</code>: growing segments</li>
+</ul>
+</li>
+<li><strong>Worker 管理</strong>: 通过 workerManager 获取 worker 客户端</li>
+<li><strong>容错</strong>: 如果 worker 获取失败，任务仍然创建（用于部分结果模式）</li>
+</ul>
+<h3 id="9-执行子任务-Lines-654-661"><a href="#9-执行子任务-Lines-654-661" class="headerlink" title="9. 执行子任务 (Lines 654-661)"></a>9. 执行子任务 (Lines 654-661)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">results, err := executeSubTasks(ctx, tasks, </span><br><span class="line">    NewRowCountBasedEvaluator(sealedRowCount), </span><br><span class="line">    <span class="function"><span class="keyword">func</span><span class="params">(ctx context.Context, req *querypb.QueryRequest, worker cluster.Worker)</span></span> (*internalpb.RetrieveResults, <span class="type">error</span>) &#123;</span><br><span class="line">        resp, err := worker.QuerySegments(ctx, req)</span><br><span class="line">        status, ok := status.FromError(err)</span><br><span class="line">        <span class="keyword">if</span> ok &amp;&amp; status.Code() == codes.Unavailable &#123;</span><br><span class="line">            sd.markSegmentOffline(req.GetSegmentIDs()...)</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> resp, err</span><br><span class="line">    &#125;, </span><br><span class="line">    <span class="string">&quot;Query&quot;</span>, log)</span><br></pre></td></tr></table></figure>
+
+<p><strong>executeSubTasks 方法</strong> (line 802):</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">executeSubTasks</span>[<span class="title">T</span> <span class="title">any</span>, <span class="title">R</span> <span class="title">interface</span></span>&#123; GetStatus() *commonpb.Status &#125;](</span><br><span class="line">    ctx context.Context, </span><br><span class="line">    tasks []subTask[T], </span><br><span class="line">    evaluator PartialResultEvaluator, </span><br><span class="line">    execute <span class="function"><span class="keyword">func</span><span class="params">(context.Context, T, cluster.Worker)</span></span> (R, <span class="type">error</span>), </span><br><span class="line">    taskType <span class="type">string</span>, </span><br><span class="line">    log *log.MLogger,</span><br><span class="line">) ([]R, <span class="type">error</span>) &#123;</span><br><span class="line">    </span><br><span class="line">    ctx, cancel := context.WithCancel(ctx)</span><br><span class="line">    <span class="keyword">defer</span> cancel()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 确定部分结果要求</span></span><br><span class="line">    <span class="keyword">var</span> partialResultRequiredDataRatio <span class="type">float64</span></span><br><span class="line">    <span class="keyword">if</span> taskType == <span class="string">&quot;Query&quot;</span> || taskType == <span class="string">&quot;Search&quot;</span> &#123;</span><br><span class="line">        partialResultRequiredDataRatio = paramtable.Get().QueryNodeCfg.PartialResultRequiredDataRatio.GetAsFloat()</span><br><span class="line">    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">        partialResultRequiredDataRatio = <span class="number">1.0</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 并发执行所有任务</span></span><br><span class="line">    wg, ctx := errgroup.WithContext(ctx)</span><br><span class="line">    resultCh := <span class="built_in">make</span>(<span class="keyword">chan</span> channelResult, <span class="built_in">len</span>(tasks))</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> _, task := <span class="keyword">range</span> tasks &#123;</span><br><span class="line">        task := task <span class="comment">// capture loop variable</span></span><br><span class="line">        wg.Go(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> <span class="type">error</span> &#123;</span><br><span class="line">            <span class="keyword">var</span> result R</span><br><span class="line">            <span class="keyword">var</span> err <span class="type">error</span></span><br><span class="line">            </span><br><span class="line">            <span class="keyword">if</span> task.targetID == <span class="number">-1</span> || task.worker == <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="comment">// Worker 不可用</span></span><br><span class="line">                err = fmt.Errorf(<span class="string">&quot;segments not loaded in any worker: %v&quot;</span>, ...)</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                <span class="comment">// 执行任务</span></span><br><span class="line">                result, err = execute(ctx, task.req, task.worker)</span><br><span class="line">                <span class="keyword">if</span> result.GetStatus().GetErrorCode() != commonpb.ErrorCode_Success &#123;</span><br><span class="line">                    err = fmt.Errorf(<span class="string">&quot;worker(%d) query failed: %s&quot;</span>, task.targetID, result.GetStatus().GetReason())</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                log.Warn(<span class="string">&quot;failed to execute sub task&quot;</span>, ...)</span><br><span class="line">                <span class="comment">// 如果禁用部分结果，立即失败</span></span><br><span class="line">                <span class="keyword">if</span> partialResultRequiredDataRatio == <span class="number">1</span> &#123;</span><br><span class="line">                    <span class="keyword">return</span> err</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            <span class="comment">// 发送结果到 channel</span></span><br><span class="line">            resultCh &lt;- channelResult&#123;</span><br><span class="line">                nodeID:   task.targetID,</span><br><span class="line">                result:   result,</span><br><span class="line">                err:      err,</span><br><span class="line">                segments: req.GetSegmentIDs(),</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">        &#125;)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 等待所有任务完成</span></span><br><span class="line">    <span class="keyword">if</span> err := wg.Wait(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">close</span>(resultCh)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 收集结果</span></span><br><span class="line">    successSegmentList := typeutil.NewSet[<span class="type">int64</span>]()</span><br><span class="line">    failureSegmentList := <span class="built_in">make</span>([]<span class="type">int64</span>, <span class="number">0</span>)</span><br><span class="line">    <span class="keyword">var</span> errors []<span class="type">error</span></span><br><span class="line">    results := <span class="built_in">make</span>([]R, <span class="number">0</span>, <span class="built_in">len</span>(tasks))</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> item := <span class="keyword">range</span> resultCh &#123;</span><br><span class="line">        <span class="keyword">if</span> item.err == <span class="literal">nil</span> &#123;</span><br><span class="line">            successSegmentList.Insert(item.segments...)</span><br><span class="line">            results = <span class="built_in">append</span>(results, item.result)</span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            failureSegmentList = <span class="built_in">append</span>(failureSegmentList, item.segments...)</span><br><span class="line">            errors = <span class="built_in">append</span>(errors, item.err)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 如果全部成功，直接返回</span></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(errors) == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> results, <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 使用 evaluator 判断是否返回部分结果</span></span><br><span class="line">    <span class="keyword">if</span> evaluator != <span class="literal">nil</span> &#123;</span><br><span class="line">        shouldReturnPartial, accessedDataRatio := evaluator(</span><br><span class="line">            taskType, successSegmentList, failureSegmentList, errors)</span><br><span class="line">        <span class="keyword">if</span> shouldReturnPartial &#123;</span><br><span class="line">            log.Info(<span class="string">&quot;partial result executed successfully&quot;</span>,</span><br><span class="line">                zap.Float64(<span class="string">&quot;accessedDataRatio&quot;</span>, accessedDataRatio),</span><br><span class="line">                zap.Int64s(<span class="string">&quot;failureSegmentList&quot;</span>, failureSegmentList),</span><br><span class="line">            )</span><br><span class="line">            <span class="keyword">return</span> results, <span class="literal">nil</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>, merr.Combine(errors...)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键机制</strong>:</p>
+<ul>
+<li><strong>并发执行</strong>: 使用 <code>errgroup</code> 并发执行所有子任务</li>
+<li><strong>结果收集</strong>: 使用 buffered channel 收集结果</li>
+<li><strong>错误处理</strong>: <ul>
+<li>如果 <code>partialResultRequiredDataRatio == 1.0</code>，任何失败都会导致整体失败</li>
+<li>否则，使用 evaluator 评估是否可以返回部分结果</li>
+</ul>
+</li>
+<li><strong>Segment 标记</strong>: 如果 worker 不可用，标记 segment 为 offline</li>
+<li><strong>Partial Result Evaluator</strong>: 根据成功访问的数据比例决定是否返回部分结果</li>
+</ul>
+<p><strong>RowCountBasedEvaluator</strong>:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> RowCountBasedEvaluator <span class="keyword">struct</span> &#123;</span><br><span class="line">    sealedRowCount <span class="keyword">map</span>[<span class="type">int64</span>]<span class="type">int64</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(e *RowCountBasedEvaluator)</span></span> Evaluate(</span><br><span class="line">    taskType <span class="type">string</span>,</span><br><span class="line">    successSegments typeutil.Set[<span class="type">int64</span>],</span><br><span class="line">    failureSegments []<span class="type">int64</span>,</span><br><span class="line">    errors []<span class="type">error</span>,</span><br><span class="line">) (shouldReturn <span class="type">bool</span>, accessedDataRatio <span class="type">float64</span>) &#123;</span><br><span class="line">    <span class="comment">// 计算成功访问的行数</span></span><br><span class="line">    successRows := <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> segID := <span class="keyword">range</span> successSegments &#123;</span><br><span class="line">        successRows += e.sealedRowCount[segID]</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 计算总行数</span></span><br><span class="line">    totalRows := <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> _, count := <span class="keyword">range</span> e.sealedRowCount &#123;</span><br><span class="line">        totalRows += count</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    accessedDataRatio = <span class="type">float64</span>(successRows) / <span class="type">float64</span>(totalRows)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 判断是否满足部分结果要求</span></span><br><span class="line">    requiredRatio := paramtable.Get().QueryNodeCfg.PartialResultRequiredDataRatio.GetAsFloat()</span><br><span class="line">    shouldReturn = accessedDataRatio &gt;= requiredRatio</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> shouldReturn, accessedDataRatio</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="10-返回结果-Lines-667-685"><a href="#10-返回结果-Lines-667-685" class="headerlink" title="10. 返回结果 (Lines 667-685)"></a>10. 返回结果 (Lines 667-685)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">log.Debug(<span class="string">&quot;Delegator Query done&quot;</span>)</span><br><span class="line"><span class="keyword">if</span> log.Core().Enabled(zap.DebugLevel) &#123;</span><br><span class="line">    <span class="comment">// 记录查询的 segment IDs</span></span><br><span class="line">    sealedIDs := lo.FlatMap(sealed, <span class="function"><span class="keyword">func</span><span class="params">(item SnapshotItem, _ <span class="type">int</span>)</span></span> []<span class="type">int64</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> lo.Map(item.Segments, <span class="function"><span class="keyword">func</span><span class="params">(segment SegmentEntry, _ <span class="type">int</span>)</span></span> <span class="type">int64</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> segment.SegmentID</span><br><span class="line">        &#125;)</span><br><span class="line">    &#125;)</span><br><span class="line">    growingIDs := lo.Map(growing, <span class="function"><span class="keyword">func</span><span class="params">(item SegmentEntry, _ <span class="type">int</span>)</span></span> <span class="type">int64</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> item.SegmentID</span><br><span class="line">    &#125;)</span><br><span class="line">    log.Debug(<span class="string">&quot;execute count on segments...&quot;</span>,</span><br><span class="line">        zap.Int64s(<span class="string">&quot;sealedIDs&quot;</span>, sealedIDs),</span><br><span class="line">        zap.Int64s(<span class="string">&quot;growingIDs&quot;</span>, growingIDs),</span><br><span class="line">    )</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">return</span> results, <span class="literal">nil</span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>结果</strong>: 返回所有成功的查询结果列表</li>
+<li><strong>日志</strong>: 在 debug 模式下记录查询的 segment IDs</li>
+</ul>
+<h2 id="关键数据结构"><a href="#关键数据结构" class="headerlink" title="关键数据结构"></a>关键数据结构</h2><h3 id="subTask"><a href="#subTask" class="headerlink" title="subTask"></a>subTask</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> subTask[T any] <span class="keyword">struct</span> &#123;</span><br><span class="line">    req      T              <span class="comment">// 查询请求</span></span><br><span class="line">    targetID <span class="type">int64</span>          <span class="comment">// 目标节点 ID</span></span><br><span class="line">    worker   cluster.Worker <span class="comment">// Worker 客户端</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="SnapshotItem"><a href="#SnapshotItem" class="headerlink" title="SnapshotItem"></a>SnapshotItem</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> SnapshotItem <span class="keyword">struct</span> &#123;</span><br><span class="line">    NodeID   <span class="type">int64</span>          <span class="comment">// 节点 ID</span></span><br><span class="line">    Segments []SegmentEntry <span class="comment">// Segment 列表</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="SegmentEntry"><a href="#SegmentEntry" class="headerlink" title="SegmentEntry"></a>SegmentEntry</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> SegmentEntry <span class="keyword">struct</span> &#123;</span><br><span class="line">    SegmentID   <span class="type">int64</span></span><br><span class="line">    NodeID      <span class="type">int64</span></span><br><span class="line">    PartitionID <span class="type">int64</span></span><br><span class="line">    Version     <span class="type">int64</span></span><br><span class="line">    Offline     <span class="type">bool</span></span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="性能优化点"><a href="#性能优化点" class="headerlink" title="性能优化点"></a>性能优化点</h2><ol>
+<li><strong>Guarantee Timestamp 优化</strong>: 使用 WAL MVCC timestamp 加速 Strong 一致性查询</li>
+<li><strong>部分结果模式</strong>: 允许在数据未完全加载时返回部分结果，降低延迟</li>
+<li><strong>Segment 剪枝</strong>: 根据统计信息跳过不相关的 segments</li>
+<li><strong>并发执行</strong>: 多个 segment 查询并发执行</li>
+<li><strong>Pin 机制</strong>: 防止查询过程中 segment 被卸载</li>
+</ol>
+<h2 id="错误处理"><a href="#错误处理" class="headerlink" title="错误处理"></a>错误处理</h2><ol>
+<li><strong>Delegator 不可用</strong>: 生命周期检查失败</li>
+<li><strong>Channel 不匹配</strong>: 请求的 channel 不属于当前 delegator</li>
+<li><strong>tSafe 等待超时</strong>: 时间戳延迟过大</li>
+<li><strong>Distribution 不可服务</strong>: Segments 未完全加载且不允许部分结果</li>
+<li><strong>Worker 不可用</strong>: 节点离线，根据部分结果策略决定是否失败</li>
+<li><strong>查询失败</strong>: Segment 查询失败，根据 evaluator 决定是否返回部分结果</li>
+</ol>
+<h2 id="配置参数"><a href="#配置参数" class="headerlink" title="配置参数"></a>配置参数</h2><ul>
+<li><code>QueryNodeCfg.PartialResultRequiredDataRatio</code>: 部分结果所需数据比例（默认 1.0）</li>
+<li><code>QueryNodeCfg.EnableSegmentPrune</code>: 是否启用 segment 剪枝</li>
+<li><code>QueryNodeCfg.DefaultSegmentFilterRatio</code>: 默认 segment 过滤比例</li>
+<li><code>QueryNodeCfg.DowngradeTsafe</code>: 是否降级 tSafe（不等待）</li>
+<li><code>QueryNodeCfg.MaxTimestampLag</code>: 最大时间戳延迟</li>
+</ul>
+<h2 id="调用链"><a href="#调用链" class="headerlink" title="调用链"></a>调用链</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">QueryNode.Query()</span><br><span class="line">    ↓</span><br><span class="line">QueryNode.queryChannel()</span><br><span class="line">    ↓</span><br><span class="line">shardDelegator.Query()  ← 本文档分析的方法</span><br><span class="line">    ↓</span><br><span class="line">organizeSubTask()</span><br><span class="line">    ↓</span><br><span class="line">executeSubTasks()</span><br><span class="line">    ↓</span><br><span class="line">worker.QuerySegments()</span><br><span class="line">    ↓</span><br><span class="line">实际查询 segment 数据</span><br></pre></td></tr></table></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><code>shardDelegator.Query</code> 是一个复杂的协调方法，它：</p>
+<ol>
+<li><strong>管理时间戳</strong>: 优化 guarantee timestamp，等待 tSafe</li>
+<li><strong>管理 Segments</strong>: Pin segments，防止卸载</li>
+<li><strong>优化查询</strong>: Segment 剪枝，跳过不相关的数据</li>
+<li><strong>分发任务</strong>: 将查询任务分发到不同的节点</li>
+<li><strong>并发执行</strong>: 并发查询多个 segments</li>
+<li><strong>容错处理</strong>: 支持部分结果，提高可用性</li>
+</ol>
+<p>该方法的设计充分考虑了性能、一致性和可用性的平衡，是 Milvus 查询系统的核心组件之一。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#shardDelegator-Query-%E6%96%B9%E6%B3%95%E8%AF%A6%E7%BB%86%E5%88%86%E6%9E%90"><span class="toc-number">1.</span> <span class="toc-text">shardDelegator.Query 方法详细分析</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%B3%95%E7%AD%BE%E5%90%8D"><span class="toc-number">1.1.</span> <span class="toc-text">方法签名</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%96%B9%E6%B3%95%E8%81%8C%E8%B4%A3"><span class="toc-number">1.2.</span> <span class="toc-text">方法职责</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-number">1.3.</span> <span class="toc-text">执行流程详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F%E7%AE%A1%E7%90%86-Lines-579-582"><span class="toc-number">1.3.1.</span> <span class="toc-text">1. 生命周期管理 (Lines 579-582)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Channel-%E9%AA%8C%E8%AF%81-Lines-584-589"><span class="toc-number">1.3.2.</span> <span class="toc-text">2. Channel 验证 (Lines 584-589)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E4%BC%98%E5%8C%96-Guarantee-Timestamp-Lines-591-597"><span class="toc-number">1.3.3.</span> <span class="toc-text">3. 优化 Guarantee Timestamp (Lines 591-597)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E7%AD%89%E5%BE%85-tSafe-Lines-599-621"><span class="toc-number">1.3.4.</span> <span class="toc-text">4. 等待 tSafe (Lines 599-621)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-Pin-Readable-Segments-Lines-623-628"><span class="toc-number">1.3.5.</span> <span class="toc-text">5. Pin Readable Segments (Lines 623-628)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-%E5%A4%84%E7%90%86-IgnoreGrowing-%E6%A0%87%E5%BF%97-Lines-630-632"><span class="toc-number">1.3.6.</span> <span class="toc-text">6. 处理 IgnoreGrowing 标志 (Lines 630-632)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#7-Segment-%E5%89%AA%E6%9E%9D-Lines-634-640"><span class="toc-number">1.3.7.</span> <span class="toc-text">7. Segment 剪枝 (Lines 634-640)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#8-%E7%BB%84%E7%BB%87%E5%AD%90%E4%BB%BB%E5%8A%A1-Lines-648-652"><span class="toc-number">1.3.8.</span> <span class="toc-text">8. 组织子任务 (Lines 648-652)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#9-%E6%89%A7%E8%A1%8C%E5%AD%90%E4%BB%BB%E5%8A%A1-Lines-654-661"><span class="toc-number">1.3.9.</span> <span class="toc-text">9. 执行子任务 (Lines 654-661)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#10-%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C-Lines-667-685"><span class="toc-number">1.3.10.</span> <span class="toc-text">10. 返回结果 (Lines 667-685)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">1.4.</span> <span class="toc-text">关键数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#subTask"><span class="toc-number">1.4.1.</span> <span class="toc-text">subTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SnapshotItem"><span class="toc-number">1.4.2.</span> <span class="toc-text">SnapshotItem</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SegmentEntry"><span class="toc-number">1.4.3.</span> <span class="toc-text">SegmentEntry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%82%B9"><span class="toc-number">1.5.</span> <span class="toc-text">性能优化点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">1.6.</span> <span class="toc-text">错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">1.7.</span> <span class="toc-text">配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%B0%83%E7%94%A8%E9%93%BE"><span class="toc-number">1.8.</span> <span class="toc-text">调用链</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">1.9.</span> <span class="toc-text">总结</span></a></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&text=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&is_video=false&description=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus ShardDelegator.Query 方法详细分析&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&title=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&name=Milvus ShardDelegator.Query 方法详细分析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/shard_delegator_query_analysis/&t=Milvus ShardDelegator.Query 方法详细分析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

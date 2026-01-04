@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="Milvus 数据刷新管道文档索引📚 文档列表本文档系列详细介绍了 Milvus DataNode 中数据刷新（Flush）管道的核心组件和机制。 主文档 总览文档 系统架构总览 组件关系图 数据流程图 关键概念介绍    组件文档 FlowGraph 管理器  fgManagerImpl 的设计与职责 FlowGraph 生命周期管理 多通道并发管理   DataSyncService  Da">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus 数据刷新管道文档索引">
+<meta property="og:url" content="https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="Milvus 数据刷新管道文档索引📚 文档列表本文档系列详细介绍了 Milvus DataNode 中数据刷新（Flush）管道的核心组件和机制。 主文档 总览文档 系统架构总览 组件关系图 数据流程图 关键概念介绍    组件文档 FlowGraph 管理器  fgManagerImpl 的设计与职责 FlowGraph 生命周期管理 多通道并发管理   DataSyncService  Da">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-06-15T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-04T12:56:57.192Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus 数据刷新管道文档索引</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/flush_pipeline_flowgraph_manager/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/06/15/Milvus/flush_pipeline_overview/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&text=Milvus 数据刷新管道文档索引"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&is_video=false&description=Milvus 数据刷新管道文档索引"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus 数据刷新管道文档索引&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&name=Milvus 数据刷新管道文档索引&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&t=Milvus 数据刷新管道文档索引"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Milvus-%E6%95%B0%E6%8D%AE%E5%88%B7%E6%96%B0%E7%AE%A1%E9%81%93%E6%96%87%E6%A1%A3%E7%B4%A2%E5%BC%95"><span class="toc-number">1.</span> <span class="toc-text">Milvus 数据刷新管道文档索引</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%93%9A-%E6%96%87%E6%A1%A3%E5%88%97%E8%A1%A8"><span class="toc-number">1.1.</span> <span class="toc-text">📚 文档列表</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E6%96%87%E6%A1%A3"><span class="toc-number">1.1.1.</span> <span class="toc-text">主文档</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%84%E4%BB%B6%E6%96%87%E6%A1%A3"><span class="toc-number">1.1.2.</span> <span class="toc-text">组件文档</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%94%97-%E6%96%87%E6%A1%A3%E5%85%B3%E7%B3%BB%E5%9B%BE"><span class="toc-number">1.2.</span> <span class="toc-text">🔗 文档关系图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%93%96-%E9%98%85%E8%AF%BB%E5%BB%BA%E8%AE%AE"><span class="toc-number">1.3.</span> <span class="toc-text">📖 阅读建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B0%E6%89%8B%E5%85%A5%E9%97%A8%E8%B7%AF%E5%BE%84"><span class="toc-number">1.3.1.</span> <span class="toc-text">新手入门路径</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%93%E9%A2%98%E6%B7%B1%E5%85%A5%E8%B7%AF%E5%BE%84"><span class="toc-number">1.3.2.</span> <span class="toc-text">专题深入路径</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86%E6%B5%81%E7%A8%8B"><span class="toc-number">1.3.2.1.</span> <span class="toc-text">消息处理流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%88%B7%E6%96%B0%E6%B5%81%E7%A8%8B"><span class="toc-number">1.3.2.2.</span> <span class="toc-text">数据刷新流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9C%BA%E5%88%B6"><span class="toc-number">1.3.2.3.</span> <span class="toc-text">检查点机制</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%8E%AF-%E5%85%B3%E9%94%AE%E6%A6%82%E5%BF%B5%E9%80%9F%E6%9F%A5"><span class="toc-number">1.4.</span> <span class="toc-text">🎯 关键概念速查</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6"><span class="toc-number">1.4.1.</span> <span class="toc-text">核心组件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%9C%BA%E5%88%B6"><span class="toc-number">1.4.2.</span> <span class="toc-text">关键机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%93%9D-%E7%9B%B8%E5%85%B3%E4%BB%A3%E7%A0%81%E8%B7%AF%E5%BE%84"><span class="toc-number">1.5.</span> <span class="toc-text">📝 相关代码路径</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%94%8D-%E5%BF%AB%E9%80%9F%E6%9F%A5%E6%89%BE"><span class="toc-number">1.6.</span> <span class="toc-text">🔍 快速查找</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E5%8A%9F%E8%83%BD%E6%9F%A5%E6%89%BE"><span class="toc-number">1.6.1.</span> <span class="toc-text">按功能查找</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E7%BB%84%E4%BB%B6%E6%9F%A5%E6%89%BE"><span class="toc-number">1.6.2.</span> <span class="toc-text">按组件查找</span></a></li></ol></li></ol></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus 数据刷新管道文档索引
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-06-15T02:20:00.000Z" itemprop="datePublished">2025-06-15</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h1 id="Milvus-数据刷新管道文档索引"><a href="#Milvus-数据刷新管道文档索引" class="headerlink" title="Milvus 数据刷新管道文档索引"></a>Milvus 数据刷新管道文档索引</h1><h2 id="📚-文档列表"><a href="#📚-文档列表" class="headerlink" title="📚 文档列表"></a>📚 文档列表</h2><p>本文档系列详细介绍了 Milvus DataNode 中数据刷新（Flush）管道的核心组件和机制。</p>
+<h3 id="主文档"><a href="#主文档" class="headerlink" title="主文档"></a>主文档</h3><ol>
+<li><strong><a href="./flush_pipeline_overview.md">总览文档</a></strong><ul>
+<li>系统架构总览</li>
+<li>组件关系图</li>
+<li>数据流程图</li>
+<li>关键概念介绍</li>
+</ul>
+</li>
+</ol>
+<h3 id="组件文档"><a href="#组件文档" class="headerlink" title="组件文档"></a>组件文档</h3><ol start="2">
+<li><p><strong><a href="./flush_pipeline_flowgraph_manager.md">FlowGraph 管理器</a></strong></p>
+<ul>
+<li><code>fgManagerImpl</code> 的设计与职责</li>
+<li>FlowGraph 生命周期管理</li>
+<li>多通道并发管理</li>
+</ul>
+</li>
+<li><p><strong><a href="./flush_pipeline_data_sync_service.md">DataSyncService</a></strong></p>
+<ul>
+<li>DataSyncService 架构</li>
+<li>FlowGraph 组装流程</li>
+<li>节点初始化与启动</li>
+</ul>
+</li>
+<li><p><strong><a href="./flush_pipeline_dd_node.md">DD Node（数据分发节点）</a></strong></p>
+<ul>
+<li><code>ddNode</code> 的消息过滤机制</li>
+<li>DDL 消息处理</li>
+<li>消息类型（MsgType）赋值流程</li>
+</ul>
+</li>
+<li><p><strong><a href="./flush_pipeline_write_buffer_manager.md">WriteBuffer 管理器</a></strong></p>
+<ul>
+<li><code>bufferManager</code> 的设计与实现</li>
+<li>内存管理与驱逐策略</li>
+<li>通道注册与生命周期</li>
+</ul>
+</li>
+<li><p><strong><a href="./flush_pipeline_write_buffer.md">WriteBuffer 实现</a></strong></p>
+<ul>
+<li><code>WriteBuffer</code> 接口与基础实现</li>
+<li><code>l0WriteBuffer</code> 特殊设计</li>
+<li>段缓冲（segmentBuffer）管理</li>
+</ul>
+</li>
+<li><p><strong><a href="./flush_pipeline_sync_manager.md">SyncManager 与 SyncTask</a></strong></p>
+<ul>
+<li><code>SyncManager</code> 异步同步机制</li>
+<li><code>SyncTask</code> 执行流程</li>
+<li>数据持久化与元数据更新</li>
+</ul>
+</li>
+<li><p><strong><a href="./flush_pipeline_tt_node.md">TT Node（时间戳节点）</a></strong></p>
+<ul>
+<li><code>ttNode</code> 的检查点更新机制</li>
+<li><code>ChannelCheckpointUpdater</code> 异步更新</li>
+<li>检查点失败处理</li>
+</ul>
+</li>
+<li><p><strong><a href="./flush_pipeline_flush_checkpoint.md">Flush 与 Checkpoint 机制</a></strong></p>
+<ul>
+<li>Flush 操作的全链路影响</li>
+<li>Checkpoint 更新流程</li>
+<li><code>flushTs</code> 的作用与重置条件</li>
+<li>数据一致性保障</li>
+</ul>
+</li>
+</ol>
+<h2 id="🔗-文档关系图"><a href="#🔗-文档关系图" class="headerlink" title="🔗 文档关系图"></a>🔗 文档关系图</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">flush_pipeline_overview.md (总览)</span><br><span class="line">    │</span><br><span class="line">    ├── flush_pipeline_flowgraph_manager.md</span><br><span class="line">    │       └── flush_pipeline_data_sync_service.md</span><br><span class="line">    │               ├── flush_pipeline_dd_node.md</span><br><span class="line">    │               ├── flush_pipeline_write_buffer_manager.md</span><br><span class="line">    │               │       ├── flush_pipeline_write_buffer.md</span><br><span class="line">    │               │       └── flush_pipeline_sync_manager.md</span><br><span class="line">    │               └── flush_pipeline_tt_node.md</span><br><span class="line">    │                       └── flush_pipeline_flush_checkpoint.md</span><br><span class="line">    │</span><br><span class="line">    └── (所有文档都链接回总览文档)</span><br></pre></td></tr></table></figure>
+
+<h2 id="📖-阅读建议"><a href="#📖-阅读建议" class="headerlink" title="📖 阅读建议"></a>📖 阅读建议</h2><h3 id="新手入门路径"><a href="#新手入门路径" class="headerlink" title="新手入门路径"></a>新手入门路径</h3><ol>
+<li><strong>总览文档</strong> → 了解整体架构</li>
+<li><strong>FlowGraph 管理器</strong> → 理解多通道管理</li>
+<li><strong>DataSyncService</strong> → 理解单通道服务</li>
+<li><strong>DD Node</strong> → 理解消息过滤</li>
+<li><strong>WriteBuffer 管理器</strong> → 理解数据缓冲</li>
+<li><strong>WriteBuffer 实现</strong> → 理解缓冲细节</li>
+<li><strong>SyncManager</strong> → 理解数据同步</li>
+<li><strong>TT Node</strong> → 理解检查点更新</li>
+<li><strong>Flush 与 Checkpoint</strong> → 理解完整流程</li>
+</ol>
+<h3 id="专题深入路径"><a href="#专题深入路径" class="headerlink" title="专题深入路径"></a>专题深入路径</h3><h4 id="消息处理流程"><a href="#消息处理流程" class="headerlink" title="消息处理流程"></a>消息处理流程</h4><ul>
+<li>DD Node → WriteBuffer → SyncManager</li>
+</ul>
+<h4 id="数据刷新流程"><a href="#数据刷新流程" class="headerlink" title="数据刷新流程"></a>数据刷新流程</h4><ul>
+<li>WriteBuffer 管理器 → WriteBuffer 实现 → SyncManager → Flush 与 Checkpoint</li>
+</ul>
+<h4 id="检查点机制"><a href="#检查点机制" class="headerlink" title="检查点机制"></a>检查点机制</h4><ul>
+<li>TT Node → Flush 与 Checkpoint</li>
+</ul>
+<h2 id="🎯-关键概念速查"><a href="#🎯-关键概念速查" class="headerlink" title="🎯 关键概念速查"></a>🎯 关键概念速查</h2><h3 id="核心组件"><a href="#核心组件" class="headerlink" title="核心组件"></a>核心组件</h3><ul>
+<li><strong>fgManagerImpl</strong>: 管理多个 DataSyncService</li>
+<li><strong>DataSyncService</strong>: 控制单个通道的 FlowGraph</li>
+<li><strong>ddNode</strong>: 消息过滤和 DDL 处理</li>
+<li><strong>WriteBufferManager</strong>: 管理多个 WriteBuffer</li>
+<li><strong>WriteBuffer</strong>: 管理单个通道的数据缓冲</li>
+<li><strong>SyncManager</strong>: 异步数据同步管理器</li>
+<li><strong>SyncTask</strong>: 数据同步任务单元</li>
+<li><strong>ttNode</strong>: 检查点更新节点</li>
+<li><strong>ChannelCheckpointUpdater</strong>: 异步检查点更新器</li>
+</ul>
+<h3 id="关键机制"><a href="#关键机制" class="headerlink" title="关键机制"></a>关键机制</h3><ul>
+<li><strong>Flush</strong>: 数据刷新操作，将内存数据持久化</li>
+<li><strong>Checkpoint</strong>: 数据消费位置，用于故障恢复</li>
+<li><strong>flushTs</strong>: 刷新目标时间戳</li>
+<li><strong>SyncPolicy</strong>: 同步策略，决定何时同步数据</li>
+<li><strong>MetaCache</strong>: 本地段元数据缓存</li>
+</ul>
+<h2 id="📝-相关代码路径"><a href="#📝-相关代码路径" class="headerlink" title="📝 相关代码路径"></a>📝 相关代码路径</h2><ul>
+<li>FlowGraph 管理: <code>internal/flushcommon/pipeline/flow_graph_manager.go</code></li>
+<li>DataSyncService: <code>internal/flushcommon/pipeline/data_sync_service.go</code></li>
+<li>DD Node: <code>internal/flushcommon/pipeline/flow_graph_dd_node.go</code></li>
+<li>WriteBuffer 管理器: <code>internal/flushcommon/writebuffer/manager.go</code></li>
+<li>WriteBuffer 实现: <code>internal/flushcommon/writebuffer/write_buffer.go</code></li>
+<li>L0 WriteBuffer: <code>internal/flushcommon/writebuffer/l0_write_buffer.go</code></li>
+<li>SyncManager: <code>internal/flushcommon/syncmgr/sync_manager.go</code></li>
+<li>SyncTask: <code>internal/flushcommon/syncmgr/task.go</code></li>
+<li>TT Node: <code>internal/flushcommon/pipeline/flow_graph_time_tick_node.go</code></li>
+<li>CheckpointUpdater: <code>internal/flushcommon/util/checkpoint_updater.go</code></li>
+</ul>
+<h2 id="🔍-快速查找"><a href="#🔍-快速查找" class="headerlink" title="🔍 快速查找"></a>🔍 快速查找</h2><h3 id="按功能查找"><a href="#按功能查找" class="headerlink" title="按功能查找"></a>按功能查找</h3><ul>
+<li><strong>消息过滤</strong>: <a href="./flush_pipeline_dd_node.md">DD Node</a></li>
+<li><strong>数据缓冲</strong>: <a href="./flush_pipeline_write_buffer_manager.md">WriteBuffer 管理器</a>, <a href="./flush_pipeline_write_buffer.md">WriteBuffer 实现</a></li>
+<li><strong>数据同步</strong>: <a href="./flush_pipeline_sync_manager.md">SyncManager</a></li>
+<li><strong>检查点更新</strong>: <a href="./flush_pipeline_tt_node.md">TT Node</a></li>
+<li><strong>刷新机制</strong>: <a href="./flush_pipeline_flush_checkpoint.md">Flush 与 Checkpoint</a></li>
+</ul>
+<h3 id="按组件查找"><a href="#按组件查找" class="headerlink" title="按组件查找"></a>按组件查找</h3><ul>
+<li><strong>管理器层</strong>: <a href="./flush_pipeline_flowgraph_manager.md">FlowGraph 管理器</a>, <a href="./flush_pipeline_write_buffer_manager.md">WriteBuffer 管理器</a></li>
+<li><strong>服务层</strong>: <a href="./flush_pipeline_data_sync_service.md">DataSyncService</a></li>
+<li><strong>节点层</strong>: <a href="./flush_pipeline_dd_node.md">DD Node</a>, <a href="./flush_pipeline_tt_node.md">TT Node</a></li>
+<li><strong>缓冲层</strong>: <a href="./flush_pipeline_write_buffer.md">WriteBuffer 实现</a></li>
+<li><strong>同步层</strong>: <a href="./flush_pipeline_sync_manager.md">SyncManager</a></li>
+</ul>
+<hr>
+<p><strong>开始阅读</strong>: 从 <a href="./flush_pipeline_overview.md">总览文档</a> 开始您的学习之旅！</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#Milvus-%E6%95%B0%E6%8D%AE%E5%88%B7%E6%96%B0%E7%AE%A1%E9%81%93%E6%96%87%E6%A1%A3%E7%B4%A2%E5%BC%95"><span class="toc-number">1.</span> <span class="toc-text">Milvus 数据刷新管道文档索引</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%93%9A-%E6%96%87%E6%A1%A3%E5%88%97%E8%A1%A8"><span class="toc-number">1.1.</span> <span class="toc-text">📚 文档列表</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BB%E6%96%87%E6%A1%A3"><span class="toc-number">1.1.1.</span> <span class="toc-text">主文档</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%84%E4%BB%B6%E6%96%87%E6%A1%A3"><span class="toc-number">1.1.2.</span> <span class="toc-text">组件文档</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%94%97-%E6%96%87%E6%A1%A3%E5%85%B3%E7%B3%BB%E5%9B%BE"><span class="toc-number">1.2.</span> <span class="toc-text">🔗 文档关系图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%93%96-%E9%98%85%E8%AF%BB%E5%BB%BA%E8%AE%AE"><span class="toc-number">1.3.</span> <span class="toc-text">📖 阅读建议</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%96%B0%E6%89%8B%E5%85%A5%E9%97%A8%E8%B7%AF%E5%BE%84"><span class="toc-number">1.3.1.</span> <span class="toc-text">新手入门路径</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%93%E9%A2%98%E6%B7%B1%E5%85%A5%E8%B7%AF%E5%BE%84"><span class="toc-number">1.3.2.</span> <span class="toc-text">专题深入路径</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86%E6%B5%81%E7%A8%8B"><span class="toc-number">1.3.2.1.</span> <span class="toc-text">消息处理流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%88%B7%E6%96%B0%E6%B5%81%E7%A8%8B"><span class="toc-number">1.3.2.2.</span> <span class="toc-text">数据刷新流程</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%A3%80%E6%9F%A5%E7%82%B9%E6%9C%BA%E5%88%B6"><span class="toc-number">1.3.2.3.</span> <span class="toc-text">检查点机制</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%8E%AF-%E5%85%B3%E9%94%AE%E6%A6%82%E5%BF%B5%E9%80%9F%E6%9F%A5"><span class="toc-number">1.4.</span> <span class="toc-text">🎯 关键概念速查</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%84%E4%BB%B6"><span class="toc-number">1.4.1.</span> <span class="toc-text">核心组件</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%9C%BA%E5%88%B6"><span class="toc-number">1.4.2.</span> <span class="toc-text">关键机制</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%93%9D-%E7%9B%B8%E5%85%B3%E4%BB%A3%E7%A0%81%E8%B7%AF%E5%BE%84"><span class="toc-number">1.5.</span> <span class="toc-text">📝 相关代码路径</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%F0%9F%94%8D-%E5%BF%AB%E9%80%9F%E6%9F%A5%E6%89%BE"><span class="toc-number">1.6.</span> <span class="toc-text">🔍 快速查找</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E5%8A%9F%E8%83%BD%E6%9F%A5%E6%89%BE"><span class="toc-number">1.6.1.</span> <span class="toc-text">按功能查找</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%8C%89%E7%BB%84%E4%BB%B6%E6%9F%A5%E6%89%BE"><span class="toc-number">1.6.2.</span> <span class="toc-text">按组件查找</span></a></li></ol></li></ol></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&text=Milvus 数据刷新管道文档索引"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&is_video=false&description=Milvus 数据刷新管道文档索引"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus 数据刷新管道文档索引&body=Check out this article: https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&title=Milvus 数据刷新管道文档索引"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&name=Milvus 数据刷新管道文档索引&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/06/15/Milvus/flush_pipeline_index/&t=Milvus 数据刷新管道文档索引"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>
