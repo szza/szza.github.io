@@ -1,3 +1,4 @@
+https://szza.github.io/2025/08/09/Milvus/overview/
 https://szza.github.io/2025/08/10/Milvus/flush_pipeline_data_sync_service/
 https://szza.github.io/2025/08/10/Milvus/flush_pipeline_flowgraph_manager/
 https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/
@@ -19,7 +20,6 @@ https://szza.github.io/2025/08/15/Milvus/flush_pipeline_write_buffer_manager/
 https://szza.github.io/2025/08/15/Milvus/flush_pipeline_tt_node/
 https://szza.github.io/2025/08/15/Milvus/flush_pipeline_dd_node/
 https://szza.github.io/2025/08/15/Milvus/arrow_parquet_advantages_analysis/
-https://szza.github.io/2025/08/15/Milvus/overview/
 https://szza.github.io/2025/06/15/Juicefs/cached_store/
 https://szza.github.io/2024/08/19/ETCD/2_kv/
 https://szza.github.io/2024/08/01/ETCD/1_backend/
