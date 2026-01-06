@@ -1,5 +1,6 @@
-https://szza.github.io/2025/08/15/Milvus/flush_pipeline_flowgraph_manager/
-https://szza.github.io/2025/08/11/Milvus/flush_pipeline_data_sync_service/
+https://szza.github.io/2025/08/10/Milvus/flush_pipeline_data_sync_service/
+https://szza.github.io/2025/08/10/Milvus/flush_pipeline_flowgraph_manager/
+https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/
 https://szza.github.io/2025/08/15/Milvus/cgo_cpp_integration_analysis/
 https://szza.github.io/2025/08/15/Milvus/why_reduce_search_results/
 https://szza.github.io/2025/08/15/Milvus/tso_generation_and_usage_analysis/
@@ -12,7 +13,6 @@ https://szza.github.io/2025/08/15/Milvus/milvus_timestamp_write_flow/
 https://szza.github.io/2025/08/15/Milvus/index_sync_flow_analysis/
 https://szza.github.io/2025/08/15/Milvus/flush_pipeline_index/
 https://szza.github.io/2025/08/15/Milvus/flush_pipeline_sync_manager/
-https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/
 https://szza.github.io/2025/08/15/Milvus/flush_pipeline_flush_checkpoint/
 https://szza.github.io/2025/08/15/Milvus/flush_pipeline_write_buffer/
 https://szza.github.io/2025/08/15/Milvus/flush_pipeline_write_buffer_manager/

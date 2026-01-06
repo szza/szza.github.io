@@ -2,18 +2,27 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
-    <loc>https://szza.github.io/2025/08/15/Milvus/flush_pipeline_flowgraph_manager/</loc>
+    <loc>https://szza.github.io/2025/08/10/Milvus/flush_pipeline_data_sync_service/</loc>
     
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   
   <url>
-    <loc>https://szza.github.io/2025/08/11/Milvus/flush_pipeline_data_sync_service/</loc>
+    <loc>https://szza.github.io/2025/08/10/Milvus/flush_pipeline_flowgraph_manager/</loc>
     
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
+    
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <url>
+    <loc>https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/</loc>
+    
+    <lastmod>2026-01-06</lastmod>
     
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
@@ -120,15 +129,6 @@
   
   <url>
     <loc>https://szza.github.io/2025/08/15/Milvus/flush_pipeline_sync_manager/</loc>
-    
-    <lastmod>2026-01-04</lastmod>
-    
-    <changefreq>monthly</changefreq>
-    <priority>0.6</priority>
-  </url>
-  
-  <url>
-    <loc>https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/</loc>
     
     <lastmod>2026-01-04</lastmod>
     
@@ -976,7 +976,7 @@
 
   <url>
     <loc>https://szza.github.io/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>daily</changefreq>
     <priority>1.0</priority>
   </url>
@@ -984,63 +984,63 @@
   
   <url>
     <loc>https://szza.github.io/tags/Modern-C/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Papers/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Redis6-0/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/StarRocks/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/tidb-v6-1/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/RocksDb/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/ETCD/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Juicefs/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/tags/Milvus/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
@@ -1049,21 +1049,21 @@
   
   <url>
     <loc>https://szza.github.io/categories/SIMD/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/CBO/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>
   
   <url>
     <loc>https://szza.github.io/categories/Pipeline/</loc>
-    <lastmod>2026-01-04</lastmod>
+    <lastmod>2026-01-06</lastmod>
     <changefreq>weekly</changefreq>
     <priority>0.2</priority>
   </url>

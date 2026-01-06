@@ -8,13 +8,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
     <meta name="description" content="文档索引本文档系列详细介绍了 Milvus DataNode 中数据刷新（Flush）管道的核心组件和机制。文档按组件和功能模块组织，便于深入理解系统设计。 📚 核心组件文档 FlowGraph 管理器  fgManagerImpl 的设计与职责 FlowGraph 生命周期管理 多通道并发管理   DataSyncService  DataSyncService 架构 FlowGraph 组装">
 <meta property="og:type" content="article">
-<meta property="og:title" content="Milvus 数据刷新管道架构总览">
-<meta property="og:url" content="https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/index.html">
+<meta property="og:title" content="Milvus DataNode Overview">
+<meta property="og:url" content="https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/index.html">
 <meta property="og:site_name" content="szza">
 <meta property="og:description" content="文档索引本文档系列详细介绍了 Milvus DataNode 中数据刷新（Flush）管道的核心组件和机制。文档按组件和功能模块组织，便于深入理解系统设计。 📚 核心组件文档 FlowGraph 管理器  fgManagerImpl 的设计与职责 FlowGraph 生命周期管理 多通道并发管理   DataSyncService  DataSyncService 架构 FlowGraph 组装">
 <meta property="og:locale" content="en_US">
-<meta property="article:published_time" content="2025-08-15T02:20:00.000Z">
-<meta property="article:modified_time" content="2026-01-04T13:33:50.240Z">
+<meta property="article:published_time" content="2025-08-10T02:20:00.000Z">
+<meta property="article:modified_time" content="2026-01-06T12:52:30.027Z">
 <meta property="article:author" content="fibonaccii">
 <meta property="article:tag" content="Milvus">
 <meta name="twitter:card" content="summary">
@@ -37,7 +37,7 @@
       
     
     <!-- title -->
-    <title>Milvus 数据刷新管道架构总览</title>
+    <title>Milvus DataNode Overview</title>
     <!-- styles -->
     
 <link rel="stylesheet" href="/css/style.css">
@@ -74,10 +74,10 @@
     <span id="actions">
       <ul>
         
-        <li><a class="icon" href="/2025/08/15/Milvus/flush_pipeline_index/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        <li><a class="icon" href="/2025/08/10/Milvus/flush_pipeline_flowgraph_manager/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
         
         
-        <li><a class="icon" href="/2025/08/15/Milvus/flush_pipeline_sync_manager/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        <li><a class="icon" href="/2025/06/15/Juicefs/cached_store/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
         
         <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
         <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
@@ -90,17 +90,17 @@
     <br/>
     <div id="share" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&text=Milvus 数据刷新管道架构总览"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&is_video=false&description=Milvus 数据刷新管道架构总览"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=Milvus 数据刷新管道架构总览&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&name=Milvus 数据刷新管道架构总览&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&t=Milvus 数据刷新管道架构总览"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&text=Milvus DataNode Overview"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&is_video=false&description=Milvus DataNode Overview"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus DataNode Overview&body=Check out this article: https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&name=Milvus DataNode Overview&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&t=Milvus DataNode Overview"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
@@ -117,7 +117,7 @@
   <header>
     
     <h1 class="posttitle" itemprop="name headline">
-        Milvus 数据刷新管道架构总览
+        Milvus DataNode Overview
     </h1>
 
 
@@ -129,7 +129,7 @@
       
     <div class="postdate">
       
-        <time datetime="2025-08-15T02:20:00.000Z" itemprop="datePublished">2025-08-15</time>
+        <time datetime="2025-08-10T02:20:00.000Z" itemprop="datePublished">2025-08-10</time>
         
       
     </div>
@@ -209,7 +209,7 @@
 </ul>
 </li>
 </ol>
-<h3 id="🔗-组件关系图"><a href="#🔗-组件关系图" class="headerlink" title="🔗 组件关系图"></a>🔗 组件关系图</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│                    fgManagerImpl                            │</span><br><span class="line">│  (管理多个 DataSyncService，按通道组织)                      │</span><br><span class="line">└────────────────────┬────────────────────────────────────────┘</span><br><span class="line">                     │</span><br><span class="line">                     ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│                 DataSyncService                             │</span><br><span class="line">│  (控制一个通道的 FlowGraph)                                  │</span><br><span class="line">└──────┬──────────────┬──────────────┬───────────────────────┘</span><br><span class="line">       │              │              │</span><br><span class="line">       ▼              ▼              ▼</span><br><span class="line">┌──────────┐   ┌──────────┐   ┌──────────┐</span><br><span class="line">│  ddNode  │──▶│writeNode │──▶│  ttNode   │</span><br><span class="line">│(消息过滤)│   │(数据缓冲)│   │(检查点更新)│</span><br><span class="line">└────┬─────┘   └────┬─────┘   └─────┬─────┘</span><br><span class="line">     │              │                │</span><br><span class="line">     │              ▼                │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │WriteBufferMgr│        │</span><br><span class="line">     │      └──────┬───────┘        │</span><br><span class="line">     │             │                │</span><br><span class="line">     │             ▼                │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │ WriteBuffer  │        │</span><br><span class="line">     │      └──────┬───────┘        │</span><br><span class="line">     │             │                │</span><br><span class="line">     │             ▼                │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │ SyncManager  │        │</span><br><span class="line">     │      └──────┬───────┘        │</span><br><span class="line">     │             │                │</span><br><span class="line">     │             ▼                │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │  SyncTask    │        │</span><br><span class="line">     │      └──────────────┘        │</span><br><span class="line">     │                              │</span><br><span class="line">     └──────────────┬───────────────┘</span><br><span class="line">                    │</span><br><span class="line">                    ▼</span><br><span class="line">          ┌─────────────────┐</span><br><span class="line">          │ ChannelCheckpoint│</span><br><span class="line">          │    Updater       │</span><br><span class="line">          └─────────────────┘</span><br></pre></td></tr></table></figure>
+<h3 id="🔗-组件关系图"><a href="#🔗-组件关系图" class="headerlink" title="🔗 组件关系图"></a>🔗 组件关系图</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│                    fgManagerImpl                            │</span><br><span class="line">│         (管理多个 DataSyncService，按通道组织)                 │</span><br><span class="line">└────────────────────┬────────────────────────────────────────┘</span><br><span class="line">                     │</span><br><span class="line">                     ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│                 DataSyncService                             │</span><br><span class="line">│             (控制一个通道的 FlowGraph)                        │</span><br><span class="line">└──────┬──────────────┬──────────────┬─────────────-──────────┘</span><br><span class="line">       │              │              │</span><br><span class="line">       ▼              ▼              ▼</span><br><span class="line">┌──────────┐   ┌──────────┐   ┌──────────┐</span><br><span class="line">│  ddNode  │──▶│writeNode │──▶│  ttNode  │</span><br><span class="line">│(消息过滤)│    │(数据缓冲)  │   │(检查点更新)│</span><br><span class="line">└────┬─────┘   └────┬─────┘   └─────┬─────┘</span><br><span class="line">     │              │               │</span><br><span class="line">     │              ▼               │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │WriteBufferMgr│        │</span><br><span class="line">     │      └──────┬───────┘        │</span><br><span class="line">     │             │                │</span><br><span class="line">     │             ▼                │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │ WriteBuffer  │        │</span><br><span class="line">     │      └──────┬───────┘        │</span><br><span class="line">     │             │                │</span><br><span class="line">     │             ▼                │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │ SyncManager  │        │</span><br><span class="line">     │      └──────┬───────┘        │</span><br><span class="line">     │             │                │</span><br><span class="line">     │             ▼                │</span><br><span class="line">     │      ┌──────────────┐        │</span><br><span class="line">     │      │  SyncTask    │        │</span><br><span class="line">     │      └──────────────┘        │</span><br><span class="line">     │                              │</span><br><span class="line">     └──────────────┬───────────────┘</span><br><span class="line">                    │</span><br><span class="line">                    ▼</span><br><span class="line">          ┌──────────────────┐</span><br><span class="line">          │ ChannelCheckpoint│</span><br><span class="line">          │    Updater       │</span><br><span class="line">          └──────────────────┘</span><br></pre></td></tr></table></figure>
 
 <h3 id="📖-关键概念"><a href="#📖-关键概念" class="headerlink" title="📖 关键概念"></a>📖 关键概念</h3><h4 id="消息流（Message-Stream）"><a href="#消息流（Message-Stream）" class="headerlink" title="消息流（Message Stream）"></a>消息流（Message Stream）</h4><ul>
 <li><strong>InsertMsg</strong>: 插入数据消息</li>
@@ -273,17 +273,17 @@
 
     <div id="share-footer" style="display: none">
       <ul>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&text=Milvus 数据刷新管道架构总览"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&is_video=false&description=Milvus 数据刷新管道架构总览"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" href="mailto:?subject=Milvus 数据刷新管道架构总览&body=Check out this article: https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&title=Milvus 数据刷新管道架构总览"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&name=Milvus 数据刷新管道架构总览&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
-  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/15/Milvus/flush_pipeline_overview/&t=Milvus 数据刷新管道架构总览"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&text=Milvus DataNode Overview"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&is_video=false&description=Milvus DataNode Overview"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus DataNode Overview&body=Check out this article: https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&title=Milvus DataNode Overview"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&name=Milvus DataNode Overview&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/10/Milvus/flush_pipeline_overview/&t=Milvus DataNode Overview"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
 </ul>
 
     </div>
