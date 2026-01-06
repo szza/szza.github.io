@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="概述ddNode（Data Distribution Node）是 FlowGraph 中的第一个处理节点，负责从消息流中过滤和分发消息。它处理插入消息、删除消息以及 DDL 消息（如 CreateSegment、Flush、DropCollection），确保只有有效的数据消息传递到后续节点。 架构设计核心结构123456789101112131415type ddNode struct &amp;#1">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus DDNode（数据分发节点）详解">
+<meta property="og:url" content="https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="概述ddNode（Data Distribution Node）是 FlowGraph 中的第一个处理节点，负责从消息流中过滤和分发消息。它处理插入消息、删除消息以及 DDL 消息（如 CreateSegment、Flush、DropCollection），确保只有有效的数据消息传递到后续节点。 架构设计核心结构123456789101112131415type ddNode struct &amp;#1">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-09T06:00:00.000Z">
+<meta property="article:modified_time" content="2026-01-06T13:10:44.131Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus DDNode（数据分发节点）详解</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/09/Milvus/6_flush_pipeline_write_buffer_manager/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/09/Milvus/4_flush_pipeline_data_sync_service/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&text=Milvus DDNode（数据分发节点）详解"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&is_video=false&description=Milvus DDNode（数据分发节点）详解"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus DDNode（数据分发节点）详解&body=Check out this article: https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&name=Milvus DDNode（数据分发节点）详解&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&t=Milvus DDNode（数据分发节点）详解"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">2.</span> <span class="toc-text">架构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">2.1.</span> <span class="toc-text">核心结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86%E6%B5%81%E7%A8%8B"><span class="toc-number">3.</span> <span class="toc-text">消息处理流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Operate-%E6%96%B9%E6%B3%95"><span class="toc-number">3.1.</span> <span class="toc-text">Operate 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B%E5%A4%84%E7%90%86"><span class="toc-number">4.</span> <span class="toc-text">消息类型处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Insert-%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.1.</span> <span class="toc-text">1. Insert 消息处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Delete-%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.2.</span> <span class="toc-text">2. Delete 消息处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-DDL-%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.3.</span> <span class="toc-text">3. DDL 消息处理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CreateSegment"><span class="toc-number">4.3.1.</span> <span class="toc-text">CreateSegment</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#FlushSegment"><span class="toc-number">4.3.2.</span> <span class="toc-text">FlushSegment</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ManualFlush"><span class="toc-number">4.3.3.</span> <span class="toc-text">ManualFlush</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E8%BF%87%E6%BB%A4%E6%9C%BA%E5%88%B6"><span class="toc-number">5.</span> <span class="toc-text">消息过滤机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tryToFilterSegmentInsertMessages"><span class="toc-number">5.1.</span> <span class="toc-text">tryToFilterSegmentInsertMessages</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B%EF%BC%88MsgType%EF%BC%89%E8%B5%8B%E5%80%BC%E6%B5%81%E7%A8%8B"><span class="toc-number">6.</span> <span class="toc-text">消息类型（MsgType）赋值流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%88%9B%E5%BB%BA%E6%97%B6%E7%9A%84%E8%B5%8B%E5%80%BC"><span class="toc-number">6.1.</span> <span class="toc-text">消息创建时的赋值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B%E8%8E%B7%E5%8F%96"><span class="toc-number">6.2.</span> <span class="toc-text">消息类型获取</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%B5%81%E4%B8%AD%E7%9A%84%E4%BC%A0%E9%80%92"><span class="toc-number">6.3.</span> <span class="toc-text">消息流中的传递</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B"><span class="toc-number">7.</span> <span class="toc-text">初始化流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">8.</span> <span class="toc-text">监控指标</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E8%B4%B9%E6%8C%87%E6%A0%87"><span class="toc-number">8.1.</span> <span class="toc-text">消费指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%9F%E7%8E%87%E6%8C%87%E6%A0%87"><span class="toc-number">8.2.</span> <span class="toc-text">速率指标</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">9.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%97%A9%E6%9C%9F%E8%BF%87%E6%BB%A4"><span class="toc-number">9.1.</span> <span class="toc-text">1. 早期过滤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86"><span class="toc-number">9.2.</span> <span class="toc-text">2. 状态管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-DDL-%E5%A7%94%E6%89%98"><span class="toc-number">9.3.</span> <span class="toc-text">3. DDL 委托</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8"><span class="toc-number">9.4.</span> <span class="toc-text">4. 线程安全</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">10.</span> <span class="toc-text">相关文档</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus DDNode（数据分发节点）详解
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-09T06:00:00.000Z" itemprop="datePublished">2025-08-09</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p><code>ddNode</code>（Data Distribution Node）是 FlowGraph 中的第一个处理节点，负责从消息流中过滤和分发消息。它处理插入消息、删除消息以及 DDL 消息（如 CreateSegment、Flush、DropCollection），确保只有有效的数据消息传递到后续节点。</p>
+<h2 id="架构设计"><a href="#架构设计" class="headerlink" title="架构设计"></a>架构设计</h2><h3 id="核心结构"><a href="#核心结构" class="headerlink" title="核心结构"></a>核心结构</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> ddNode <span class="keyword">struct</span> &#123;</span><br><span class="line">    BaseNode</span><br><span class="line">    </span><br><span class="line">    ctx          context.Context</span><br><span class="line">    collectionID typeutil.UniqueID</span><br><span class="line">    vChannelName  <span class="type">string</span></span><br><span class="line">    </span><br><span class="line">    dropMode   atomic.Value</span><br><span class="line">    msgHandler util.MsgHandler</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 段信息缓存（用于过滤）</span></span><br><span class="line">    growingSegInfo    <span class="keyword">map</span>[typeutil.UniqueID]*datapb.SegmentInfo</span><br><span class="line">    sealedSegInfo     <span class="keyword">map</span>[typeutil.UniqueID]*datapb.SegmentInfo</span><br><span class="line">    droppedSegmentIDs []<span class="type">int64</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键字段说明：</strong></p>
+<ul>
+<li><code>dropMode</code>: 原子值，标记是否处于删除模式</li>
+<li><code>msgHandler</code>: DDL 消息处理器</li>
+<li><code>growingSegInfo</code>: Growing 段信息映射</li>
+<li><code>sealedSegInfo</code>: Sealed 段信息映射</li>
+<li><code>droppedSegmentIDs</code>: 已删除段 ID 列表</li>
+</ul>
+<h2 id="消息处理流程"><a href="#消息处理流程" class="headerlink" title="消息处理流程"></a>消息处理流程</h2><h3 id="Operate-方法"><a href="#Operate-方法" class="headerlink" title="Operate 方法"></a>Operate 方法</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ddn *ddNode)</span></span> Operate(in []Msg) []Msg &#123;</span><br><span class="line">    msMsg, ok := in[<span class="number">0</span>].(*MsgStreamMsg)</span><br><span class="line">    <span class="keyword">if</span> !ok &#123;</span><br><span class="line">        <span class="keyword">return</span> []Msg&#123;&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 1. 处理关闭消息</span></span><br><span class="line">    <span class="keyword">if</span> msMsg.IsCloseMsg() &#123;</span><br><span class="line">        <span class="keyword">return</span> []Msg&#123;&amp;FlowGraphMsg&#123;...&#125;&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 检查删除模式</span></span><br><span class="line">    <span class="keyword">if</span> load := ddn.dropMode.Load(); load != <span class="literal">nil</span> &amp;&amp; load.(<span class="type">bool</span>) &#123;</span><br><span class="line">        <span class="keyword">return</span> []Msg&#123;&#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 处理消息流中的每条消息</span></span><br><span class="line">    fgMsg := FlowGraphMsg&#123;...&#125;</span><br><span class="line">    <span class="keyword">for</span> _, msg := <span class="keyword">range</span> msMsg.TsMessages() &#123;</span><br><span class="line">        <span class="keyword">switch</span> msg.Type() &#123;</span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_DropCollection:</span><br><span class="line">            <span class="comment">// 处理删除集合消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_DropPartition:</span><br><span class="line">            <span class="comment">// 处理删除分区消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_Insert:</span><br><span class="line">            <span class="comment">// 处理插入消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_Delete:</span><br><span class="line">            <span class="comment">// 处理删除消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_CreateSegment:</span><br><span class="line">            <span class="comment">// 处理创建段消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_FlushSegment:</span><br><span class="line">            <span class="comment">// 处理刷新段消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_ManualFlush:</span><br><span class="line">            <span class="comment">// 处理手动刷新消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_AddCollectionField:</span><br><span class="line">            <span class="comment">// 处理 Schema 变更消息</span></span><br><span class="line">        <span class="keyword">case</span> commonpb.MsgType_AlterCollection:</span><br><span class="line">            <span class="comment">// 处理修改集合消息</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> []Msg&#123;&amp;fgMsg&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="消息类型处理"><a href="#消息类型处理" class="headerlink" title="消息类型处理"></a>消息类型处理</h2><h3 id="1-Insert-消息处理"><a href="#1-Insert-消息处理" class="headerlink" title="1. Insert 消息处理"></a>1. Insert 消息处理</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> commonpb.MsgType_Insert:</span><br><span class="line">    imsg := msg.(*msgstream.InsertMsg)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 检查集合 ID 匹配</span></span><br><span class="line">    <span class="keyword">if</span> imsg.CollectionID != ddn.collectionID &#123;</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 过滤段消息</span></span><br><span class="line">    <span class="keyword">if</span> ddn.tryToFilterSegmentInsertMessages(imsg) &#123;</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 记录指标</span></span><br><span class="line">    metrics.DataNodeConsumeMsgCount.Inc()</span><br><span class="line">    metrics.DataNodeConsumeMsgRowsCount.Add(<span class="type">float64</span>(imsg.GetNumRows()))</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 添加到输出消息</span></span><br><span class="line">    fgMsg.InsertMessages = <span class="built_in">append</span>(fgMsg.InsertMessages, imsg)</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-Delete-消息处理"><a href="#2-Delete-消息处理" class="headerlink" title="2. Delete 消息处理"></a>2. Delete 消息处理</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> commonpb.MsgType_Delete:</span><br><span class="line">    dmsg := msg.(*msgstream.DeleteMsg)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 检查集合 ID 匹配</span></span><br><span class="line">    <span class="keyword">if</span> dmsg.CollectionID != ddn.collectionID &#123;</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 记录指标</span></span><br><span class="line">    metrics.DataNodeConsumeMsgCount.Inc()</span><br><span class="line">    metrics.DataNodeConsumeMsgRowsCount.Add(<span class="type">float64</span>(dmsg.GetNumRows()))</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 添加到输出消息</span></span><br><span class="line">    fgMsg.DeleteMessages = <span class="built_in">append</span>(fgMsg.DeleteMessages, dmsg)</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-DDL-消息处理"><a href="#3-DDL-消息处理" class="headerlink" title="3. DDL 消息处理"></a>3. DDL 消息处理</h3><h4 id="CreateSegment"><a href="#CreateSegment" class="headerlink" title="CreateSegment"></a>CreateSegment</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> commonpb.MsgType_CreateSegment:</span><br><span class="line">    createSegment := msg.(*adaptor.CreateSegmentMessageBody)</span><br><span class="line">    <span class="keyword">if</span> err := ddn.msgHandler.HandleCreateSegment(ddn.ctx, createSegment.CreateSegmentMessage); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Warn(<span class="string">&quot;handle create segment message failed&quot;</span>, zap.Error(err))</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="FlushSegment"><a href="#FlushSegment" class="headerlink" title="FlushSegment"></a>FlushSegment</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> commonpb.MsgType_FlushSegment:</span><br><span class="line">    flushMsg := msg.(*adaptor.FlushMessageBody)</span><br><span class="line">    <span class="keyword">if</span> err := ddn.msgHandler.HandleFlush(flushMsg.FlushMessage); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Warn(<span class="string">&quot;handle flush message failed&quot;</span>, zap.Error(err))</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="ManualFlush"><a href="#ManualFlush" class="headerlink" title="ManualFlush"></a>ManualFlush</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> commonpb.MsgType_ManualFlush:</span><br><span class="line">    manualFlushMsg := msg.(*adaptor.ManualFlushMessageBody)</span><br><span class="line">    <span class="keyword">if</span> err := ddn.msgHandler.HandleManualFlush(manualFlushMsg.ManualFlushMessage); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Warn(<span class="string">&quot;handle manual flush message failed&quot;</span>, zap.Error(err))</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="消息过滤机制"><a href="#消息过滤机制" class="headerlink" title="消息过滤机制"></a>消息过滤机制</h2><h3 id="tryToFilterSegmentInsertMessages"><a href="#tryToFilterSegmentInsertMessages" class="headerlink" title="tryToFilterSegmentInsertMessages"></a>tryToFilterSegmentInsertMessages</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(ddn *ddNode)</span></span> tryToFilterSegmentInsertMessages(msg *msgstream.InsertMsg) <span class="type">bool</span> &#123;</span><br><span class="line">    <span class="comment">// 1. 检查 Shard 名称匹配</span></span><br><span class="line">    <span class="keyword">if</span> msg.GetShardName() != ddn.vChannelName &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 过滤已删除的段</span></span><br><span class="line">    <span class="keyword">if</span> ddn.isDropped(msg.GetSegmentID()) &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 过滤 Sealed 段（直到当前时间戳超过段的检查点）</span></span><br><span class="line">    <span class="keyword">for</span> segID, segInfo := <span class="keyword">range</span> ddn.sealedSegInfo &#123;</span><br><span class="line">        <span class="keyword">if</span> msg.EndTs() &gt; segInfo.GetDmlPosition().GetTimestamp() &#123;</span><br><span class="line">            <span class="built_in">delete</span>(ddn.sealedSegInfo, segID)</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> _, ok := ddn.sealedSegInfo[msg.GetSegmentID()]; ok &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 4. 过滤 Growing 段（直到当前时间戳超过段的 DML 位置）</span></span><br><span class="line">    <span class="keyword">if</span> si, ok := ddn.growingSegInfo[msg.GetSegmentID()]; ok &#123;</span><br><span class="line">        <span class="keyword">if</span> msg.EndTs() &lt;= si.GetDmlPosition().GetTimestamp() &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">true</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="built_in">delete</span>(ddn.growingSegInfo, msg.GetSegmentID())</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> <span class="literal">false</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>过滤逻辑说明：</strong></p>
+<ol>
+<li><strong>Shard 名称检查</strong>: 确保消息属于当前通道</li>
+<li><strong>删除段过滤</strong>: 过滤掉已删除段的消息</li>
+<li><strong>Sealed 段过滤</strong>: 过滤已封装的段，直到消息时间戳超过段的检查点</li>
+<li><strong>Growing 段过滤</strong>: 过滤 Growing 段中已处理的消息</li>
+</ol>
+<h2 id="消息类型（MsgType）赋值流程"><a href="#消息类型（MsgType）赋值流程" class="headerlink" title="消息类型（MsgType）赋值流程"></a>消息类型（MsgType）赋值流程</h2><h3 id="消息创建时的赋值"><a href="#消息创建时的赋值" class="headerlink" title="消息创建时的赋值"></a>消息创建时的赋值</h3><p>消息的 <code>MsgType</code> 在创建时通过 <code>commonpbutil.WithMsgType</code> 设置：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 在消息创建时</span></span><br><span class="line">msg := &amp;msgstream.InsertMsg&#123;</span><br><span class="line">    BaseMsg: msgstream.BaseMsg&#123;</span><br><span class="line">        Base: commonpbutil.NewMsgBase(</span><br><span class="line">            commonpbutil.WithMsgType(commonpb.MsgType_Insert),</span><br><span class="line">            commonpbutil.WithMsgID(...),</span><br><span class="line">            commonpbutil.WithTimeStamp(...),</span><br><span class="line">        ),</span><br><span class="line">    &#125;,</span><br><span class="line">    InsertRequest: &amp;msgpb.InsertRequest&#123;...&#125;,</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="消息类型获取"><a href="#消息类型获取" class="headerlink" title="消息类型获取"></a>消息类型获取</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// InsertMsg 实现</span></span><br><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(it *InsertMsg)</span></span> Type() MsgType &#123;</span><br><span class="line">    <span class="keyword">return</span> it.Base.MsgType  <span class="comment">// 返回 Base 中的 MsgType</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="消息流中的传递"><a href="#消息流中的传递" class="headerlink" title="消息流中的传递"></a>消息流中的传递</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">消息创建 → 序列化 → 消息流 → MsgStreamMsg 包装 → ddNode.Operate → msg.Type()</span><br></pre></td></tr></table></figure>
+
+<h2 id="初始化流程"><a href="#初始化流程" class="headerlink" title="初始化流程"></a>初始化流程</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">newDDNode</span><span class="params">(ctx context.Context, collID typeutil.UniqueID, vChannelName <span class="type">string</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">    droppedSegmentIDs []typeutil.UniqueID,</span></span></span><br><span class="line"><span class="params"><span class="function">    sealedSegments []*datapb.SegmentInfo, </span></span></span><br><span class="line"><span class="params"><span class="function">    growingSegments []*datapb.SegmentInfo, </span></span></span><br><span class="line"><span class="params"><span class="function">    handler util.MsgHandler)</span></span> *ddNode &#123;</span><br><span class="line">    </span><br><span class="line">    dd := &amp;ddNode&#123;</span><br><span class="line">        ctx:               ctx,</span><br><span class="line">        collectionID:      collID,</span><br><span class="line">        sealedSegInfo:     <span class="built_in">make</span>(<span class="keyword">map</span>[typeutil.UniqueID]*datapb.SegmentInfo, <span class="built_in">len</span>(sealedSegments)),</span><br><span class="line">        growingSegInfo:    <span class="built_in">make</span>(<span class="keyword">map</span>[typeutil.UniqueID]*datapb.SegmentInfo, <span class="built_in">len</span>(growingSegments)),</span><br><span class="line">        droppedSegmentIDs: droppedSegmentIDs,</span><br><span class="line">        vChannelName:      vChannelName,</span><br><span class="line">        msgHandler:        handler,</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 初始化段信息</span></span><br><span class="line">    <span class="keyword">for</span> _, s := <span class="keyword">range</span> sealedSegments &#123;</span><br><span class="line">        dd.sealedSegInfo[s.GetID()] = s</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> _, s := <span class="keyword">range</span> growingSegments &#123;</span><br><span class="line">        dd.growingSegInfo[s.GetID()] = s</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    dd.dropMode.Store(<span class="literal">false</span>)</span><br><span class="line">    <span class="keyword">return</span> dd</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="监控指标"><a href="#监控指标" class="headerlink" title="监控指标"></a>监控指标</h2><h3 id="消费指标"><a href="#消费指标" class="headerlink" title="消费指标"></a>消费指标</h3><ul>
+<li><code>DataNodeConsumeMsgCount</code>: 消费消息数量</li>
+<li><code>DataNodeConsumeMsgRowsCount</code>: 消费行数</li>
+<li><code>DataNodeConsumeBytesCount</code>: 消费字节数</li>
+</ul>
+<h3 id="速率指标"><a href="#速率指标" class="headerlink" title="速率指标"></a>速率指标</h3><ul>
+<li><code>InsertConsumeThroughput</code>: 插入消息吞吐量</li>
+<li><code>DeleteConsumeThroughput</code>: 删除消息吞吐量</li>
+</ul>
+<h2 id="设计特点"><a href="#设计特点" class="headerlink" title="设计特点"></a>设计特点</h2><h3 id="1-早期过滤"><a href="#1-早期过滤" class="headerlink" title="1. 早期过滤"></a>1. 早期过滤</h3><p>在 FlowGraph 的第一个节点就进行过滤，减少无效消息的传递和处理。</p>
+<h3 id="2-状态管理"><a href="#2-状态管理" class="headerlink" title="2. 状态管理"></a>2. 状态管理</h3><p>维护段的 Growing&#x2F;Sealed&#x2F;Dropped 状态，实现精确的消息过滤。</p>
+<h3 id="3-DDL-委托"><a href="#3-DDL-委托" class="headerlink" title="3. DDL 委托"></a>3. DDL 委托</h3><p>将 DDL 消息处理委托给 <code>MsgHandler</code>，实现关注点分离。</p>
+<h3 id="4-线程安全"><a href="#4-线程安全" class="headerlink" title="4. 线程安全"></a>4. 线程安全</h3><p>使用原子操作管理 <code>dropMode</code>，支持并发访问。</p>
+<h2 id="相关文档"><a href="#相关文档" class="headerlink" title="相关文档"></a>相关文档</h2><ul>
+<li><a href="./flush_pipeline_data_sync_service.md">DataSyncService 详解</a></li>
+<li><a href="./flush_pipeline_write_buffer_manager.md">WriteBuffer 管理器</a></li>
+<li><a href="./flush_pipeline_overview.md">总览文档</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1"><span class="toc-number">2.</span> <span class="toc-text">架构设计</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E7%BB%93%E6%9E%84"><span class="toc-number">2.1.</span> <span class="toc-text">核心结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86%E6%B5%81%E7%A8%8B"><span class="toc-number">3.</span> <span class="toc-text">消息处理流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Operate-%E6%96%B9%E6%B3%95"><span class="toc-number">3.1.</span> <span class="toc-text">Operate 方法</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B%E5%A4%84%E7%90%86"><span class="toc-number">4.</span> <span class="toc-text">消息类型处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Insert-%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.1.</span> <span class="toc-text">1. Insert 消息处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Delete-%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.2.</span> <span class="toc-text">2. Delete 消息处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-DDL-%E6%B6%88%E6%81%AF%E5%A4%84%E7%90%86"><span class="toc-number">4.3.</span> <span class="toc-text">3. DDL 消息处理</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#CreateSegment"><span class="toc-number">4.3.1.</span> <span class="toc-text">CreateSegment</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#FlushSegment"><span class="toc-number">4.3.2.</span> <span class="toc-text">FlushSegment</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ManualFlush"><span class="toc-number">4.3.3.</span> <span class="toc-text">ManualFlush</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E8%BF%87%E6%BB%A4%E6%9C%BA%E5%88%B6"><span class="toc-number">5.</span> <span class="toc-text">消息过滤机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#tryToFilterSegmentInsertMessages"><span class="toc-number">5.1.</span> <span class="toc-text">tryToFilterSegmentInsertMessages</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B%EF%BC%88MsgType%EF%BC%89%E8%B5%8B%E5%80%BC%E6%B5%81%E7%A8%8B"><span class="toc-number">6.</span> <span class="toc-text">消息类型（MsgType）赋值流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E5%88%9B%E5%BB%BA%E6%97%B6%E7%9A%84%E8%B5%8B%E5%80%BC"><span class="toc-number">6.1.</span> <span class="toc-text">消息创建时的赋值</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E7%B1%BB%E5%9E%8B%E8%8E%B7%E5%8F%96"><span class="toc-number">6.2.</span> <span class="toc-text">消息类型获取</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E6%81%AF%E6%B5%81%E4%B8%AD%E7%9A%84%E4%BC%A0%E9%80%92"><span class="toc-number">6.3.</span> <span class="toc-text">消息流中的传递</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%88%9D%E5%A7%8B%E5%8C%96%E6%B5%81%E7%A8%8B"><span class="toc-number">7.</span> <span class="toc-text">初始化流程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">8.</span> <span class="toc-text">监控指标</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%B6%88%E8%B4%B9%E6%8C%87%E6%A0%87"><span class="toc-number">8.1.</span> <span class="toc-text">消费指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%80%9F%E7%8E%87%E6%8C%87%E6%A0%87"><span class="toc-number">8.2.</span> <span class="toc-text">速率指标</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E7%89%B9%E7%82%B9"><span class="toc-number">9.</span> <span class="toc-text">设计特点</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%97%A9%E6%9C%9F%E8%BF%87%E6%BB%A4"><span class="toc-number">9.1.</span> <span class="toc-text">1. 早期过滤</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E7%8A%B6%E6%80%81%E7%AE%A1%E7%90%86"><span class="toc-number">9.2.</span> <span class="toc-text">2. 状态管理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-DDL-%E5%A7%94%E6%89%98"><span class="toc-number">9.3.</span> <span class="toc-text">3. DDL 委托</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8"><span class="toc-number">9.4.</span> <span class="toc-text">4. 线程安全</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">10.</span> <span class="toc-text">相关文档</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&text=Milvus DDNode（数据分发节点）详解"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&is_video=false&description=Milvus DDNode（数据分发节点）详解"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus DDNode（数据分发节点）详解&body=Check out this article: https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&title=Milvus DDNode（数据分发节点）详解"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&name=Milvus DDNode（数据分发节点）详解&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/09/Milvus/5_flush_pipeline_dd_node/&t=Milvus DDNode（数据分发节点）详解"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

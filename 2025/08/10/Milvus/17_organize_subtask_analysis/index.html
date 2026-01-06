@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本文档深入分析 organizeSubTask 函数的实现细节，这是 QueryNode delegator 中负责组织和分发子任务的核心函数。 函数签名123456789func organizeSubTask[T any](    ctx context.Context,    req T,    sealed []SnapshotItem,    growing []SegmentEntry">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus organizeSubTask 函数详细分析">
+<meta property="og:url" content="https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本文档深入分析 organizeSubTask 函数的实现细节，这是 QueryNode delegator 中负责组织和分发子任务的核心函数。 函数签名123456789func organizeSubTask[T any](    ctx context.Context,    req T,    sealed []SnapshotItem,    growing []SegmentEntry">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-10T06:00:00.000Z">
+<meta property="article:modified_time" content="2026-01-06T13:10:49.877Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus organizeSubTask 函数详细分析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/10/Milvus/18_why_reduce_search_results/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/10/Milvus/16_shard_delegator_query_analysis/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&text=Milvus organizeSubTask 函数详细分析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&is_video=false&description=Milvus organizeSubTask 函数详细分析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus organizeSubTask 函数详细分析&body=Check out this article: https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&name=Milvus organizeSubTask 函数详细分析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&t=Milvus organizeSubTask 函数详细分析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E7%AD%BE%E5%90%8D"><span class="toc-number">1.</span> <span class="toc-text">函数签名</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E8%81%8C%E8%B4%A3"><span class="toc-number">2.</span> <span class="toc-text">函数职责</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E"><span class="toc-number">3.</span> <span class="toc-text">参数说明</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%80%BC"><span class="toc-number">4.</span> <span class="toc-text">返回值</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">5.</span> <span class="toc-text">核心数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#subTask"><span class="toc-number">5.1.</span> <span class="toc-text">subTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SnapshotItem"><span class="toc-number">5.2.</span> <span class="toc-text">SnapshotItem</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SegmentEntry"><span class="toc-number">5.3.</span> <span class="toc-text">SegmentEntry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-number">6.</span> <span class="toc-text">执行流程详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%88%9D%E5%A7%8B%E5%8C%96%E7%BB%93%E6%9E%9C%E5%88%97%E8%A1%A8-Line-760"><span class="toc-number">6.1.</span> <span class="toc-text">1. 初始化结果列表 (Line 760)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%AE%9A%E4%B9%89-packSubTask-%E9%97%AD%E5%8C%85%E5%87%BD%E6%95%B0-Lines-762-788"><span class="toc-number">6.2.</span> <span class="toc-text">2. 定义 packSubTask 闭包函数 (Lines 762-788)</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#packSubTask-%E7%9A%84%E5%85%B3%E9%94%AE%E7%89%B9%E6%80%A7"><span class="toc-number">6.2.1.</span> <span class="toc-text">packSubTask 的关键特性</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%A4%84%E7%90%86-Sealed-Segments-Lines-790-795"><span class="toc-number">6.3.</span> <span class="toc-text">3. 处理 Sealed Segments (Lines 790-795)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E5%A4%84%E7%90%86-Growing-Segments-Line-797"><span class="toc-number">6.4.</span> <span class="toc-text">4. 处理 Growing Segments (Line 797)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C-Line-799"><span class="toc-number">6.5.</span> <span class="toc-text">5. 返回结果 (Line 799)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#modify-%E5%87%BD%E6%95%B0%E8%AF%A6%E8%A7%A3"><span class="toc-number">7.</span> <span class="toc-text">modify 函数详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Query-%E6%93%8D%E4%BD%9C%E7%9A%84-modify-%E5%87%BD%E6%95%B0"><span class="toc-number">7.1.</span> <span class="toc-text">Query 操作的 modify 函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Search-%E6%93%8D%E4%BD%9C%E7%9A%84-modify-%E5%87%BD%E6%95%B0"><span class="toc-number">7.2.</span> <span class="toc-text">Search 操作的 modify 函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#GetStatistics-%E6%93%8D%E4%BD%9C%E7%9A%84-modify-%E5%87%BD%E6%95%B0"><span class="toc-number">7.3.</span> <span class="toc-text">GetStatistics 操作的 modify 函数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Worker-%E8%8E%B7%E5%8F%96%E6%9C%BA%E5%88%B6"><span class="toc-number">8.</span> <span class="toc-text">Worker 获取机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#WorkerManager-GetWorker"><span class="toc-number">8.1.</span> <span class="toc-text">WorkerManager.GetWorker</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Worker-%E7%B1%BB%E5%9E%8B"><span class="toc-number">8.2.</span> <span class="toc-text">Worker 类型</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9C%AC%E5%9C%B0-Worker-LocalWorker"><span class="toc-number">8.2.1.</span> <span class="toc-text">本地 Worker (LocalWorker)</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%BF%9C%E7%A8%8B-Worker-RemoteWorker"><span class="toc-number">8.2.2.</span> <span class="toc-text">远程 Worker (RemoteWorker)</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-number">9.</span> <span class="toc-text">使用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Query-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.1.</span> <span class="toc-text">1. Query 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-QueryStream-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.2.</span> <span class="toc-text">2. QueryStream 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-Search-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.3.</span> <span class="toc-text">3. Search 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-GetStatistics-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.4.</span> <span class="toc-text">4. GetStatistics 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-UpdateSchema-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.5.</span> <span class="toc-text">5. UpdateSchema 操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E4%BC%98%E5%8A%BF"><span class="toc-number">10.</span> <span class="toc-text">设计优势</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%B3%9B%E5%9E%8B%E8%AE%BE%E8%AE%A1"><span class="toc-number">10.1.</span> <span class="toc-text">1. 泛型设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%AE%B9%E9%94%99%E8%AE%BE%E8%AE%A1"><span class="toc-number">10.2.</span> <span class="toc-text">2. 容错设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%85%B3%E6%B3%A8%E7%82%B9%E5%88%86%E7%A6%BB"><span class="toc-number">10.3.</span> <span class="toc-text">3. 关注点分离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E6%89%B9%E9%87%8F%E6%93%8D%E4%BD%9C"><span class="toc-number">10.4.</span> <span class="toc-text">4. 批量操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%80%83%E8%99%91"><span class="toc-number">11.</span> <span class="toc-text">性能考虑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E9%A2%84%E5%88%86%E9%85%8D%E5%AE%B9%E9%87%8F"><span class="toc-number">11.1.</span> <span class="toc-text">1. 预分配容量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Worker-%E7%BC%93%E5%AD%98"><span class="toc-number">11.2.</span> <span class="toc-text">2. Worker 缓存</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E8%BF%9E%E6%8E%A5%E6%B1%A0"><span class="toc-number">11.3.</span> <span class="toc-text">3. 连接池</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E6%9C%AC%E5%9C%B0%E4%BC%98%E5%8C%96"><span class="toc-number">11.4.</span> <span class="toc-text">4. 本地优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">12.</span> <span class="toc-text">错误处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Worker-%E8%8E%B7%E5%8F%96%E5%A4%B1%E8%B4%A5"><span class="toc-number">12.1.</span> <span class="toc-text">Worker 获取失败</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A9%BA-Segment-%E5%88%97%E8%A1%A8"><span class="toc-number">12.2.</span> <span class="toc-text">空 Segment 列表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E7%A4%BA%E4%BE%8B"><span class="toc-number">13.</span> <span class="toc-text">完整示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%93%E5%85%A5"><span class="toc-number">13.1.</span> <span class="toc-text">输入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%93%E5%87%BA"><span class="toc-number">13.2.</span> <span class="toc-text">输出</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">14.</span> <span class="toc-text">总结</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus organizeSubTask 函数详细分析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-10T06:00:00.000Z" itemprop="datePublished">2025-08-10</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文档深入分析 <code>organizeSubTask</code> 函数的实现细节，这是 QueryNode delegator 中负责组织和分发子任务的核心函数。</p>
+<h2 id="函数签名"><a href="#函数签名" class="headerlink" title="函数签名"></a>函数签名</h2><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">organizeSubTask</span>[<span class="title">T</span> <span class="title">any</span>]<span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    ctx context.Context,</span></span></span><br><span class="line"><span class="params"><span class="function">    req T,</span></span></span><br><span class="line"><span class="params"><span class="function">    sealed []SnapshotItem,</span></span></span><br><span class="line"><span class="params"><span class="function">    growing []SegmentEntry,</span></span></span><br><span class="line"><span class="params"><span class="function">    sd *shardDelegator,</span></span></span><br><span class="line"><span class="params"><span class="function">    skipEmpty <span class="type">bool</span>,</span></span></span><br><span class="line"><span class="params"><span class="function">    modify <span class="keyword">func</span>(T, querypb.DataScope, []<span class="type">int64</span>, <span class="type">int64</span>)</span></span> T,</span><br><span class="line">) ([]subTask[T], <span class="type">error</span>)</span><br></pre></td></tr></table></figure>
+
+<p><strong>位置</strong>: <code>internal/querynodev2/delegator/delegator.go:751</code></p>
+<h2 id="函数职责"><a href="#函数职责" class="headerlink" title="函数职责"></a>函数职责</h2><p><code>organizeSubTask</code> 是一个泛型函数，负责将查询&#x2F;搜索请求组织成多个子任务，每个子任务对应一组需要在特定节点上查询的 segments。</p>
+<h2 id="参数说明"><a href="#参数说明" class="headerlink" title="参数说明"></a>参数说明</h2><table>
+<thead>
+<tr>
+<th>参数</th>
+<th>类型</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td><code>ctx</code></td>
+<td><code>context.Context</code></td>
+<td>上下文，用于取消和超时控制</td>
+</tr>
+<tr>
+<td><code>req</code></td>
+<td><code>T</code> (泛型)</td>
+<td>原始请求，可以是 <code>QueryRequest</code>、<code>SearchRequest</code> 或 <code>GetStatisticsRequest</code></td>
+</tr>
+<tr>
+<td><code>sealed</code></td>
+<td><code>[]SnapshotItem</code></td>
+<td>sealed segments 分布快照，按节点分组</td>
+</tr>
+<tr>
+<td><code>growing</code></td>
+<td><code>[]SegmentEntry</code></td>
+<td>growing segments 列表（通常在本地节点）</td>
+</tr>
+<tr>
+<td><code>sd</code></td>
+<td><code>*shardDelegator</code></td>
+<td>shard delegator 实例，提供 workerManager 等资源</td>
+</tr>
+<tr>
+<td><code>skipEmpty</code></td>
+<td><code>bool</code></td>
+<td>是否跳过空的子任务（没有 segments）</td>
+</tr>
+<tr>
+<td><code>modify</code></td>
+<td><code>func(...)</code></td>
+<td>修改请求的回调函数，为每个子任务定制请求参数</td>
+</tr>
+</tbody></table>
+<h2 id="返回值"><a href="#返回值" class="headerlink" title="返回值"></a>返回值</h2><ul>
+<li><code>[]subTask[T]</code>: 子任务列表，每个子任务包含请求、目标节点 ID 和 worker 客户端</li>
+<li><code>error</code>: 错误信息（当前实现总是返回 nil）</li>
+</ul>
+<h2 id="核心数据结构"><a href="#核心数据结构" class="headerlink" title="核心数据结构"></a>核心数据结构</h2><h3 id="subTask"><a href="#subTask" class="headerlink" title="subTask"></a>subTask</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> subTask[T any] <span class="keyword">struct</span> &#123;</span><br><span class="line">    req      T              <span class="comment">// 修改后的请求（包含特定的 segmentIDs 和 targetID）</span></span><br><span class="line">    targetID <span class="type">int64</span>          <span class="comment">// 目标节点 ID</span></span><br><span class="line">    worker   cluster.Worker <span class="comment">// Worker 客户端（可能为 nil 如果节点不可用）</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="SnapshotItem"><a href="#SnapshotItem" class="headerlink" title="SnapshotItem"></a>SnapshotItem</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> SnapshotItem <span class="keyword">struct</span> &#123;</span><br><span class="line">    NodeID   <span class="type">int64</span>           <span class="comment">// 节点 ID</span></span><br><span class="line">    Segments []SegmentEntry  <span class="comment">// 该节点上的 segments</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>说明</strong>: SnapshotItem 表示某个节点上的 sealed segments 分组。</p>
+<h3 id="SegmentEntry"><a href="#SegmentEntry" class="headerlink" title="SegmentEntry"></a>SegmentEntry</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> SegmentEntry <span class="keyword">struct</span> &#123;</span><br><span class="line">    NodeID        <span class="type">int64</span>                <span class="comment">// 节点 ID</span></span><br><span class="line">    SegmentID     UniqueID             <span class="comment">// Segment ID</span></span><br><span class="line">    PartitionID   UniqueID             <span class="comment">// Partition ID</span></span><br><span class="line">    Version       <span class="type">int64</span>                <span class="comment">// Segment 版本</span></span><br><span class="line">    TargetVersion <span class="type">int64</span>                <span class="comment">// 目标版本</span></span><br><span class="line">    Level         datapb.SegmentLevel  <span class="comment">// Segment 级别（L0, L1 等）</span></span><br><span class="line">    Offline       <span class="type">bool</span>                 <span class="comment">// 是否离线</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="执行流程详解"><a href="#执行流程详解" class="headerlink" title="执行流程详解"></a>执行流程详解</h2><h3 id="1-初始化结果列表-Line-760"><a href="#1-初始化结果列表-Line-760" class="headerlink" title="1. 初始化结果列表 (Line 760)"></a>1. 初始化结果列表 (Line 760)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">log := sd.getLogger(ctx)</span><br><span class="line">result := <span class="built_in">make</span>([]subTask[T], <span class="number">0</span>, <span class="built_in">len</span>(sealed)+<span class="number">1</span>)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>容量预分配</strong>: <code>len(sealed)+1</code><ul>
+<li><code>len(sealed)</code>: 每个 sealed snapshot 一个任务</li>
+<li><code>+1</code>: growing segments 一个任务</li>
+</ul>
+</li>
+</ul>
+<h3 id="2-定义-packSubTask-闭包函数-Lines-762-788"><a href="#2-定义-packSubTask-闭包函数-Lines-762-788" class="headerlink" title="2. 定义 packSubTask 闭包函数 (Lines 762-788)"></a>2. 定义 packSubTask 闭包函数 (Lines 762-788)</h3><p><code>packSubTask</code> 是核心的任务打包函数，负责为一组 segments 创建子任务。</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line">packSubTask := <span class="function"><span class="keyword">func</span><span class="params">(segments []SegmentEntry, workerID <span class="type">int64</span>, scope querypb.DataScope)</span></span> <span class="type">error</span> &#123;</span><br><span class="line">    <span class="comment">// 步骤 1: 提取 segment IDs</span></span><br><span class="line">    segmentIDs := lo.Map(segments, <span class="function"><span class="keyword">func</span><span class="params">(item SegmentEntry, _ <span class="type">int</span>)</span></span> <span class="type">int64</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> item.SegmentID</span><br><span class="line">    &#125;)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 步骤 2: 跳过空任务（可选）</span></span><br><span class="line">    <span class="keyword">if</span> skipEmpty &amp;&amp; <span class="built_in">len</span>(segmentIDs) == <span class="number">0</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 步骤 3: 修改请求</span></span><br><span class="line">    req := modify(req, scope, segmentIDs, workerID)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 步骤 4: 获取 worker（容错）</span></span><br><span class="line">    worker, err := sd.workerManager.GetWorker(ctx, workerID)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Warn(<span class="string">&quot;failed to get worker for sub task&quot;</span>,</span><br><span class="line">            zap.Int64(<span class="string">&quot;nodeID&quot;</span>, workerID),</span><br><span class="line">            zap.Int64s(<span class="string">&quot;segments&quot;</span>, segmentIDs),</span><br><span class="line">            zap.Error(err),</span><br><span class="line">        )</span><br><span class="line">        <span class="comment">// 注意：即使获取 worker 失败，仍然创建任务</span></span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 步骤 5: 创建并添加子任务</span></span><br><span class="line">    result = <span class="built_in">append</span>(result, subTask[T]&#123;</span><br><span class="line">        req:      req,</span><br><span class="line">        targetID: workerID,</span><br><span class="line">        worker:   worker,  <span class="comment">// 可能为 nil</span></span><br><span class="line">    &#125;)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h4 id="packSubTask-的关键特性"><a href="#packSubTask-的关键特性" class="headerlink" title="packSubTask 的关键特性"></a>packSubTask 的关键特性</h4><ol>
+<li><strong>Segment IDs 提取</strong>: 使用 <code>lo.Map</code> 提取所有 segment IDs</li>
+<li><strong>空任务处理</strong>: 根据 <code>skipEmpty</code> 决定是否跳过没有 segments 的任务</li>
+<li><strong>请求定制</strong>: 通过 <code>modify</code> 函数为每个子任务定制请求参数</li>
+<li><strong>容错设计</strong>: 即使 worker 获取失败，仍然创建任务（worker 为 nil），留给后续的 <code>executeSubTasks</code> 处理</li>
+</ol>
+<h3 id="3-处理-Sealed-Segments-Lines-790-795"><a href="#3-处理-Sealed-Segments-Lines-790-795" class="headerlink" title="3. 处理 Sealed Segments (Lines 790-795)"></a>3. 处理 Sealed Segments (Lines 790-795)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">for</span> _, entry := <span class="keyword">range</span> sealed &#123;</span><br><span class="line">    err := packSubTask(entry.Segments, entry.NodeID, querypb.DataScope_Historical)</span><br><span class="line">    <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>逻辑</strong>:</p>
+<ul>
+<li>遍历每个 <code>SnapshotItem</code>（每个代表一个节点上的 sealed segments）</li>
+<li>为每个节点创建一个子任务</li>
+<li><strong>Scope</strong>: <code>DataScope_Historical</code>（历史数据）</li>
+<li><strong>Worker ID</strong>: <code>entry.NodeID</code>（远程节点）</li>
+</ul>
+<p><strong>示例</strong>:</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">sealed = [</span><br><span class="line">    &#123;NodeID: 1, Segments: [seg1, seg2, seg3]&#125;,</span><br><span class="line">    &#123;NodeID: 2, Segments: [seg4, seg5]&#125;,</span><br><span class="line">    &#123;NodeID: 3, Segments: [seg6]&#125;,</span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">生成 3 个子任务:</span><br><span class="line">- Task 1: NodeID=1, SegmentIDs=[seg1, seg2, seg3], Scope=Historical</span><br><span class="line">- Task 2: NodeID=2, SegmentIDs=[seg4, seg5], Scope=Historical</span><br><span class="line">- Task 3: NodeID=3, SegmentIDs=[seg6], Scope=Historical</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-处理-Growing-Segments-Line-797"><a href="#4-处理-Growing-Segments-Line-797" class="headerlink" title="4. 处理 Growing Segments (Line 797)"></a>4. 处理 Growing Segments (Line 797)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">packSubTask(growing, paramtable.GetNodeID(), querypb.DataScope_Streaming)</span><br></pre></td></tr></table></figure>
+
+<p><strong>逻辑</strong>:</p>
+<ul>
+<li>所有 growing segments 在一个子任务中</li>
+<li><strong>Scope</strong>: <code>DataScope_Streaming</code>（流式数据）</li>
+<li><strong>Worker ID</strong>: <code>paramtable.GetNodeID()</code>（本地节点）</li>
+<li>Growing segments 总是在当前节点（leader）上</li>
+</ul>
+<p><strong>为什么在本地节点</strong>:</p>
+<ul>
+<li>Growing segments 是正在写入的数据</li>
+<li>只有 shard leader（当前 delegator 所在节点）负责 growing segments</li>
+<li>不会分布到其他节点</li>
+</ul>
+<h3 id="5-返回结果-Line-799"><a href="#5-返回结果-Line-799" class="headerlink" title="5. 返回结果 (Line 799)"></a>5. 返回结果 (Line 799)</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">return</span> result, <span class="literal">nil</span></span><br></pre></td></tr></table></figure>
+
+<p>返回所有创建的子任务。</p>
+<h2 id="modify-函数详解"><a href="#modify-函数详解" class="headerlink" title="modify 函数详解"></a>modify 函数详解</h2><p><code>modify</code> 函数是一个回调函数，用于为每个子任务定制请求参数。不同的操作类型有不同的实现。</p>
+<h3 id="Query-操作的-modify-函数"><a href="#Query-操作的-modify-函数" class="headerlink" title="Query 操作的 modify 函数"></a>Query 操作的 modify 函数</h3><p><strong>函数</strong>: <code>shardDelegator.modifyQueryRequest</code> (line 292)</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sd *shardDelegator)</span></span> modifyQueryRequest(</span><br><span class="line">    req *querypb.QueryRequest, </span><br><span class="line">    scope querypb.DataScope, </span><br><span class="line">    segmentIDs []<span class="type">int64</span>, </span><br><span class="line">    targetID <span class="type">int64</span>,</span><br><span class="line">) *querypb.QueryRequest &#123;</span><br><span class="line">    nodeReq := proto.Clone(req).(*querypb.QueryRequest)</span><br><span class="line">    nodeReq.Scope = scope                      <span class="comment">// 设置 scope</span></span><br><span class="line">    nodeReq.Req.Base.TargetID = targetID        <span class="comment">// 设置目标节点</span></span><br><span class="line">    nodeReq.SegmentIDs = segmentIDs             <span class="comment">// 设置要查询的 segments</span></span><br><span class="line">    nodeReq.DmlChannels = []<span class="type">string</span>&#123;sd.vchannelName&#125;</span><br><span class="line">    <span class="keyword">return</span> nodeReq</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Search-操作的-modify-函数"><a href="#Search-操作的-modify-函数" class="headerlink" title="Search 操作的 modify 函数"></a>Search 操作的 modify 函数</h3><p><strong>函数</strong>: <code>shardDelegator.modifySearchRequest</code> (line 280)</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sd *shardDelegator)</span></span> modifySearchRequest(</span><br><span class="line">    req *querypb.SearchRequest, </span><br><span class="line">    scope querypb.DataScope, </span><br><span class="line">    segmentIDs []<span class="type">int64</span>, </span><br><span class="line">    targetID <span class="type">int64</span>,</span><br><span class="line">) *querypb.SearchRequest &#123;</span><br><span class="line">    nodeReq := &amp;querypb.SearchRequest&#123;</span><br><span class="line">        DmlChannels:     []<span class="type">string</span>&#123;sd.vchannelName&#125;,</span><br><span class="line">        SegmentIDs:      segmentIDs,</span><br><span class="line">        Scope:           scope,</span><br><span class="line">        Req:             sd.shallowCopySearchRequest(req.GetReq(), targetID),</span><br><span class="line">        FromShardLeader: req.FromShardLeader,</span><br><span class="line">        TotalChannelNum: req.TotalChannelNum,</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> nodeReq</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="GetStatistics-操作的-modify-函数"><a href="#GetStatistics-操作的-modify-函数" class="headerlink" title="GetStatistics 操作的 modify 函数"></a>GetStatistics 操作的 modify 函数</h3><p><strong>使用</strong>: 内联定义 (line 717)</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span><span class="params">(req *querypb.GetStatisticsRequest, scope querypb.DataScope, segmentIDs []<span class="type">int64</span>, targetID <span class="type">int64</span>)</span></span> *querypb.GetStatisticsRequest &#123;</span><br><span class="line">    nodeReq := proto.Clone(req).(*querypb.GetStatisticsRequest)</span><br><span class="line">    nodeReq.GetReq().GetBase().TargetID = targetID</span><br><span class="line">    nodeReq.Scope = scope</span><br><span class="line">    nodeReq.SegmentIDs = segmentIDs</span><br><span class="line">    nodeReq.FromShardLeader = <span class="literal">true</span></span><br><span class="line">    <span class="keyword">return</span> nodeReq</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="Worker-获取机制"><a href="#Worker-获取机制" class="headerlink" title="Worker 获取机制"></a>Worker 获取机制</h2><h3 id="WorkerManager-GetWorker"><a href="#WorkerManager-GetWorker" class="headerlink" title="WorkerManager.GetWorker"></a>WorkerManager.GetWorker</h3><p><strong>位置</strong>: <code>internal/querynodev2/cluster/manager.go:47</code></p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *grpcWorkerManager)</span></span> GetWorker(ctx context.Context, nodeID <span class="type">int64</span>) (Worker, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="comment">// 1. 尝试从缓存获取</span></span><br><span class="line">    worker, ok := m.workers.Get(nodeID)</span><br><span class="line">    <span class="keyword">var</span> err <span class="type">error</span></span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 如果不存在，使用 singleflight 创建（防止重复创建）</span></span><br><span class="line">    <span class="keyword">if</span> !ok &#123;</span><br><span class="line">        worker, err, _ = m.sf.Do(strconv.FormatInt(nodeID, <span class="number">10</span>), <span class="function"><span class="keyword">func</span><span class="params">()</span></span> (Worker, <span class="type">error</span>) &#123;</span><br><span class="line">            <span class="comment">// 使用 builder 创建 worker</span></span><br><span class="line">            worker, err = m.builder(ctx, nodeID)</span><br><span class="line">            <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">                <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            <span class="comment">// 插入缓存（如果已存在则使用已有的）</span></span><br><span class="line">            old, exist := m.workers.GetOrInsert(nodeID, worker)</span><br><span class="line">            <span class="keyword">if</span> exist &#123;</span><br><span class="line">                worker.Stop()</span><br><span class="line">                worker = old</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">return</span> worker, <span class="literal">nil</span></span><br><span class="line">        &#125;)</span><br><span class="line">        <span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">nil</span>, err</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 检查 worker 健康状态</span></span><br><span class="line">    <span class="keyword">if</span> !worker.IsHealthy() &#123;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">&quot;node is not healthy: %d&quot;</span>, nodeID)</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">return</span> worker, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>特性</strong>:</p>
+<ul>
+<li><strong>缓存机制</strong>: 复用已创建的 worker</li>
+<li><strong>Singleflight</strong>: 防止并发创建同一个 worker</li>
+<li><strong>健康检查</strong>: 确保 worker 可用</li>
+</ul>
+<h3 id="Worker-类型"><a href="#Worker-类型" class="headerlink" title="Worker 类型"></a>Worker 类型</h3><h4 id="本地-Worker-LocalWorker"><a href="#本地-Worker-LocalWorker" class="headerlink" title="本地 Worker (LocalWorker)"></a>本地 Worker (LocalWorker)</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 当 nodeID == 当前节点 ID 时创建</span></span><br><span class="line"><span class="keyword">if</span> nodeID == node.GetNodeID() &#123;</span><br><span class="line">    <span class="keyword">return</span> NewLocalWorker(node), <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>直接调用本地 QueryNode 方法</li>
+<li>无网络开销</li>
+</ul>
+<h4 id="远程-Worker-RemoteWorker"><a href="#远程-Worker-RemoteWorker" class="headerlink" title="远程 Worker (RemoteWorker)"></a>远程 Worker (RemoteWorker)</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 远程节点</span></span><br><span class="line"><span class="keyword">return</span> cluster.NewPoolingRemoteWorker(<span class="function"><span class="keyword">func</span><span class="params">()</span></span> (types.QueryNodeClient, <span class="type">error</span>) &#123;</span><br><span class="line">    <span class="keyword">return</span> grpcquerynodeclient.NewClient(node.ctx, addr, nodeID)</span><br><span class="line">&#125;)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>通过 gRPC 调用远程 QueryNode</li>
+<li>支持连接池（<code>WorkerPoolingSize</code> 配置）</li>
+<li>使用 round-robin 选择连接</li>
+</ul>
+<p><strong>Worker 接口</strong>:</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">type</span> Worker <span class="keyword">interface</span> &#123;</span><br><span class="line">    LoadSegments(context.Context, *querypb.LoadSegmentsRequest) <span class="type">error</span></span><br><span class="line">    ReleaseSegments(context.Context, *querypb.ReleaseSegmentsRequest) <span class="type">error</span></span><br><span class="line">    SearchSegments(ctx context.Context, req *querypb.SearchRequest) (*internalpb.SearchResults, <span class="type">error</span>)</span><br><span class="line">    QuerySegments(ctx context.Context, req *querypb.QueryRequest) (*internalpb.RetrieveResults, <span class="type">error</span>)</span><br><span class="line">    QueryStreamSegments(ctx context.Context, req *querypb.QueryRequest, srv streamrpc.QueryStreamServer) <span class="type">error</span></span><br><span class="line">    GetStatistics(ctx context.Context, req *querypb.GetStatisticsRequest) (*internalpb.GetStatisticsResponse, <span class="type">error</span>)</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">    IsHealthy() <span class="type">bool</span></span><br><span class="line">    Stop()</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="使用场景"><a href="#使用场景" class="headerlink" title="使用场景"></a>使用场景</h2><h3 id="1-Query-操作"><a href="#1-Query-操作" class="headerlink" title="1. Query 操作"></a>1. Query 操作</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tasks, err := organizeSubTask(ctx, req, sealed, growing, sd, <span class="literal">true</span>, sd.modifyQueryRequest)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用于普通查询操作</li>
+<li><code>skipEmpty = true</code>: 跳过没有 segments 的任务</li>
+</ul>
+<h3 id="2-QueryStream-操作"><a href="#2-QueryStream-操作" class="headerlink" title="2. QueryStream 操作"></a>2. QueryStream 操作</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tasks, err := organizeSubTask(ctx, req, sealed, growing, sd, <span class="literal">true</span>, sd.modifyQueryRequest)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用于流式查询操作</li>
+<li>与普通查询使用相同的逻辑</li>
+</ul>
+<h3 id="3-Search-操作"><a href="#3-Search-操作" class="headerlink" title="3. Search 操作"></a>3. Search 操作</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tasks, err := organizeSubTask(ctx, req, sealed, growing, sd, <span class="literal">true</span>, sd.modifySearchRequest)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用于向量搜索操作</li>
+<li>使用 <code>modifySearchRequest</code> 定制请求</li>
+</ul>
+<h3 id="4-GetStatistics-操作"><a href="#4-GetStatistics-操作" class="headerlink" title="4. GetStatistics 操作"></a>4. GetStatistics 操作</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">tasks, err := organizeSubTask(ctx, req, sealed, growing, sd, <span class="literal">true</span>, </span><br><span class="line">    <span class="function"><span class="keyword">func</span><span class="params">(req *querypb.GetStatisticsRequest, scope querypb.DataScope, segmentIDs []<span class="type">int64</span>, targetID <span class="type">int64</span>)</span></span> *querypb.GetStatisticsRequest &#123;</span><br><span class="line">        <span class="comment">// 内联定制函数</span></span><br><span class="line">    &#125;)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用于获取统计信息</li>
+<li>使用内联函数定制请求</li>
+</ul>
+<h3 id="5-UpdateSchema-操作"><a href="#5-UpdateSchema-操作" class="headerlink" title="5. UpdateSchema 操作"></a>5. UpdateSchema 操作</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">tasks, err := organizeSubTask(ctx, &amp;querypb.UpdateSchemaRequest&#123;...&#125;, </span><br><span class="line">    sealed, growing, sd, <span class="literal">false</span>,  <span class="comment">// skipEmpty = false</span></span><br><span class="line">    <span class="function"><span class="keyword">func</span><span class="params">(...)</span></span> *querypb.UpdateSchemaRequest &#123;</span><br><span class="line">        <span class="comment">// 定制函数</span></span><br><span class="line">    &#125;)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>用于更新 schema</li>
+<li><code>skipEmpty = false</code>: 即使没有 segments 也创建任务（需要通知所有节点）</li>
+</ul>
+<h2 id="设计优势"><a href="#设计优势" class="headerlink" title="设计优势"></a>设计优势</h2><h3 id="1-泛型设计"><a href="#1-泛型设计" class="headerlink" title="1. 泛型设计"></a>1. 泛型设计</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">organizeSubTask</span>[<span class="title">T</span> <span class="title">any</span>]<span class="params">(...)</span></span></span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>类型安全</strong>: 编译时类型检查</li>
+<li><strong>代码复用</strong>: 同一函数支持多种请求类型</li>
+<li><strong>灵活性</strong>: 通过 <code>modify</code> 函数定制不同类型的请求</li>
+</ul>
+<h3 id="2-容错设计"><a href="#2-容错设计" class="headerlink" title="2. 容错设计"></a>2. 容错设计</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">worker, err := sd.workerManager.GetWorker(ctx, workerID)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Warn(<span class="string">&quot;failed to get worker for sub task&quot;</span>, ...)</span><br><span class="line">    <span class="comment">// 继续创建任务，worker 为 nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>即使 worker 不可用，仍然创建任务</li>
+<li>让后续的 <code>executeSubTasks</code> 决定如何处理（部分结果 vs 完全失败）</li>
+</ul>
+<h3 id="3-关注点分离"><a href="#3-关注点分离" class="headerlink" title="3. 关注点分离"></a>3. 关注点分离</h3><ul>
+<li><strong>organizeSubTask</strong>: 只负责组织任务，不执行</li>
+<li><strong>executeSubTasks</strong>: 负责执行任务和结果收集</li>
+<li><strong>modify 函数</strong>: 负责请求定制</li>
+</ul>
+<h3 id="4-批量操作"><a href="#4-批量操作" class="headerlink" title="4. 批量操作"></a>4. 批量操作</h3><ul>
+<li>将同一节点上的所有 segments 组织到一个任务中</li>
+<li>减少 RPC 调用次数</li>
+<li>提高网络效率</li>
+</ul>
+<h2 id="性能考虑"><a href="#性能考虑" class="headerlink" title="性能考虑"></a>性能考虑</h2><h3 id="1-预分配容量"><a href="#1-预分配容量" class="headerlink" title="1. 预分配容量"></a>1. 预分配容量</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">result := <span class="built_in">make</span>([]subTask[T], <span class="number">0</span>, <span class="built_in">len</span>(sealed)+<span class="number">1</span>)</span><br></pre></td></tr></table></figure>
+
+<p>减少内存重新分配。</p>
+<h3 id="2-Worker-缓存"><a href="#2-Worker-缓存" class="headerlink" title="2. Worker 缓存"></a>2. Worker 缓存</h3><ul>
+<li>WorkerManager 缓存已创建的 worker</li>
+<li>避免重复建立 gRPC 连接</li>
+</ul>
+<h3 id="3-连接池"><a href="#3-连接池" class="headerlink" title="3. 连接池"></a>3. 连接池</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">poolSize := paramtable.Get().QueryNodeCfg.WorkerPoolingSize.GetAsInt()</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>每个远程 worker 维护多个 gRPC 连接</li>
+<li>Round-robin 选择连接，提高并发性能</li>
+</ul>
+<h3 id="4-本地优化"><a href="#4-本地优化" class="headerlink" title="4. 本地优化"></a>4. 本地优化</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> nodeID == node.GetNodeID() &#123;</span><br><span class="line">    <span class="keyword">return</span> NewLocalWorker(node), <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li>本地 worker 直接调用，无网络开销</li>
+</ul>
+<h2 id="错误处理"><a href="#错误处理" class="headerlink" title="错误处理"></a>错误处理</h2><h3 id="Worker-获取失败"><a href="#Worker-获取失败" class="headerlink" title="Worker 获取失败"></a>Worker 获取失败</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Warn(<span class="string">&quot;failed to get worker for sub task&quot;</span>, ...)</span><br><span class="line">    <span class="comment">// 不返回错误，继续创建任务</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>策略</strong>: 延迟错误处理</p>
+<ul>
+<li>在 <code>organizeSubTask</code> 阶段只记录警告</li>
+<li>在 <code>executeSubTasks</code> 阶段根据部分结果策略决定是否失败</li>
+</ul>
+<h3 id="空-Segment-列表"><a href="#空-Segment-列表" class="headerlink" title="空 Segment 列表"></a>空 Segment 列表</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> skipEmpty &amp;&amp; <span class="built_in">len</span>(segmentIDs) == <span class="number">0</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>  <span class="comment">// 跳过任务</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>场景</strong>:</p>
+<ul>
+<li>某个节点上没有需要查询的 segments</li>
+<li>根据 <code>skipEmpty</code> 参数决定是否创建任务</li>
+</ul>
+<h2 id="完整示例"><a href="#完整示例" class="headerlink" title="完整示例"></a>完整示例</h2><h3 id="输入"><a href="#输入" class="headerlink" title="输入"></a>输入</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">sealed = [</span><br><span class="line">    &#123;NodeID: <span class="number">1</span>, Segments: [</span><br><span class="line">        &#123;SegmentID: <span class="number">101</span>, PartitionID: <span class="number">1</span>&#125;,</span><br><span class="line">        &#123;SegmentID: <span class="number">102</span>, PartitionID: <span class="number">1</span>&#125;,</span><br><span class="line">    ]&#125;,</span><br><span class="line">    &#123;NodeID: <span class="number">2</span>, Segments: [</span><br><span class="line">        &#123;SegmentID: <span class="number">103</span>, PartitionID: <span class="number">2</span>&#125;,</span><br><span class="line">    ]&#125;,</span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">growing = [</span><br><span class="line">    &#123;SegmentID: <span class="number">201</span>, NodeID: <span class="number">0</span>, PartitionID: <span class="number">1</span>&#125;,</span><br><span class="line">    &#123;SegmentID: <span class="number">202</span>, NodeID: <span class="number">0</span>, PartitionID: <span class="number">2</span>&#125;,</span><br><span class="line">]</span><br><span class="line"></span><br><span class="line">currentNodeID = <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="输出"><a href="#输出" class="headerlink" title="输出"></a>输出</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line">tasks = [</span><br><span class="line">    &#123;</span><br><span class="line">        req: QueryRequest&#123;</span><br><span class="line">            SegmentIDs: [<span class="number">101</span>, <span class="number">102</span>],</span><br><span class="line">            Scope: DataScope_Historical,</span><br><span class="line">            TargetID: <span class="number">1</span>,</span><br><span class="line">            DmlChannels: [<span class="string">&quot;channel-1&quot;</span>],</span><br><span class="line">        &#125;,</span><br><span class="line">        targetID: <span class="number">1</span>,</span><br><span class="line">        worker: RemoteWorker&#123;nodeID: <span class="number">1</span>&#125;,</span><br><span class="line">    &#125;,</span><br><span class="line">    &#123;</span><br><span class="line">        req: QueryRequest&#123;</span><br><span class="line">            SegmentIDs: [<span class="number">103</span>],</span><br><span class="line">            Scope: DataScope_Historical,</span><br><span class="line">            TargetID: <span class="number">2</span>,</span><br><span class="line">            DmlChannels: [<span class="string">&quot;channel-1&quot;</span>],</span><br><span class="line">        &#125;,</span><br><span class="line">        targetID: <span class="number">2</span>,</span><br><span class="line">        worker: RemoteWorker&#123;nodeID: <span class="number">2</span>&#125;,</span><br><span class="line">    &#125;,</span><br><span class="line">    &#123;</span><br><span class="line">        req: QueryRequest&#123;</span><br><span class="line">            SegmentIDs: [<span class="number">201</span>, <span class="number">202</span>],</span><br><span class="line">            Scope: DataScope_Streaming,</span><br><span class="line">            TargetID: <span class="number">0</span>,</span><br><span class="line">            DmlChannels: [<span class="string">&quot;channel-1&quot;</span>],</span><br><span class="line">        &#125;,</span><br><span class="line">        targetID: <span class="number">0</span>,</span><br><span class="line">        worker: LocalWorker&#123;&#125;,</span><br><span class="line">    &#125;,</span><br><span class="line">]</span><br></pre></td></tr></table></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><code>organizeSubTask</code> 是一个设计精巧的泛型函数，具有以下特点：</p>
+<ol>
+<li><strong>高度抽象</strong>: 通过泛型和回调函数支持多种请求类型</li>
+<li><strong>容错健壮</strong>: 即使部分 worker 不可用也能创建任务</li>
+<li><strong>性能优化</strong>: 批量操作、连接池、本地优化</li>
+<li><strong>关注点分离</strong>: 只负责组织任务，不负责执行</li>
+<li><strong>易于扩展</strong>: 添加新的请求类型只需提供新的 modify 函数</li>
+</ol>
+<p>该函数是 Milvus 查询系统中任务分发机制的核心组件，确保了查询能够高效、可靠地分发到多个节点并行执行。</p>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E7%AD%BE%E5%90%8D"><span class="toc-number">1.</span> <span class="toc-text">函数签名</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%87%BD%E6%95%B0%E8%81%8C%E8%B4%A3"><span class="toc-number">2.</span> <span class="toc-text">函数职责</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E6%95%B0%E8%AF%B4%E6%98%8E"><span class="toc-number">3.</span> <span class="toc-text">参数说明</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%94%E5%9B%9E%E5%80%BC"><span class="toc-number">4.</span> <span class="toc-text">返回值</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="toc-number">5.</span> <span class="toc-text">核心数据结构</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#subTask"><span class="toc-number">5.1.</span> <span class="toc-text">subTask</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SnapshotItem"><span class="toc-number">5.2.</span> <span class="toc-text">SnapshotItem</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SegmentEntry"><span class="toc-number">5.3.</span> <span class="toc-text">SegmentEntry</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B%E8%AF%A6%E8%A7%A3"><span class="toc-number">6.</span> <span class="toc-text">执行流程详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%88%9D%E5%A7%8B%E5%8C%96%E7%BB%93%E6%9E%9C%E5%88%97%E8%A1%A8-Line-760"><span class="toc-number">6.1.</span> <span class="toc-text">1. 初始化结果列表 (Line 760)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%AE%9A%E4%B9%89-packSubTask-%E9%97%AD%E5%8C%85%E5%87%BD%E6%95%B0-Lines-762-788"><span class="toc-number">6.2.</span> <span class="toc-text">2. 定义 packSubTask 闭包函数 (Lines 762-788)</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#packSubTask-%E7%9A%84%E5%85%B3%E9%94%AE%E7%89%B9%E6%80%A7"><span class="toc-number">6.2.1.</span> <span class="toc-text">packSubTask 的关键特性</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%A4%84%E7%90%86-Sealed-Segments-Lines-790-795"><span class="toc-number">6.3.</span> <span class="toc-text">3. 处理 Sealed Segments (Lines 790-795)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E5%A4%84%E7%90%86-Growing-Segments-Line-797"><span class="toc-number">6.4.</span> <span class="toc-text">4. 处理 Growing Segments (Line 797)</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-%E8%BF%94%E5%9B%9E%E7%BB%93%E6%9E%9C-Line-799"><span class="toc-number">6.5.</span> <span class="toc-text">5. 返回结果 (Line 799)</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#modify-%E5%87%BD%E6%95%B0%E8%AF%A6%E8%A7%A3"><span class="toc-number">7.</span> <span class="toc-text">modify 函数详解</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Query-%E6%93%8D%E4%BD%9C%E7%9A%84-modify-%E5%87%BD%E6%95%B0"><span class="toc-number">7.1.</span> <span class="toc-text">Query 操作的 modify 函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Search-%E6%93%8D%E4%BD%9C%E7%9A%84-modify-%E5%87%BD%E6%95%B0"><span class="toc-number">7.2.</span> <span class="toc-text">Search 操作的 modify 函数</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#GetStatistics-%E6%93%8D%E4%BD%9C%E7%9A%84-modify-%E5%87%BD%E6%95%B0"><span class="toc-number">7.3.</span> <span class="toc-text">GetStatistics 操作的 modify 函数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Worker-%E8%8E%B7%E5%8F%96%E6%9C%BA%E5%88%B6"><span class="toc-number">8.</span> <span class="toc-text">Worker 获取机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#WorkerManager-GetWorker"><span class="toc-number">8.1.</span> <span class="toc-text">WorkerManager.GetWorker</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Worker-%E7%B1%BB%E5%9E%8B"><span class="toc-number">8.2.</span> <span class="toc-text">Worker 类型</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%9C%AC%E5%9C%B0-Worker-LocalWorker"><span class="toc-number">8.2.1.</span> <span class="toc-text">本地 Worker (LocalWorker)</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%BF%9C%E7%A8%8B-Worker-RemoteWorker"><span class="toc-number">8.2.2.</span> <span class="toc-text">远程 Worker (RemoteWorker)</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%9C%BA%E6%99%AF"><span class="toc-number">9.</span> <span class="toc-text">使用场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Query-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.1.</span> <span class="toc-text">1. Query 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-QueryStream-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.2.</span> <span class="toc-text">2. QueryStream 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-Search-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.3.</span> <span class="toc-text">3. Search 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-GetStatistics-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.4.</span> <span class="toc-text">4. GetStatistics 操作</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-UpdateSchema-%E6%93%8D%E4%BD%9C"><span class="toc-number">9.5.</span> <span class="toc-text">5. UpdateSchema 操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%AE%BE%E8%AE%A1%E4%BC%98%E5%8A%BF"><span class="toc-number">10.</span> <span class="toc-text">设计优势</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E6%B3%9B%E5%9E%8B%E8%AE%BE%E8%AE%A1"><span class="toc-number">10.1.</span> <span class="toc-text">1. 泛型设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E5%AE%B9%E9%94%99%E8%AE%BE%E8%AE%A1"><span class="toc-number">10.2.</span> <span class="toc-text">2. 容错设计</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E5%85%B3%E6%B3%A8%E7%82%B9%E5%88%86%E7%A6%BB"><span class="toc-number">10.3.</span> <span class="toc-text">3. 关注点分离</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E6%89%B9%E9%87%8F%E6%93%8D%E4%BD%9C"><span class="toc-number">10.4.</span> <span class="toc-text">4. 批量操作</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%A7%E8%83%BD%E8%80%83%E8%99%91"><span class="toc-number">11.</span> <span class="toc-text">性能考虑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E9%A2%84%E5%88%86%E9%85%8D%E5%AE%B9%E9%87%8F"><span class="toc-number">11.1.</span> <span class="toc-text">1. 预分配容量</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Worker-%E7%BC%93%E5%AD%98"><span class="toc-number">11.2.</span> <span class="toc-text">2. Worker 缓存</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E8%BF%9E%E6%8E%A5%E6%B1%A0"><span class="toc-number">11.3.</span> <span class="toc-text">3. 连接池</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-%E6%9C%AC%E5%9C%B0%E4%BC%98%E5%8C%96"><span class="toc-number">11.4.</span> <span class="toc-text">4. 本地优化</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">12.</span> <span class="toc-text">错误处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Worker-%E8%8E%B7%E5%8F%96%E5%A4%B1%E8%B4%A5"><span class="toc-number">12.1.</span> <span class="toc-text">Worker 获取失败</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A9%BA-Segment-%E5%88%97%E8%A1%A8"><span class="toc-number">12.2.</span> <span class="toc-text">空 Segment 列表</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%AE%8C%E6%95%B4%E7%A4%BA%E4%BE%8B"><span class="toc-number">13.</span> <span class="toc-text">完整示例</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%93%E5%85%A5"><span class="toc-number">13.1.</span> <span class="toc-text">输入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BE%93%E5%87%BA"><span class="toc-number">13.2.</span> <span class="toc-text">输出</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">14.</span> <span class="toc-text">总结</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&text=Milvus organizeSubTask 函数详细分析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&is_video=false&description=Milvus organizeSubTask 函数详细分析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus organizeSubTask 函数详细分析&body=Check out this article: https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&title=Milvus organizeSubTask 函数详细分析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&name=Milvus organizeSubTask 函数详细分析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/10/Milvus/17_organize_subtask_analysis/&t=Milvus organizeSubTask 函数详细分析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

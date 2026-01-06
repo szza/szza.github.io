@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="概述在 Milvus 的搜索流程中，虽然每个 segment 在 segment-&gt;Search 中已经完成了 MVCC 过滤、topK 选择、group by 等操作，但仍然需要对多个 segment 的搜索结果进行 Reduce（归约）操作。本文档详细解释为什么需要 Reduce 以及 Reduce 的具体作用。 核心原因：数据分布与全局 TopK核心问题：一个查询请求通常涉及多个 se">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus 为什么需要对 Search Result 进行 Reduce">
+<meta property="og:url" content="https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="概述在 Milvus 的搜索流程中，虽然每个 segment 在 segment-&gt;Search 中已经完成了 MVCC 过滤、topK 选择、group by 等操作，但仍然需要对多个 segment 的搜索结果进行 Reduce（归约）操作。本文档详细解释为什么需要 Reduce 以及 Reduce 的具体作用。 核心原因：数据分布与全局 TopK核心问题：一个查询请求通常涉及多个 se">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-10T07:00:00.000Z">
+<meta property="article:modified_time" content="2026-01-06T13:10:50.533Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus 为什么需要对 Search Result 进行 Reduce</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/10/Milvus/19_search_flow_comprehensive_analysis/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/10/Milvus/17_organize_subtask_analysis/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&text=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&is_video=false&description=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus 为什么需要对 Search Result 进行 Reduce&body=Check out this article: https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&name=Milvus 为什么需要对 Search Result 进行 Reduce&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&t=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8E%9F%E5%9B%A0%EF%BC%9A%E6%95%B0%E6%8D%AE%E5%88%86%E5%B8%83%E4%B8%8E%E5%85%A8%E5%B1%80-TopK"><span class="toc-number">2.</span> <span class="toc-text">核心原因：数据分布与全局 TopK</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E5%A4%9A%E4%B8%AA-Segments-%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-number">3.</span> <span class="toc-text">1. 多个 Segments 的场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A4%BA%E4%BE%8B%E5%9C%BA%E6%99%AF"><span class="toc-number">3.1.</span> <span class="toc-text">示例场景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E6%AF%8F%E4%B8%AA-Segment-%E8%BF%94%E5%9B%9E%E7%9A%84%E6%98%AF%E5%B1%80%E9%83%A8-TopK"><span class="toc-number">4.</span> <span class="toc-text">2. 每个 Segment 返回的是局部 TopK</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Segment-Search-%E7%9A%84%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">4.1.</span> <span class="toc-text">Segment Search 的执行流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Segment-%E8%BF%94%E5%9B%9E%E7%9A%84%E7%BB%93%E6%9E%9C%E7%BB%93%E6%9E%84"><span class="toc-number">4.2.</span> <span class="toc-text">Segment 返回的结果结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-Reduce-%E7%9A%84%E4%BD%9C%E7%94%A8%EF%BC%9AK-Way-Merge-%E7%AE%97%E6%B3%95"><span class="toc-number">5.</span> <span class="toc-text">3. Reduce 的作用：K-Way Merge 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86"><span class="toc-number">5.1.</span> <span class="toc-text">算法原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0"><span class="toc-number">5.2.</span> <span class="toc-text">代码实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SelectSearchResultData-%E5%87%BD%E6%95%B0"><span class="toc-number">5.3.</span> <span class="toc-text">SelectSearchResultData 函数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E7%A4%BA%E4%BE%8B%E8%AF%B4%E6%98%8E"><span class="toc-number">6.</span> <span class="toc-text">4. 示例说明</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Segment-%E7%BB%93%E6%9E%9C%EF%BC%88%E5%B7%B2%E6%8E%92%E5%BA%8F%EF%BC%89"><span class="toc-number">6.1.</span> <span class="toc-text">Segment 结果（已排序）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reduce-%E8%BF%87%E7%A8%8B"><span class="toc-number">6.2.</span> <span class="toc-text">Reduce 过程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-Reduce-%E7%9A%84%E5%85%B6%E4%BB%96%E9%87%8D%E8%A6%81%E4%BD%9C%E7%94%A8"><span class="toc-number">7.</span> <span class="toc-text">5. Reduce 的其他重要作用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%8E%BB%E9%87%8D%EF%BC%88Deduplication%EF%BC%89"><span class="toc-number">7.1.</span> <span class="toc-text">5.1 去重（Deduplication）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-Group-By-%E5%A4%84%E7%90%86"><span class="toc-number">7.2.</span> <span class="toc-text">5.2 Group By 处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-%E6%88%90%E6%9C%AC%E8%81%9A%E5%90%88"><span class="toc-number">7.3.</span> <span class="toc-text">5.3 成本聚合</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E6%80%A7%E8%83%BD%E8%80%83%E8%99%91"><span class="toc-number">8.</span> <span class="toc-text">6. 性能考虑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">8.1.</span> <span class="toc-text">时间复杂度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-number">8.2.</span> <span class="toc-text">优化策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E6%80%BB%E7%BB%93"><span class="toc-number">9.</span> <span class="toc-text">7. 总结</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-Reduce%EF%BC%9F"><span class="toc-number">9.1.</span> <span class="toc-text">为什么需要 Reduce？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%A6%81%E7%82%B9"><span class="toc-number">9.2.</span> <span class="toc-text">关键要点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B1%BB%E6%AF%94%E7%90%86%E8%A7%A3"><span class="toc-number">9.3.</span> <span class="toc-text">类比理解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-number">10.</span> <span class="toc-text">参考资料</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus 为什么需要对 Search Result 进行 Reduce
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-10T07:00:00.000Z" itemprop="datePublished">2025-08-10</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>在 Milvus 的搜索流程中，虽然每个 segment 在 <code>segment-&gt;Search</code> 中已经完成了 MVCC 过滤、topK 选择、group by 等操作，但仍然需要对多个 segment 的搜索结果进行 Reduce（归约）操作。本文档详细解释为什么需要 Reduce 以及 Reduce 的具体作用。</p>
+<h2 id="核心原因：数据分布与全局-TopK"><a href="#核心原因：数据分布与全局-TopK" class="headerlink" title="核心原因：数据分布与全局 TopK"></a>核心原因：数据分布与全局 TopK</h2><p><strong>核心问题</strong>：一个查询请求通常涉及多个 segments，每个 segment 只返回自己数据范围内的 topK 结果，但用户需要的是<strong>全局最优的 topK</strong>。</p>
+<h2 id="1-多个-Segments-的场景"><a href="#1-多个-Segments-的场景" class="headerlink" title="1. 多个 Segments 的场景"></a>1. 多个 Segments 的场景</h2><p>在 Milvus 中，一个 collection 的数据可能分布在：</p>
+<ul>
+<li><strong>多个 Sealed Segments</strong>：历史数据被分割成多个 sealed segments</li>
+<li><strong>多个 Growing Segments</strong>：实时写入的数据存储在 growing segments 中</li>
+<li><strong>多个 Shards</strong>：在分布式场景中，数据分布在多个 shards 上</li>
+<li><strong>多个 QueryNodes</strong>：在分布式部署中，不同的 segments 可能位于不同的 QueryNode 上</li>
+</ul>
+<h3 id="示例场景"><a href="#示例场景" class="headerlink" title="示例场景"></a>示例场景</h3><p>假设一个 collection 有 1000 万条数据，被分割成：</p>
+<ul>
+<li>Segment 1: 300 万条（sealed）</li>
+<li>Segment 2: 300 万条（sealed）</li>
+<li>Segment 3: 300 万条（sealed）</li>
+<li>Segment 4: 100 万条（growing）</li>
+</ul>
+<p>当用户请求 topK&#x3D;10 时，每个 segment 都会返回自己的 topK&#x3D;10，但我们需要的是从这 4000 万条数据中选出全局最优的 topK&#x3D;10。</p>
+<h2 id="2-每个-Segment-返回的是局部-TopK"><a href="#2-每个-Segment-返回的是局部-TopK" class="headerlink" title="2. 每个 Segment 返回的是局部 TopK"></a>2. 每个 Segment 返回的是局部 TopK</h2><h3 id="Segment-Search-的执行流程"><a href="#Segment-Search-的执行流程" class="headerlink" title="Segment Search 的执行流程"></a>Segment Search 的执行流程</h3><p>每个 segment 在执行 <code>segment-&gt;Search</code> 时：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="function">std::unique_ptr&lt;SearchResult&gt;</span></span><br><span class="line"><span class="function"><span class="title">SegmentInternalInterface::Search</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> query::Plan* plan,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> query::PlaceholderGroup* placeholder_group,</span></span></span><br><span class="line"><span class="params"><span class="function">    Timestamp timestamp,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">const</span> folly::CancellationToken&amp; cancel_token,</span></span></span><br><span class="line"><span class="params"><span class="function">    <span class="type">int32_t</span> consistency_level,</span></span></span><br><span class="line"><span class="params"><span class="function">    Timestamp collection_ttl)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">    <span class="comment">// ... 执行搜索计划节点树</span></span><br><span class="line">    <span class="comment">// 包括：MVCC 过滤、向量搜索、topK 选择、group by 等</span></span><br><span class="line">    *results = visitor.<span class="built_in">get_moved_result</span>(*plan-&gt;plan_node_);</span><br><span class="line">    <span class="keyword">return</span> results;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Segment-返回的结果结构"><a href="#Segment-返回的结果结构" class="headerlink" title="Segment 返回的结果结构"></a>Segment 返回的结果结构</h3><p>每个 segment 的 <code>SearchResult</code> 包含：</p>
+<ul>
+<li><code>seg_offsets_</code>：该 segment 内的 topK 偏移量（已排序）</li>
+<li><code>distances_</code>：该 segment 内的 topK 距离值（已排序）</li>
+<li><code>group_by_values_</code>：group by 的值（如果启用）</li>
+<li><code>topk_per_nq_prefix_sum_</code>：每个查询的 topK 前缀和</li>
+</ul>
+<p><strong>关键点</strong>：这些结果是<strong>局部最优</strong>的，只代表该 segment 内的 topK，不代表全局最优。</p>
+<h2 id="3-Reduce-的作用：K-Way-Merge-算法"><a href="#3-Reduce-的作用：K-Way-Merge-算法" class="headerlink" title="3. Reduce 的作用：K-Way Merge 算法"></a>3. Reduce 的作用：K-Way Merge 算法</h2><p>Reduce 操作使用<strong>多路归并（K-Way Merge）算法</strong>，从多个已排序的结果中选择全局最优的 topK。</p>
+<h3 id="算法原理"><a href="#算法原理" class="headerlink" title="算法原理"></a>算法原理</h3><p>Reduce 算法的核心思想类似于归并排序的归并阶段：</p>
+<ol>
+<li><strong>多路指针</strong>：为每个 segment 的结果维护一个指针（offset）</li>
+<li><strong>比较选择</strong>：每次比较所有 segment 当前指针位置的值</li>
+<li><strong>选择最优</strong>：选择当前最大的 score，移动对应 segment 的指针</li>
+<li><strong>去重处理</strong>：如果遇到重复的 entity ID，跳过</li>
+<li><strong>重复直到 topK</strong>：重复上述过程直到选出全局 topK 个结果</li>
+</ol>
+<h3 id="代码实现"><a href="#代码实现" class="headerlink" title="代码实现"></a>代码实现</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(scr *SearchCommonReduce)</span></span> ReduceSearchResultData(</span><br><span class="line">    ctx context.Context, </span><br><span class="line">    searchResultData []*schemapb.SearchResultData, </span><br><span class="line">    info *reduce.ResultInfo) (*schemapb.SearchResultData, <span class="type">error</span>) &#123;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 为每个 segment 的结果维护偏移量</span></span><br><span class="line">    offsets := <span class="built_in">make</span>([]<span class="type">int64</span>, <span class="built_in">len</span>(searchResultData))</span><br><span class="line">    idSet := <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">interface</span>&#123;&#125;]<span class="keyword">struct</span>&#123;&#125;)  <span class="comment">// 用于去重</span></span><br><span class="line">    </span><br><span class="line">    <span class="keyword">for</span> i := <span class="type">int64</span>(<span class="number">0</span>); i &lt; info.GetNq(); i++ &#123;</span><br><span class="line">        <span class="keyword">var</span> j <span class="type">int64</span></span><br><span class="line">        <span class="keyword">for</span> j = <span class="number">0</span>; j &lt; info.GetTopK(); &#123;</span><br><span class="line">            <span class="comment">// 从所有 segment 中选择当前最高分</span></span><br><span class="line">            sel := SelectSearchResultData(searchResultData, resultOffsets, offsets, i)</span><br><span class="line">            <span class="keyword">if</span> sel == <span class="number">-1</span> &#123;</span><br><span class="line">                <span class="keyword">break</span></span><br><span class="line">            &#125;</span><br><span class="line">            </span><br><span class="line">            idx := resultOffsets[sel][i] + offsets[sel]</span><br><span class="line">            id := typeutil.GetPK(searchResultData[sel].GetIds(), idx)</span><br><span class="line">            score := searchResultData[sel].Scores[idx]</span><br><span class="line">            </span><br><span class="line">            <span class="comment">// 去重：跳过已存在的 entity</span></span><br><span class="line">            <span class="keyword">if</span> _, ok := idSet[id]; !ok &#123;</span><br><span class="line">                <span class="comment">// 添加到最终结果</span></span><br><span class="line">                retSize += typeutil.AppendFieldData(ret.FieldsData, </span><br><span class="line">                    searchResultData[sel].FieldsData, idx)</span><br><span class="line">                typeutil.AppendPKs(ret.Ids, id)</span><br><span class="line">                ret.Scores = <span class="built_in">append</span>(ret.Scores, score)</span><br><span class="line">                idSet[id] = <span class="keyword">struct</span>&#123;&#125;&#123;&#125;</span><br><span class="line">                j++</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                skipDupCnt++  <span class="comment">// 跳过重复的 entity</span></span><br><span class="line">            &#125;</span><br><span class="line">            offsets[sel]++  <span class="comment">// 移动指针</span></span><br><span class="line">        &#125;</span><br><span class="line">        ret.Topks = <span class="built_in">append</span>(ret.Topks, j)</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> ret, <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="SelectSearchResultData-函数"><a href="#SelectSearchResultData-函数" class="headerlink" title="SelectSearchResultData 函数"></a>SelectSearchResultData 函数</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="title">SelectSearchResultData</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">    dataArray []*schemapb.SearchResultData, </span></span></span><br><span class="line"><span class="params"><span class="function">    resultOffsets [][]<span class="type">int64</span>, </span></span></span><br><span class="line"><span class="params"><span class="function">    offsets []<span class="type">int64</span>, </span></span></span><br><span class="line"><span class="params"><span class="function">    qi <span class="type">int64</span>)</span></span> <span class="type">int</span> &#123;</span><br><span class="line">    </span><br><span class="line">    <span class="keyword">var</span> sel = <span class="number">-1</span></span><br><span class="line">    <span class="keyword">var</span> maxDistance = -<span class="type">float32</span>(math.MaxFloat32)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 遍历所有 segment，找到当前最高分</span></span><br><span class="line">    <span class="keyword">for</span> i, offset := <span class="keyword">range</span> offsets &#123;</span><br><span class="line">        <span class="keyword">if</span> offset &gt;= dataArray[i].Topks[qi] &#123;</span><br><span class="line">            <span class="keyword">continue</span>  <span class="comment">// 该 segment 的结果已用完</span></span><br><span class="line">        &#125;</span><br><span class="line">        </span><br><span class="line">        idx := resultOffsets[i][qi] + offset</span><br><span class="line">        distance := dataArray[i].Scores[idx]</span><br><span class="line">        </span><br><span class="line">        <span class="keyword">if</span> distance &gt; maxDistance &#123;</span><br><span class="line">            sel = i</span><br><span class="line">            maxDistance = distance</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> sel</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="4-示例说明"><a href="#4-示例说明" class="headerlink" title="4. 示例说明"></a>4. 示例说明</h2><p>假设有 3 个 segments，每个返回 topK&#x3D;10，用户请求全局 topK&#x3D;10：</p>
+<h3 id="Segment-结果（已排序）"><a href="#Segment-结果（已排序）" class="headerlink" title="Segment 结果（已排序）"></a>Segment 结果（已排序）</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Segment 1: [0.95, 0.90, 0.85, 0.80, 0.75, ...] (10个结果)</span><br><span class="line">Segment 2: [0.92, 0.88, 0.82, 0.78, 0.73, ...] (10个结果)</span><br><span class="line">Segment 3: [0.89, 0.87, 0.80, 0.76, 0.71, ...] (10个结果)</span><br></pre></td></tr></table></figure>
+
+<h3 id="Reduce-过程"><a href="#Reduce-过程" class="headerlink" title="Reduce 过程"></a>Reduce 过程</h3><table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>Segment 1 指针</th>
+<th>Segment 2 指针</th>
+<th>Segment 3 指针</th>
+<th>选择</th>
+<th>全局结果</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>0 (0.95)</td>
+<td>0 (0.92)</td>
+<td>0 (0.89)</td>
+<td>Seg1</td>
+<td>[0.95]</td>
+</tr>
+<tr>
+<td>2</td>
+<td>1 (0.90)</td>
+<td>0 (0.92)</td>
+<td>0 (0.89)</td>
+<td>Seg2</td>
+<td>[0.95, 0.92]</td>
+</tr>
+<tr>
+<td>3</td>
+<td>1 (0.90)</td>
+<td>1 (0.88)</td>
+<td>0 (0.89)</td>
+<td>Seg1</td>
+<td>[0.95, 0.92, 0.90]</td>
+</tr>
+<tr>
+<td>4</td>
+<td>2 (0.85)</td>
+<td>1 (0.88)</td>
+<td>0 (0.89)</td>
+<td>Seg3</td>
+<td>[0.95, 0.92, 0.90, 0.89]</td>
+</tr>
+<tr>
+<td>5</td>
+<td>2 (0.85)</td>
+<td>1 (0.88)</td>
+<td>1 (0.87)</td>
+<td>Seg2</td>
+<td>[0.95, 0.92, 0.90, 0.89, 0.88]</td>
+</tr>
+<tr>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+<tr>
+<td>10</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>[全局 topK&#x3D;10]</td>
+</tr>
+</tbody></table>
+<p><strong>结果</strong>：最终得到全局最优的 topK&#x3D;10 个结果。</p>
+<h2 id="5-Reduce-的其他重要作用"><a href="#5-Reduce-的其他重要作用" class="headerlink" title="5. Reduce 的其他重要作用"></a>5. Reduce 的其他重要作用</h2><h3 id="5-1-去重（Deduplication）"><a href="#5-1-去重（Deduplication）" class="headerlink" title="5.1 去重（Deduplication）"></a>5.1 去重（Deduplication）</h3><p>同一个 entity 可能同时出现在多个 segments 中：</p>
+<ul>
+<li><strong>Growing + Sealed</strong>：新写入的数据在 growing segment，但可能还未 flush 到 sealed segment</li>
+<li><strong>Compaction</strong>：compaction 过程中，数据可能同时存在于新旧 segments</li>
+<li><strong>多副本</strong>：在分布式场景中，可能存在数据副本</li>
+</ul>
+<p>Reduce 通过 <code>idSet</code> 确保每个 entity 只出现一次：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">idSet := <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">interface</span>&#123;&#125;]<span class="keyword">struct</span>&#123;&#125;)</span><br><span class="line"><span class="keyword">if</span> _, ok := idSet[id]; !ok &#123;</span><br><span class="line">    <span class="comment">// 添加到结果</span></span><br><span class="line">    idSet[id] = <span class="keyword">struct</span>&#123;&#125;&#123;&#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    skipDupCnt++  <span class="comment">// 跳过重复</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-2-Group-By-处理"><a href="#5-2-Group-By-处理" class="headerlink" title="5.2 Group By 处理"></a>5.2 Group By 处理</h3><p>如果有 group by 需求，Reduce 阶段会进行全局的 group by 处理：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(sbr *SearchGroupByReduce)</span></span> ReduceSearchResultData(...) &#123;</span><br><span class="line">    <span class="comment">// 1. 按 group by 值分组</span></span><br><span class="line">    groupByValueMap := <span class="built_in">make</span>(<span class="keyword">map</span>[<span class="keyword">interface</span>&#123;&#125;]<span class="type">int64</span>)</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 为每个 group 选择 topK</span></span><br><span class="line">    <span class="keyword">for</span> j = <span class="number">0</span>; j &lt; groupBound; &#123;</span><br><span class="line">        <span class="comment">// 选择当前最高分</span></span><br><span class="line">        sel := SelectSearchResultData(...)</span><br><span class="line">        groupByVal := groupByValIterator[sel](idx)</span><br><span class="line">        </span><br><span class="line">        <span class="comment">// 3. 检查 group 限制</span></span><br><span class="line">        <span class="keyword">if</span> groupCount &gt;= groupSize &#123;</span><br><span class="line">            <span class="comment">// 跳过：该 group 已满</span></span><br><span class="line">        &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">            <span class="comment">// 添加到该 group</span></span><br><span class="line">            groupByValueMap[groupByVal]++</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="5-3-成本聚合"><a href="#5-3-成本聚合" class="headerlink" title="5.3 成本聚合"></a>5.3 成本聚合</h3><p>Reduce 还会聚合各个 segment 的存储扫描成本：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">storageCost := lo.Reduce(results, <span class="function"><span class="keyword">func</span><span class="params">(acc segcore.StorageCost, </span></span></span><br><span class="line"><span class="params"><span class="function">    result *internalpb.SearchResults, _ <span class="type">int</span>)</span></span> segcore.StorageCost &#123;</span><br><span class="line">    acc.ScannedRemoteBytes += result.GetScannedRemoteBytes()</span><br><span class="line">    acc.ScannedTotalBytes += result.GetScannedTotalBytes()</span><br><span class="line">    <span class="keyword">return</span> acc</span><br><span class="line">&#125;, segcore.StorageCost&#123;&#125;)</span><br></pre></td></tr></table></figure>
+
+<h2 id="6-性能考虑"><a href="#6-性能考虑" class="headerlink" title="6. 性能考虑"></a>6. 性能考虑</h2><h3 id="时间复杂度"><a href="#时间复杂度" class="headerlink" title="时间复杂度"></a>时间复杂度</h3><ul>
+<li><strong>Segment Search</strong>：O(N × log K)，其中 N 是 segment 内的数据量，K 是 topK</li>
+<li><strong>Reduce</strong>：O(M × K)，其中 M 是 segment 数量，K 是 topK</li>
+</ul>
+<p>由于 M（segment 数量）通常远小于 N（数据量），Reduce 的开销相对较小。</p>
+<h3 id="优化策略"><a href="#优化策略" class="headerlink" title="优化策略"></a>优化策略</h3><ol>
+<li><p><strong>短路优化</strong>：如果只有一个 segment 的结果，直接返回，无需 Reduce</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> <span class="built_in">len</span>(results) == <span class="number">1</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> results[<span class="number">0</span>], <span class="literal">nil</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>并行处理</strong>：对于多个查询（nq &gt; 1），可以并行处理每个查询的 Reduce</p>
+</li>
+<li><p><strong>内存限制</strong>：检查结果大小，避免 OOM</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> retSize &gt; maxOutputSize &#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">nil</span>, fmt.Errorf(<span class="string">&quot;search results exceed the maxOutputSize Limit&quot;</span>)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ol>
+<h2 id="7-总结"><a href="#7-总结" class="headerlink" title="7. 总结"></a>7. 总结</h2><h3 id="为什么需要-Reduce？"><a href="#为什么需要-Reduce？" class="headerlink" title="为什么需要 Reduce？"></a>为什么需要 Reduce？</h3><ol>
+<li><strong>数据分布</strong>：数据分布在多个 segments 中</li>
+<li><strong>局部 vs 全局</strong>：每个 segment 返回局部 topK，用户需要全局 topK</li>
+<li><strong>去重需求</strong>：需要去除跨 segment 的重复 entity</li>
+<li><strong>Group By</strong>：需要全局的 group by 处理</li>
+<li><strong>成本聚合</strong>：需要聚合各个 segment 的成本信息</li>
+</ol>
+<h3 id="关键要点"><a href="#关键要点" class="headerlink" title="关键要点"></a>关键要点</h3><ul>
+<li>✅ 每个 segment 的 <code>Search</code> 已经完成了 MVCC、topK、group by 等操作</li>
+<li>✅ 但返回的是<strong>局部最优</strong>结果</li>
+<li>✅ Reduce 通过 <strong>K-Way Merge</strong> 算法合并多个 segment 的结果</li>
+<li>✅ 最终得到<strong>全局最优</strong>的 topK 结果</li>
+<li>✅ 同时处理去重、group by、成本聚合等逻辑</li>
+</ul>
+<h3 id="类比理解"><a href="#类比理解" class="headerlink" title="类比理解"></a>类比理解</h3><p>可以类比为：</p>
+<ul>
+<li><strong>Segment Search</strong>：每个班级选出前 10 名</li>
+<li><strong>Reduce</strong>：从所有班级的前 10 名中，选出全校前 10 名</li>
+</ul>
+<p>即使每个班级已经完成了排名，仍然需要全校级别的 Reduce 操作来选出最终的 topK。</p>
+<h2 id="参考资料"><a href="#参考资料" class="headerlink" title="参考资料"></a>参考资料</h2><ul>
+<li><a href="./proxy-reduce.md">Proxy Reduce 算法详解</a></li>
+<li><a href="./query_request_flow_analysis.md">Query Request Flow Analysis</a></li>
+<li><a href="../design_docs/segcore/segment_interface.md">Segment Search Implementation</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A0%B8%E5%BF%83%E5%8E%9F%E5%9B%A0%EF%BC%9A%E6%95%B0%E6%8D%AE%E5%88%86%E5%B8%83%E4%B8%8E%E5%85%A8%E5%B1%80-TopK"><span class="toc-number">2.</span> <span class="toc-text">核心原因：数据分布与全局 TopK</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E5%A4%9A%E4%B8%AA-Segments-%E7%9A%84%E5%9C%BA%E6%99%AF"><span class="toc-number">3.</span> <span class="toc-text">1. 多个 Segments 的场景</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%A4%BA%E4%BE%8B%E5%9C%BA%E6%99%AF"><span class="toc-number">3.1.</span> <span class="toc-text">示例场景</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E6%AF%8F%E4%B8%AA-Segment-%E8%BF%94%E5%9B%9E%E7%9A%84%E6%98%AF%E5%B1%80%E9%83%A8-TopK"><span class="toc-number">4.</span> <span class="toc-text">2. 每个 Segment 返回的是局部 TopK</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Segment-Search-%E7%9A%84%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">4.1.</span> <span class="toc-text">Segment Search 的执行流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Segment-%E8%BF%94%E5%9B%9E%E7%9A%84%E7%BB%93%E6%9E%9C%E7%BB%93%E6%9E%84"><span class="toc-number">4.2.</span> <span class="toc-text">Segment 返回的结果结构</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-Reduce-%E7%9A%84%E4%BD%9C%E7%94%A8%EF%BC%9AK-Way-Merge-%E7%AE%97%E6%B3%95"><span class="toc-number">5.</span> <span class="toc-text">3. Reduce 的作用：K-Way Merge 算法</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AE%97%E6%B3%95%E5%8E%9F%E7%90%86"><span class="toc-number">5.1.</span> <span class="toc-text">算法原理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%A3%E7%A0%81%E5%AE%9E%E7%8E%B0"><span class="toc-number">5.2.</span> <span class="toc-text">代码实现</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#SelectSearchResultData-%E5%87%BD%E6%95%B0"><span class="toc-number">5.3.</span> <span class="toc-text">SelectSearchResultData 函数</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E7%A4%BA%E4%BE%8B%E8%AF%B4%E6%98%8E"><span class="toc-number">6.</span> <span class="toc-text">4. 示例说明</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Segment-%E7%BB%93%E6%9E%9C%EF%BC%88%E5%B7%B2%E6%8E%92%E5%BA%8F%EF%BC%89"><span class="toc-number">6.1.</span> <span class="toc-text">Segment 结果（已排序）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Reduce-%E8%BF%87%E7%A8%8B"><span class="toc-number">6.2.</span> <span class="toc-text">Reduce 过程</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-Reduce-%E7%9A%84%E5%85%B6%E4%BB%96%E9%87%8D%E8%A6%81%E4%BD%9C%E7%94%A8"><span class="toc-number">7.</span> <span class="toc-text">5. Reduce 的其他重要作用</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#5-1-%E5%8E%BB%E9%87%8D%EF%BC%88Deduplication%EF%BC%89"><span class="toc-number">7.1.</span> <span class="toc-text">5.1 去重（Deduplication）</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-2-Group-By-%E5%A4%84%E7%90%86"><span class="toc-number">7.2.</span> <span class="toc-text">5.2 Group By 处理</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#5-3-%E6%88%90%E6%9C%AC%E8%81%9A%E5%90%88"><span class="toc-number">7.3.</span> <span class="toc-text">5.3 成本聚合</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E6%80%A7%E8%83%BD%E8%80%83%E8%99%91"><span class="toc-number">8.</span> <span class="toc-text">6. 性能考虑</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%B6%E9%97%B4%E5%A4%8D%E6%9D%82%E5%BA%A6"><span class="toc-number">8.1.</span> <span class="toc-text">时间复杂度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BC%98%E5%8C%96%E7%AD%96%E7%95%A5"><span class="toc-number">8.2.</span> <span class="toc-text">优化策略</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E6%80%BB%E7%BB%93"><span class="toc-number">9.</span> <span class="toc-text">7. 总结</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-Reduce%EF%BC%9F"><span class="toc-number">9.1.</span> <span class="toc-text">为什么需要 Reduce？</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E8%A6%81%E7%82%B9"><span class="toc-number">9.2.</span> <span class="toc-text">关键要点</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%B1%BB%E6%AF%94%E7%90%86%E8%A7%A3"><span class="toc-number">9.3.</span> <span class="toc-text">类比理解</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%8F%82%E8%80%83%E8%B5%84%E6%96%99"><span class="toc-number">10.</span> <span class="toc-text">参考资料</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&text=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&is_video=false&description=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus 为什么需要对 Search Result 进行 Reduce&body=Check out this article: https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&title=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&name=Milvus 为什么需要对 Search Result 进行 Reduce&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/10/Milvus/18_why_reduce_search_results/&t=Milvus 为什么需要对 Search Result 进行 Reduce"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

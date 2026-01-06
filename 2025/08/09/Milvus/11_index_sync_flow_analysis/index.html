@@ -1,0 +1,547 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="本文档详细分析了 Milvus 中数据写入后如何同步构建索引的完整流程。 1. 概述Milvus 采用异步索引构建机制：数据写入后不会立即构建索引，而是在 Segment 完成 Flush 操作后，触发索引构建任务。这种设计可以：  提高写入性能：避免每次写入都构建索引 批量优化：对完整 Segment 构建索引更高效 资源管理：通过任务调度器控制索引构建的资源使用  2. 数据写入和 Flush">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus 数据写入过程中索引同步流程分析">
+<meta property="og:url" content="https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="本文档详细分析了 Milvus 中数据写入后如何同步构建索引的完整流程。 1. 概述Milvus 采用异步索引构建机制：数据写入后不会立即构建索引，而是在 Segment 完成 Flush 操作后，触发索引构建任务。这种设计可以：  提高写入性能：避免每次写入都构建索引 批量优化：对完整 Segment 构建索引更高效 资源管理：通过任务调度器控制索引构建的资源使用  2. 数据写入和 Flush">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-09T12:00:00.000Z">
+<meta property="article:modified_time" content="2026-01-06T13:10:46.794Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus 数据写入过程中索引同步流程分析</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/09/Milvus/11_milvus_timestamp_write_flow/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/09/Milvus/10_flush_pipeline_tt_node/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&text=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&is_video=false&description=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus 数据写入过程中索引同步流程分析&body=Check out this article: https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&name=Milvus 数据写入过程中索引同步流程分析&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&t=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">1. 概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E6%95%B0%E6%8D%AE%E5%86%99%E5%85%A5%E5%92%8C-Flush-%E6%B5%81%E7%A8%8B"><span class="toc-number">2.</span> <span class="toc-text">2. 数据写入和 Flush 流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E6%95%B0%E6%8D%AE%E5%86%99%E5%85%A5"><span class="toc-number">2.1.</span> <span class="toc-text">2.1 数据写入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-Flush-%E5%AE%8C%E6%88%90%E9%80%9A%E7%9F%A5"><span class="toc-number">2.2.</span> <span class="toc-text">2.2 Flush 完成通知</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-Flush-Channel-%E8%BD%AC%E5%8F%91"><span class="toc-number">2.3.</span> <span class="toc-text">2.3 Flush Channel 转发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E7%B4%A2%E5%BC%95%E6%9E%84%E5%BB%BA%E4%BB%BB%E5%8A%A1%E5%88%9B%E5%BB%BA"><span class="toc-number">3.</span> <span class="toc-text">3. 索引构建任务创建</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Index-Inspector-%E7%9B%91%E5%90%AC"><span class="toc-number">3.1.</span> <span class="toc-text">3.1 Index Inspector 监听</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E4%BB%BB%E5%8A%A1"><span class="toc-number">3.2.</span> <span class="toc-text">3.2 创建索引任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E5%88%9B%E5%BB%BA-SegmentIndex-%E5%85%83%E6%95%B0%E6%8D%AE"><span class="toc-number">3.3.</span> <span class="toc-text">3.3 创建 SegmentIndex 元数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E7%B4%A2%E5%BC%95%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6%E5%92%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">4.</span> <span class="toc-text">4. 索引任务调度和执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-DataCoord-%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6"><span class="toc-number">4.1.</span> <span class="toc-text">4.1 DataCoord 任务调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-DataNode-%E6%8E%A5%E6%94%B6%E4%BB%BB%E5%8A%A1"><span class="toc-number">4.2.</span> <span class="toc-text">4.2 DataNode 接收任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-%E7%B4%A2%E5%BC%95%E6%9E%84%E5%BB%BA%E6%89%A7%E8%A1%8C"><span class="toc-number">4.3.</span> <span class="toc-text">4.3 索引构建执行</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#4-3-1-PreExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">4.3.1.</span> <span class="toc-text">4.3.1 PreExecute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-3-2-Execute-%E9%98%B6%E6%AE%B5"><span class="toc-number">4.3.2.</span> <span class="toc-text">4.3.2 Execute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-3-3-PostExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">4.3.3.</span> <span class="toc-text">4.3.3 PostExecute 阶段</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-4-%E7%B4%A2%E5%BC%95%E5%85%83%E6%95%B0%E6%8D%AE%E6%9B%B4%E6%96%B0"><span class="toc-number">4.4.</span> <span class="toc-text">4.4 索引元数据更新</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E5%AE%8C%E6%95%B4%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-number">5.</span> <span class="toc-text">5. 完整流程图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%85%B3%E9%94%AE%E7%BB%84%E4%BB%B6%E8%AF%B4%E6%98%8E"><span class="toc-number">6.</span> <span class="toc-text">6. 关键组件说明</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-Index-Inspector"><span class="toc-number">6.1.</span> <span class="toc-text">6.1 Index Inspector</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-Index-Scheduler"><span class="toc-number">6.2.</span> <span class="toc-text">6.2 Index Scheduler</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-3-Index-Task-Manager"><span class="toc-number">6.3.</span> <span class="toc-text">6.3 Index Task Manager</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-4-Index-Meta"><span class="toc-number">6.4.</span> <span class="toc-text">6.4 Index Meta</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">7.</span> <span class="toc-text">7. 关键配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E7%B4%A2%E5%BC%95%E7%8A%B6%E6%80%81%E6%B5%81%E8%BD%AC"><span class="toc-number">8.</span> <span class="toc-text">8. 索引状态流转</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%82%B9"><span class="toc-number">9.</span> <span class="toc-text">9. 性能优化点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">10.</span> <span class="toc-text">10. 错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#11-%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">11.</span> <span class="toc-text">11. 监控指标</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#12-%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-number">12.</span> <span class="toc-text">12. 注意事项</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus 数据写入过程中索引同步流程分析
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-09T12:00:00.000Z" itemprop="datePublished">2025-08-09</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <p>本文档详细分析了 Milvus 中数据写入后如何同步构建索引的完整流程。</p>
+<h2 id="1-概述"><a href="#1-概述" class="headerlink" title="1. 概述"></a>1. 概述</h2><p>Milvus 采用<strong>异步索引构建</strong>机制：数据写入后不会立即构建索引，而是在 Segment 完成 Flush 操作后，触发索引构建任务。这种设计可以：</p>
+<ul>
+<li>提高写入性能：避免每次写入都构建索引</li>
+<li>批量优化：对完整 Segment 构建索引更高效</li>
+<li>资源管理：通过任务调度器控制索引构建的资源使用</li>
+</ul>
+<h2 id="2-数据写入和-Flush-流程"><a href="#2-数据写入和-Flush-流程" class="headerlink" title="2. 数据写入和 Flush 流程"></a>2. 数据写入和 Flush 流程</h2><h3 id="2-1-数据写入"><a href="#2-1-数据写入" class="headerlink" title="2.1 数据写入"></a>2.1 数据写入</h3><p><strong>文件</strong>: <code>internal/datanode/</code> (DataNode 组件)</p>
+<p>数据写入流程：</p>
+<ol>
+<li>客户端通过 Proxy 发送 Insert 请求</li>
+<li>DataNode 接收数据并写入内存 Buffer</li>
+<li>当满足条件时（如达到大小阈值、时间阈值），触发 Flush 操作</li>
+</ol>
+<h3 id="2-2-Flush-完成通知"><a href="#2-2-Flush-完成通知" class="headerlink" title="2.2 Flush 完成通知"></a>2.2 Flush 完成通知</h3><p><strong>文件</strong>: <code>internal/datacoord/services.go</code></p>
+<p><strong>方法</strong>: <code>Server.SaveBinlogPaths()</code> (line 700-738)</p>
+<p>当 DataNode 完成 Segment 的 Flush 操作后，会调用 DataCoord 的 <code>SaveBinlogPaths</code> 方法：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// notify building index and compaction for &quot;flushing/flushed&quot; level one segment</span></span><br><span class="line"><span class="keyword">if</span> req.GetFlushed() &#123;</span><br><span class="line">    <span class="comment">// notify building index</span></span><br><span class="line">    s.flushCh &lt;- req.SegmentID</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// notify compaction</span></span><br><span class="line">    s.compactionTrigger.TriggerCompaction(ctx, ...)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>：</p>
+<ul>
+<li>只有当 <code>req.GetFlushed() == true</code> 时才会触发索引构建</li>
+<li>通过 <code>flushCh</code> channel 发送 SegmentID</li>
+<li>同时也会触发 Compaction 任务</li>
+</ul>
+<h3 id="2-3-Flush-Channel-转发"><a href="#2-3-Flush-Channel-转发" class="headerlink" title="2.3 Flush Channel 转发"></a>2.3 Flush Channel 转发</h3><p><strong>文件</strong>: <code>internal/datacoord/server.go</code></p>
+<p><strong>方法</strong>: <code>Server.postFlush()</code> (line 960-976)</p>
+<p><code>flushCh</code> 中的消息会被转发到全局的 <code>getBuildIndexChSingleton()</code> channel：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> enableSortCompaction() &#123;</span><br><span class="line">    <span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> getStatsTaskChSingleton() &lt;- segmentID:</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">    &#125;</span><br><span class="line">&#125; <span class="keyword">else</span> &#123;</span><br><span class="line">    <span class="keyword">select</span> &#123;</span><br><span class="line">    <span class="keyword">case</span> getBuildIndexChSingleton() &lt;- segmentID:</span><br><span class="line">    <span class="keyword">default</span>:</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>：</p>
+<ul>
+<li>如果启用了排序压缩（Sort Compaction），先发送到统计任务 channel</li>
+<li>否则直接发送到索引构建 channel</li>
+<li>使用 <code>select</code> 的非阻塞方式，避免阻塞</li>
+</ul>
+<h2 id="3-索引构建任务创建"><a href="#3-索引构建任务创建" class="headerlink" title="3. 索引构建任务创建"></a>3. 索引构建任务创建</h2><h3 id="3-1-Index-Inspector-监听"><a href="#3-1-Index-Inspector-监听" class="headerlink" title="3.1 Index Inspector 监听"></a>3.1 Index Inspector 监听</h3><p><strong>文件</strong>: <code>internal/datacoord/index_inspector.go</code></p>
+<p><strong>方法</strong>: <code>indexInspector.createIndexForSegmentLoop()</code> (line 87-132)</p>
+<p>Index Inspector 是一个后台守护进程，持续监听以下事件：</p>
+<ol>
+<li><p><strong>定时检查</strong> (ticker.C)：</p>
+<ul>
+<li>定期检查是否有未构建索引的 Flushed Segment</li>
+<li>调用 <code>getUnIndexTaskSegments()</code> 获取需要构建索引的 Segment</li>
+</ul>
+</li>
+<li><p><strong>Collection 索引通知</strong> (notifyIndexChan)：</p>
+<ul>
+<li>当 Collection 创建新索引时触发</li>
+<li>为所有已 Flush 的 Segment 创建索引任务</li>
+</ul>
+</li>
+<li><p><strong>Flush 完成通知</strong> (getBuildIndexChSingleton())：</p>
+<ul>
+<li>接收新 Flush 完成的 SegmentID</li>
+<li>立即为该 Segment 创建索引任务</li>
+</ul>
+</li>
+</ol>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">case</span> segID := &lt;-getBuildIndexChSingleton():</span><br><span class="line">    log.Info(<span class="string">&quot;receive new flushed segment&quot;</span>, zap.Int64(<span class="string">&quot;segmentID&quot;</span>, segID))</span><br><span class="line">    segment := i.meta.GetSegment(ctx, segID)</span><br><span class="line">    <span class="keyword">if</span> segment == <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Warn(<span class="string">&quot;segment is not exist, no need to build index&quot;</span>, zap.Int64(<span class="string">&quot;segmentID&quot;</span>, segID))</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">if</span> err := i.createIndexesForSegment(ctx, segment); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Warn(<span class="string">&quot;create index for segment fail, wait for retry&quot;</span>, zap.Int64(<span class="string">&quot;segmentID&quot;</span>, segID))</span><br><span class="line">        <span class="keyword">continue</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-2-创建索引任务"><a href="#3-2-创建索引任务" class="headerlink" title="3.2 创建索引任务"></a>3.2 创建索引任务</h3><p><strong>方法</strong>: <code>indexInspector.createIndexesForSegment()</code> (line 148-170)</p>
+<p>为 Segment 创建索引任务的主要步骤：</p>
+<ol>
+<li><p><strong>检查 Segment 状态</strong>：</p>
+<ul>
+<li>如果启用了排序压缩，需要等待 Segment 排序完成</li>
+<li>L0 级别的 Segment 不构建索引</li>
+</ul>
+</li>
+<li><p><strong>获取 Collection 的所有索引</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">indexes := i.meta.indexMeta.GetIndexesForCollection(segment.CollectionID, <span class="string">&quot;&quot;</span>)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>检查哪些索引还未构建</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">indexIDToSegIndexes := i.meta.indexMeta.GetSegmentIndexes(segment.CollectionID, segment.ID)</span><br><span class="line"><span class="keyword">for</span> _, index := <span class="keyword">range</span> indexes &#123;</span><br><span class="line">    <span class="keyword">if</span> _, ok := indexIDToSegIndexes[index.IndexID]; !ok &#123;</span><br><span class="line">        <span class="comment">// 为这个索引创建任务</span></span><br><span class="line">        i.createIndexForSegment(ctx, segment, index.IndexID)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></li>
+</ol>
+<h3 id="3-3-创建-SegmentIndex-元数据"><a href="#3-3-创建-SegmentIndex-元数据" class="headerlink" title="3.3 创建 SegmentIndex 元数据"></a>3.3 创建 SegmentIndex 元数据</h3><p><strong>方法</strong>: <code>indexInspector.createIndexForSegment()</code> (line 172-225)</p>
+<p>为每个索引创建 SegmentIndex 元数据并加入调度队列：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 分配 BuildID</span></span><br><span class="line">buildID, err := i.allocator.AllocID(context.Background())</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 获取索引参数</span></span><br><span class="line">indexParams := i.meta.indexMeta.GetIndexParams(segment.CollectionID, indexID)</span><br><span class="line">indexType := GetIndexType(indexParams)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 计算任务槽位（用于资源调度）</span></span><br><span class="line">isVectorIndex := vecindexmgr.GetVecIndexMgrInstance().IsVecIndex(indexType)</span><br><span class="line">segSize := segment.getSegmentSize()</span><br><span class="line">taskSlot := calculateIndexTaskSlot(segSize, isVectorIndex)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 创建 SegmentIndex 元数据</span></span><br><span class="line">segIndex := &amp;model.SegmentIndex&#123;</span><br><span class="line">    SegmentID:      segment.ID,</span><br><span class="line">    CollectionID:   segment.CollectionID,</span><br><span class="line">    PartitionID:    segment.PartitionID,</span><br><span class="line">    NumRows:        segment.NumOfRows,</span><br><span class="line">    IndexID:        indexID,</span><br><span class="line">    BuildID:        buildID,</span><br><span class="line">    CreatedUTCTime: <span class="type">uint64</span>(time.Now().Unix()),</span><br><span class="line">    WriteHandoff:   <span class="literal">false</span>,</span><br><span class="line">    IndexType:      indexType,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 5. 保存到元数据存储</span></span><br><span class="line"><span class="keyword">if</span> err = i.meta.indexMeta.AddSegmentIndex(ctx, segIndex); err != <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> err</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 6. 加入调度器队列</span></span><br><span class="line">i.scheduler.Enqueue(newIndexBuildTask(...))</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>：</p>
+<ul>
+<li><code>BuildID</code> 是索引构建任务的唯一标识</li>
+<li><code>IndexState</code> 初始为 <code>Unissued</code></li>
+<li>任务槽位（TaskSlot）用于控制并发度，根据 Segment 大小和索引类型计算</li>
+</ul>
+<h2 id="4-索引任务调度和执行"><a href="#4-索引任务调度和执行" class="headerlink" title="4. 索引任务调度和执行"></a>4. 索引任务调度和执行</h2><h3 id="4-1-DataCoord-任务调度"><a href="#4-1-DataCoord-任务调度" class="headerlink" title="4.1 DataCoord 任务调度"></a>4.1 DataCoord 任务调度</h3><p><strong>文件</strong>: <code>internal/datacoord/task_index.go</code></p>
+<p><strong>方法</strong>: <code>indexBuildTask.CreateTaskOnWorker()</code> (line 148-206)</p>
+<p>DataCoord 的调度器会选择合适的 DataNode 节点执行索引构建任务：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 验证任务和 Segment 状态</span></span><br><span class="line">segIndex, exist := it.meta.indexMeta.GetIndexJob(it.BuildID)</span><br><span class="line">segment := it.meta.GetSegment(ctx, segIndex.SegmentID)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 检查是否需要构建索引</span></span><br><span class="line"><span class="comment">// - 某些索引类型不需要训练（如 FLAT）</span></span><br><span class="line"><span class="comment">// - 小 Segment 可能不需要索引</span></span><br><span class="line"><span class="keyword">if</span> isNoTrainIndex(indexType) || segIndex.NumRows &lt; MinSegmentNumRowsToEnableIndex &#123;</span><br><span class="line">    <span class="comment">// 标记为已完成（假完成）</span></span><br><span class="line">    it.UpdateStateWithMeta(indexpb.JobState_JobStateFinished, <span class="string">&quot;fake finished&quot;</span>)</span><br><span class="line">    <span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 准备任务请求</span></span><br><span class="line">req, err := it.prepareJobRequest(ctx, segment, segIndex, indexParams, indexType)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 选择 DataNode 并发送请求</span></span><br><span class="line"><span class="keyword">if</span> err = cluster.CreateIndex(nodeID, req); err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Warn(<span class="string">&quot;failed to send job to worker&quot;</span>, zap.Error(err))</span><br><span class="line">    <span class="keyword">return</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 5. 更新任务状态为 InProgress</span></span><br><span class="line">it.UpdateStateWithMeta(indexpb.JobState_JobStateInProgress, ...)</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-2-DataNode-接收任务"><a href="#4-2-DataNode-接收任务" class="headerlink" title="4.2 DataNode 接收任务"></a>4.2 DataNode 接收任务</h3><p><strong>文件</strong>: <code>internal/datanode/index_services.go</code></p>
+<p><strong>方法</strong>: <code>DataNode.CreateJob()</code> (line 44-120)</p>
+<p>DataNode 接收索引构建请求：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 1. 创建任务上下文</span></span><br><span class="line">taskCtx, taskCancel := context.WithCancel(node.ctx)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 2. 检查任务是否已存在（防止重复）</span></span><br><span class="line"><span class="keyword">if</span> oldInfo := node.taskManager.LoadOrStoreIndexTask(...); oldInfo != <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> merr.WrapErrIndexDuplicate(...)</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 3. 创建存储管理器</span></span><br><span class="line">cm, err := node.storageFactory.NewChunkManager(node.ctx, req.GetStorageConfig())</span><br><span class="line"></span><br><span class="line"><span class="comment">// 4. 创建索引构建任务</span></span><br><span class="line">task := index.NewIndexBuildTask(taskCtx, taskCancel, req, cm, node.taskManager, pluginContext)</span><br><span class="line"></span><br><span class="line"><span class="comment">// 5. 加入任务队列</span></span><br><span class="line"><span class="keyword">if</span> err := node.taskScheduler.TaskQueue.Enqueue(task); err != <span class="literal">nil</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> merr.Status(err)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="4-3-索引构建执行"><a href="#4-3-索引构建执行" class="headerlink" title="4.3 索引构建执行"></a>4.3 索引构建执行</h3><p><strong>文件</strong>: <code>internal/datanode/index/task_index.go</code></p>
+<p>索引构建任务遵循标准的任务执行模式：<strong>PreExecute → Execute → PostExecute</strong></p>
+<h4 id="4-3-1-PreExecute-阶段"><a href="#4-3-1-PreExecute-阶段" class="headerlink" title="4.3.1 PreExecute 阶段"></a>4.3.1 PreExecute 阶段</h4><p><strong>方法</strong>: <code>indexBuildTask.PreExecute()</code> (line 146-221)</p>
+<p>准备阶段的主要工作：</p>
+<ol>
+<li><p><strong>构建数据路径</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">if</span> <span class="built_in">len</span>(it.req.DataPaths) == <span class="number">0</span> &#123;</span><br><span class="line">    <span class="keyword">for</span> _, id := <span class="keyword">range</span> it.req.GetDataIds() &#123;</span><br><span class="line">        path := metautil.BuildInsertLogPath(...)</span><br><span class="line">        it.req.DataPaths = <span class="built_in">append</span>(it.req.DataPaths, path)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>解析索引参数</strong>：</p>
+<ul>
+<li>从请求中提取 <code>typeParams</code> 和 <code>indexParams</code></li>
+<li>处理特殊参数（如 <code>mmap_enabled</code>）</li>
+</ul>
+</li>
+<li><p><strong>填充字段元数据</strong>：</p>
+<ul>
+<li>如果请求中缺少字段信息，从 Binlog 中解析</li>
+</ul>
+</li>
+<li><p><strong>设置索引版本</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">it.req.CurrentIndexVersion = getCurrentIndexVersion(...)</span><br><span class="line">it.req.CurrentScalarIndexVersion = getCurrentScalarIndexVersion(...)</span><br></pre></td></tr></table></figure></li>
+</ol>
+<h4 id="4-3-2-Execute-阶段"><a href="#4-3-2-Execute-阶段" class="headerlink" title="4.3.2 Execute 阶段"></a>4.3.2 Execute 阶段</h4><p><strong>方法</strong>: <code>indexBuildTask.Execute()</code> (line 223-330)</p>
+<p>执行阶段的核心工作：</p>
+<ol>
+<li><p><strong>准备构建参数</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">buildIndexParams := &amp;indexcgopb.BuildIndexInfo&#123;</span><br><span class="line">    ClusterID:                 it.req.GetClusterID(),</span><br><span class="line">    BuildID:                   it.req.GetBuildID(),</span><br><span class="line">    CollectionID:              it.req.GetCollectionID(),</span><br><span class="line">    SegmentID:                 it.req.GetSegmentID(),</span><br><span class="line">    NumRows:                   it.req.GetNumRows(),</span><br><span class="line">    Dim:                       it.req.GetDim(),</span><br><span class="line">    InsertFiles:               it.req.GetDataPaths(),</span><br><span class="line">    FieldSchema:               it.req.GetField(),</span><br><span class="line">    IndexParams:               mapToKVPairs(it.newIndexParams),</span><br><span class="line">    StorageConfig:             storageConfig,</span><br><span class="line">    <span class="comment">// ...</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>调用 CGO 接口构建索引</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">it.index, err = indexcgowrapper.CreateIndex(ctx, buildIndexParams)</span><br></pre></td></tr></table></figure>
+
+<p>这一步会：</p>
+<ul>
+<li>从存储中加载 Segment 数据</li>
+<li>调用 Knowhere 库构建索引</li>
+<li>索引构建完成后序列化</li>
+</ul>
+</li>
+<li><p><strong>记录构建指标</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">metrics.DataNodeKnowhereBuildIndexLatency.Observe(buildIndexLatency.Seconds())</span><br></pre></td></tr></table></figure></li>
+</ol>
+<h4 id="4-3-3-PostExecute-阶段"><a href="#4-3-3-PostExecute-阶段" class="headerlink" title="4.3.3 PostExecute 阶段"></a>4.3.3 PostExecute 阶段</h4><p><strong>方法</strong>: <code>indexBuildTask.PostExecute()</code> (line 333-375)</p>
+<p>后处理阶段的主要工作：</p>
+<ol>
+<li><p><strong>上传索引文件到存储</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">indexStats, err := it.index.UpLoad()</span><br></pre></td></tr></table></figure>
+
+<p>上传过程会：</p>
+<ul>
+<li>序列化索引数据</li>
+<li>分片上传到对象存储（MinIO&#x2F;S3 等）</li>
+<li>返回索引文件路径和大小信息</li>
+</ul>
+</li>
+<li><p><strong>清理本地索引数据</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">gcIndex := <span class="function"><span class="keyword">func</span><span class="params">()</span></span> &#123;</span><br><span class="line">    <span class="keyword">if</span> err := it.index.Delete(); err != <span class="literal">nil</span> &#123;</span><br><span class="line">        log.Warn(<span class="string">&quot;indexBuildTask Execute CIndexDelete failed&quot;</span>, zap.Error(err))</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line">gcIndex() <span class="comment">// 早期释放，节省内存</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>保存索引元数据</strong>：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">it.manager.StoreIndexFilesAndStatistic(</span><br><span class="line">    it.req.GetClusterID(),</span><br><span class="line">    it.req.GetBuildID(),</span><br><span class="line">    saveFileKeys,        <span class="comment">// 索引文件路径列表</span></span><br><span class="line">    serializedSize,      <span class="comment">// 序列化后的大小</span></span><br><span class="line">    <span class="type">uint64</span>(indexStats.MemSize),  <span class="comment">// 内存大小</span></span><br><span class="line">    it.req.GetCurrentIndexVersion(),</span><br><span class="line">    it.req.GetCurrentScalarIndexVersion(),</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+</li>
+<li><p><strong>更新任务状态</strong>：</p>
+<ul>
+<li>通过 <code>SetState()</code> 更新任务状态为 <code>Finished</code></li>
+<li>记录完成时间</li>
+</ul>
+</li>
+</ol>
+<h3 id="4-4-索引元数据更新"><a href="#4-4-索引元数据更新" class="headerlink" title="4.4 索引元数据更新"></a>4.4 索引元数据更新</h3><p><strong>文件</strong>: <code>internal/datacoord/index_meta.go</code></p>
+<p><strong>方法</strong>: <code>indexMeta.FinishTask()</code> (line 885-920)</p>
+<p>当 DataNode 完成索引构建后，会通知 DataCoord 更新元数据：</p>
+<figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *indexMeta)</span></span> FinishTask(taskInfo *workerpb.IndexTaskInfo) <span class="type">error</span> &#123;</span><br><span class="line">    <span class="comment">// 1. 获取 SegmentIndex</span></span><br><span class="line">    segIdx, ok := m.segmentBuildInfo.Get(taskInfo.GetBuildID())</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 更新索引状态和文件信息</span></span><br><span class="line">    segIdx.IndexState = taskInfo.GetState()</span><br><span class="line">    segIdx.IndexFileKeys = common.CloneStringList(taskInfo.GetIndexFileKeys())</span><br><span class="line">    segIdx.IndexSerializedSize = taskInfo.GetSerializedSize()</span><br><span class="line">    segIdx.IndexMemSize = taskInfo.GetMemSize()</span><br><span class="line">    segIdx.FinishedUTCTime = <span class="type">uint64</span>(time.Now().Unix())</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 3. 持久化到元数据存储</span></span><br><span class="line">    <span class="keyword">return</span> m.alterSegmentIndexes([]*model.SegmentIndex&#123;segIdx&#125;)</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>关键点</strong>：</p>
+<ul>
+<li><code>IndexState</code> 更新为 <code>Finished</code></li>
+<li>保存索引文件路径列表（<code>IndexFileKeys</code>）</li>
+<li>记录索引大小信息，用于查询时加载</li>
+</ul>
+<h2 id="5-完整流程图"><a href="#5-完整流程图" class="headerlink" title="5. 完整流程图"></a>5. 完整流程图</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line">数据写入流程</span><br><span class="line">    ↓</span><br><span class="line">DataNode 接收数据 → 写入内存 Buffer</span><br><span class="line">    ↓</span><br><span class="line">触发 Flush（达到阈值或手动触发）</span><br><span class="line">    ↓</span><br><span class="line">DataNode 完成 Flush → 保存 Binlog 到存储</span><br><span class="line">    ↓</span><br><span class="line">调用 DataCoord.SaveBinlogPaths()</span><br><span class="line">    ↓</span><br><span class="line">if req.GetFlushed() == true:</span><br><span class="line">    s.flushCh &lt;- segmentID</span><br><span class="line">    ↓</span><br><span class="line">DataCoord.postFlush() 转发</span><br><span class="line">    ↓</span><br><span class="line">getBuildIndexChSingleton() &lt;- segmentID</span><br><span class="line">    ↓</span><br><span class="line">Index Inspector 监听</span><br><span class="line">    ↓</span><br><span class="line">indexInspector.createIndexesForSegment()</span><br><span class="line">    ├─ 获取 Collection 的所有索引</span><br><span class="line">    ├─ 检查哪些索引未构建</span><br><span class="line">    └─ 为每个索引创建 SegmentIndex</span><br><span class="line">        ├─ 分配 BuildID</span><br><span class="line">        ├─ 创建元数据（状态：Unissued）</span><br><span class="line">        └─ 加入调度器队列</span><br><span class="line">            ↓</span><br><span class="line">DataCoord 调度器选择 DataNode</span><br><span class="line">    ↓</span><br><span class="line">发送 CreateIndex 请求到 DataNode</span><br><span class="line">    ↓</span><br><span class="line">DataNode 接收请求</span><br><span class="line">    ├─ 创建索引构建任务</span><br><span class="line">    └─ 加入任务队列</span><br><span class="line">        ↓</span><br><span class="line">任务执行（PreExecute → Execute → PostExecute）</span><br><span class="line">    ├─ PreExecute: 准备参数和路径</span><br><span class="line">    ├─ Execute: 调用 Knowhere 构建索引</span><br><span class="line">    └─ PostExecute: 上传索引文件</span><br><span class="line">        ├─ 上传到对象存储</span><br><span class="line">        ├─ 保存文件路径到元数据</span><br><span class="line">        └─ 通知 DataCoord 更新状态</span><br><span class="line">            ↓</span><br><span class="line">DataCoord 更新索引元数据</span><br><span class="line">    ├─ IndexState: Finished</span><br><span class="line">    ├─ IndexFileKeys: [文件路径列表]</span><br><span class="line">    └─ 持久化到元数据存储</span><br><span class="line">        ↓</span><br><span class="line">索引构建完成，可用于查询</span><br></pre></td></tr></table></figure>
+
+<h2 id="6-关键组件说明"><a href="#6-关键组件说明" class="headerlink" title="6. 关键组件说明"></a>6. 关键组件说明</h2><h3 id="6-1-Index-Inspector"><a href="#6-1-Index-Inspector" class="headerlink" title="6.1 Index Inspector"></a>6.1 Index Inspector</h3><p><strong>位置</strong>: <code>internal/datacoord/index_inspector.go</code></p>
+<ul>
+<li><strong>职责</strong>：监听 Flush 完成事件，创建索引构建任务</li>
+<li><strong>触发方式</strong>：<ul>
+<li>定时检查（默认间隔由 <code>TaskCheckInterval</code> 配置）</li>
+<li>Flush 完成通知（通过 channel）</li>
+<li>Collection 索引创建通知</li>
+</ul>
+</li>
+</ul>
+<h3 id="6-2-Index-Scheduler"><a href="#6-2-Index-Scheduler" class="headerlink" title="6.2 Index Scheduler"></a>6.2 Index Scheduler</h3><p><strong>位置</strong>: <code>internal/datacoord/task/</code></p>
+<ul>
+<li><strong>职责</strong>：调度索引构建任务到合适的 DataNode</li>
+<li><strong>调度策略</strong>：<ul>
+<li>根据任务槽位（TaskSlot）控制并发度</li>
+<li>选择负载较低的 DataNode</li>
+<li>支持任务重试和失败处理</li>
+</ul>
+</li>
+</ul>
+<h3 id="6-3-Index-Task-Manager"><a href="#6-3-Index-Task-Manager" class="headerlink" title="6.3 Index Task Manager"></a>6.3 Index Task Manager</h3><p><strong>位置</strong>: <code>internal/datanode/index/</code></p>
+<ul>
+<li><strong>职责</strong>：管理 DataNode 上的索引构建任务</li>
+<li><strong>功能</strong>：<ul>
+<li>任务队列管理</li>
+<li>任务状态跟踪</li>
+<li>资源清理</li>
+</ul>
+</li>
+</ul>
+<h3 id="6-4-Index-Meta"><a href="#6-4-Index-Meta" class="headerlink" title="6.4 Index Meta"></a>6.4 Index Meta</h3><p><strong>位置</strong>: <code>internal/datacoord/index_meta.go</code></p>
+<ul>
+<li><strong>职责</strong>：管理索引元数据</li>
+<li><strong>存储内容</strong>：<ul>
+<li>SegmentIndex 信息（BuildID, SegmentID, IndexID）</li>
+<li>索引状态（Unissued, InProgress, Finished, Failed）</li>
+<li>索引文件路径和大小</li>
+</ul>
+</li>
+</ul>
+<h2 id="7-关键配置参数"><a href="#7-关键配置参数" class="headerlink" title="7. 关键配置参数"></a>7. 关键配置参数</h2><ul>
+<li><code>DataCoordCfg.TaskCheckInterval</code>: Index Inspector 定时检查间隔（默认 1 秒）</li>
+<li><code>DataCoordCfg.MinSegmentNumRowsToEnableIndex</code>: 启用索引的最小行数阈值</li>
+<li><code>KnowhereConfig.Enable</code>: 是否启用 Knowhere 索引库</li>
+<li>索引参数：<code>index_type</code>, <code>metric_type</code>, <code>nlist</code>, <code>nprobe</code> 等</li>
+</ul>
+<h2 id="8-索引状态流转"><a href="#8-索引状态流转" class="headerlink" title="8. 索引状态流转"></a>8. 索引状态流转</h2><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Unissued → InProgress → Finished</span><br><span class="line">              ↓</span><br><span class="line">           Failed (可重试)</span><br></pre></td></tr></table></figure>
+
+<ul>
+<li><strong>Unissued</strong>: 任务已创建，等待调度</li>
+<li><strong>InProgress</strong>: 任务正在执行</li>
+<li><strong>Finished</strong>: 索引构建完成</li>
+<li><strong>Failed</strong>: 构建失败，可重试</li>
+</ul>
+<h2 id="9-性能优化点"><a href="#9-性能优化点" class="headerlink" title="9. 性能优化点"></a>9. 性能优化点</h2><ol>
+<li><strong>异步构建</strong>：索引构建不影响数据写入性能</li>
+<li><strong>批量处理</strong>：对完整 Segment 构建索引，效率更高</li>
+<li><strong>资源控制</strong>：通过 TaskSlot 控制并发度，避免资源耗尽</li>
+<li><strong>早期释放</strong>：索引构建完成后立即释放内存</li>
+<li><strong>分片上传</strong>：大索引文件分片上传，提高可靠性</li>
+</ol>
+<h2 id="10-错误处理"><a href="#10-错误处理" class="headerlink" title="10. 错误处理"></a>10. 错误处理</h2><ul>
+<li><strong>Segment 不存在</strong>：忽略该任务</li>
+<li><strong>索引构建失败</strong>：任务状态标记为 Failed，可重试</li>
+<li><strong>上传失败</strong>：清理本地数据，标记失败</li>
+<li><strong>元数据更新失败</strong>：记录日志，等待重试</li>
+</ul>
+<h2 id="11-监控指标"><a href="#11-监控指标" class="headerlink" title="11. 监控指标"></a>11. 监控指标</h2><ul>
+<li><code>DataNodeBuildIndexTaskCounter</code>: 索引构建任务计数</li>
+<li><code>DataNodeKnowhereBuildIndexLatency</code>: 索引构建延迟</li>
+<li><code>DataNodeEncodeIndexFileLatency</code>: 索引文件编码和上传延迟</li>
+<li><code>DataNodeSaveIndexFileLatency</code>: 保存索引文件元数据延迟</li>
+<li><code>DataCoordStoredIndexFilesSize</code>: 存储的索引文件总大小</li>
+</ul>
+<h2 id="12-注意事项"><a href="#12-注意事项" class="headerlink" title="12. 注意事项"></a>12. 注意事项</h2><ol>
+<li><strong>索引构建是异步的</strong>：数据写入后不会立即有索引，需要等待 Flush 和索引构建完成</li>
+<li><strong>小 Segment 可能不构建索引</strong>：如果 Segment 行数小于阈值，可能跳过索引构建</li>
+<li><strong>L0 Segment 不构建索引</strong>：L0 级别的 Segment 用于实时查询，不构建持久化索引</li>
+<li><strong>排序压缩模式</strong>：如果启用了排序压缩，需要等待 Segment 排序完成后再构建索引</li>
+</ol>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#1-%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">1. 概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#2-%E6%95%B0%E6%8D%AE%E5%86%99%E5%85%A5%E5%92%8C-Flush-%E6%B5%81%E7%A8%8B"><span class="toc-number">2.</span> <span class="toc-text">2. 数据写入和 Flush 流程</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#2-1-%E6%95%B0%E6%8D%AE%E5%86%99%E5%85%A5"><span class="toc-number">2.1.</span> <span class="toc-text">2.1 数据写入</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-2-Flush-%E5%AE%8C%E6%88%90%E9%80%9A%E7%9F%A5"><span class="toc-number">2.2.</span> <span class="toc-text">2.2 Flush 完成通知</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-3-Flush-Channel-%E8%BD%AC%E5%8F%91"><span class="toc-number">2.3.</span> <span class="toc-text">2.3 Flush Channel 转发</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#3-%E7%B4%A2%E5%BC%95%E6%9E%84%E5%BB%BA%E4%BB%BB%E5%8A%A1%E5%88%9B%E5%BB%BA"><span class="toc-number">3.</span> <span class="toc-text">3. 索引构建任务创建</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#3-1-Index-Inspector-%E7%9B%91%E5%90%AC"><span class="toc-number">3.1.</span> <span class="toc-text">3.1 Index Inspector 监听</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-2-%E5%88%9B%E5%BB%BA%E7%B4%A2%E5%BC%95%E4%BB%BB%E5%8A%A1"><span class="toc-number">3.2.</span> <span class="toc-text">3.2 创建索引任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-3-%E5%88%9B%E5%BB%BA-SegmentIndex-%E5%85%83%E6%95%B0%E6%8D%AE"><span class="toc-number">3.3.</span> <span class="toc-text">3.3 创建 SegmentIndex 元数据</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#4-%E7%B4%A2%E5%BC%95%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6%E5%92%8C%E6%89%A7%E8%A1%8C"><span class="toc-number">4.</span> <span class="toc-text">4. 索引任务调度和执行</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#4-1-DataCoord-%E4%BB%BB%E5%8A%A1%E8%B0%83%E5%BA%A6"><span class="toc-number">4.1.</span> <span class="toc-text">4.1 DataCoord 任务调度</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-2-DataNode-%E6%8E%A5%E6%94%B6%E4%BB%BB%E5%8A%A1"><span class="toc-number">4.2.</span> <span class="toc-text">4.2 DataNode 接收任务</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-3-%E7%B4%A2%E5%BC%95%E6%9E%84%E5%BB%BA%E6%89%A7%E8%A1%8C"><span class="toc-number">4.3.</span> <span class="toc-text">4.3 索引构建执行</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#4-3-1-PreExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">4.3.1.</span> <span class="toc-text">4.3.1 PreExecute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-3-2-Execute-%E9%98%B6%E6%AE%B5"><span class="toc-number">4.3.2.</span> <span class="toc-text">4.3.2 Execute 阶段</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-3-3-PostExecute-%E9%98%B6%E6%AE%B5"><span class="toc-number">4.3.3.</span> <span class="toc-text">4.3.3 PostExecute 阶段</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4-4-%E7%B4%A2%E5%BC%95%E5%85%83%E6%95%B0%E6%8D%AE%E6%9B%B4%E6%96%B0"><span class="toc-number">4.4.</span> <span class="toc-text">4.4 索引元数据更新</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#5-%E5%AE%8C%E6%95%B4%E6%B5%81%E7%A8%8B%E5%9B%BE"><span class="toc-number">5.</span> <span class="toc-text">5. 完整流程图</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#6-%E5%85%B3%E9%94%AE%E7%BB%84%E4%BB%B6%E8%AF%B4%E6%98%8E"><span class="toc-number">6.</span> <span class="toc-text">6. 关键组件说明</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#6-1-Index-Inspector"><span class="toc-number">6.1.</span> <span class="toc-text">6.1 Index Inspector</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-2-Index-Scheduler"><span class="toc-number">6.2.</span> <span class="toc-text">6.2 Index Scheduler</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-3-Index-Task-Manager"><span class="toc-number">6.3.</span> <span class="toc-text">6.3 Index Task Manager</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#6-4-Index-Meta"><span class="toc-number">6.4.</span> <span class="toc-text">6.4 Index Meta</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#7-%E5%85%B3%E9%94%AE%E9%85%8D%E7%BD%AE%E5%8F%82%E6%95%B0"><span class="toc-number">7.</span> <span class="toc-text">7. 关键配置参数</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#8-%E7%B4%A2%E5%BC%95%E7%8A%B6%E6%80%81%E6%B5%81%E8%BD%AC"><span class="toc-number">8.</span> <span class="toc-text">8. 索引状态流转</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#9-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E7%82%B9"><span class="toc-number">9.</span> <span class="toc-text">9. 性能优化点</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#10-%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86"><span class="toc-number">10.</span> <span class="toc-text">10. 错误处理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#11-%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">11.</span> <span class="toc-text">11. 监控指标</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#12-%E6%B3%A8%E6%84%8F%E4%BA%8B%E9%A1%B9"><span class="toc-number">12.</span> <span class="toc-text">12. 注意事项</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&text=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&is_video=false&description=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus 数据写入过程中索引同步流程分析&body=Check out this article: https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&title=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&name=Milvus 数据写入过程中索引同步流程分析&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/09/Milvus/11_index_sync_flow_analysis/&t=Milvus 数据写入过程中索引同步流程分析"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>

@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang=en>
+<head>
+    <!-- so meta -->
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="HandheldFriendly" content="True">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="概述Flush（刷新）和 Checkpoint（检查点）是 Milvus DataNode 中确保数据可靠性和一致性的两个核心机制。它们协同工作，实现数据从内存到持久化存储的完整流程，并保证故障恢复时的数据一致性。 Flush 操作全链路影响Flush 触发方式1. 手动刷新（Manual Flush）1234&#x2F;&#x2F; 通过 DDL 消息触发case commonpb.MsgType_ManualFl">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Milvus Flush 与 Checkpoint 机制详解">
+<meta property="og:url" content="https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/index.html">
+<meta property="og:site_name" content="szza">
+<meta property="og:description" content="概述Flush（刷新）和 Checkpoint（检查点）是 Milvus DataNode 中确保数据可靠性和一致性的两个核心机制。它们协同工作，实现数据从内存到持久化存储的完整流程，并保证故障恢复时的数据一致性。 Flush 操作全链路影响Flush 触发方式1. 手动刷新（Manual Flush）1234&#x2F;&#x2F; 通过 DDL 消息触发case commonpb.MsgType_ManualFl">
+<meta property="og:locale" content="en_US">
+<meta property="article:published_time" content="2025-08-09T09:00:00.000Z">
+<meta property="article:modified_time" content="2026-01-06T13:10:45.427Z">
+<meta property="article:author" content="fibonaccii">
+<meta property="article:tag" content="Milvus">
+<meta name="twitter:card" content="summary">
+    
+    
+      
+        
+          <link rel="shortcut icon" href="/images/id.jpg">
+        
+      
+      
+        
+          <link rel="icon" type="image/png" href="/images/id.jpg" sizes="192x192">
+        
+      
+      
+        
+          <link rel="apple-touch-icon" sizes="180x180" href="/images/id.jpg">
+        
+      
+    
+    <!-- title -->
+    <title>Milvus Flush 与 Checkpoint 机制详解</title>
+    <!-- styles -->
+    
+<link rel="stylesheet" href="/css/style.css">
+
+    <!-- persian styles -->
+    
+      
+<link rel="stylesheet" href="/css/rtl.css">
+
+    
+    <!-- rss -->
+    
+    
+<meta name="generator" content="Hexo 5.4.2"><link rel="alternate" href="/atom.xml" title="szza" type="application/atom+xml">
+</head>
+
+<body class="max-width mx-auto px3 ltr">
+    
+      <div id="header-post">
+  <a id="menu-icon" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="menu-icon-tablet" href="#"><i class="fas fa-bars fa-lg"></i></a>
+  <a id="top-icon-tablet" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');" style="display:none;"><i class="fas fa-chevron-up fa-lg"></i></a>
+  <span id="menu">
+    <span id="nav">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </span>
+    <br/>
+    <span id="actions">
+      <ul>
+        
+        <li><a class="icon" href="/2025/08/09/Milvus/9_flush_pipeline_sync_manager/"><i class="fas fa-chevron-left" aria-hidden="true" onmouseover="$('#i-prev').toggle();" onmouseout="$('#i-prev').toggle();"></i></a></li>
+        
+        
+        <li><a class="icon" href="/2025/08/09/Milvus/7_flush_pipeline_write_buffer/"><i class="fas fa-chevron-right" aria-hidden="true" onmouseover="$('#i-next').toggle();" onmouseout="$('#i-next').toggle();"></i></a></li>
+        
+        <li><a class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up" aria-hidden="true" onmouseover="$('#i-top').toggle();" onmouseout="$('#i-top').toggle();"></i></a></li>
+        <li><a class="icon" href="#"><i class="fas fa-share-alt" aria-hidden="true" onmouseover="$('#i-share').toggle();" onmouseout="$('#i-share').toggle();" onclick="$('#share').toggle();return false;"></i></a></li>
+      </ul>
+      <span id="i-prev" class="info" style="display:none;">Previous post</span>
+      <span id="i-next" class="info" style="display:none;">Next post</span>
+      <span id="i-top" class="info" style="display:none;">Back to top</span>
+      <span id="i-share" class="info" style="display:none;">Share post</span>
+    </span>
+    <br/>
+    <div id="share" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/"><i class="fab fa-facebook " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&text=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-twitter " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-linkedin " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&is_video=false&description=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-pinterest " aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus Flush 与 Checkpoint 机制详解&body=Check out this article: https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/"><i class="fas fa-envelope " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-get-pocket " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-reddit " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-stumbleupon " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-digg " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&name=Milvus Flush 与 Checkpoint 机制详解&description="><i class="fab fa-tumblr " aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&t=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-hacker-news " aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+    <div id="toc">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Flush-%E6%93%8D%E4%BD%9C%E5%85%A8%E9%93%BE%E8%B7%AF%E5%BD%B1%E5%93%8D"><span class="toc-number">2.</span> <span class="toc-text">Flush 操作全链路影响</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E8%A7%A6%E5%8F%91%E6%96%B9%E5%BC%8F"><span class="toc-number">2.1.</span> <span class="toc-text">Flush 触发方式</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E6%89%8B%E5%8A%A8%E5%88%B7%E6%96%B0%EF%BC%88Manual-Flush%EF%BC%89"><span class="toc-number">2.1.1.</span> <span class="toc-text">1. 手动刷新（Manual Flush）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E8%87%AA%E5%8A%A8%E5%88%B7%E6%96%B0%EF%BC%88Auto-Flush%EF%BC%89"><span class="toc-number">2.1.2.</span> <span class="toc-text">2. 自动刷新（Auto Flush）</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">2.2.</span> <span class="toc-text">Flush 执行流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E5%AF%B9%E7%B3%BB%E7%BB%9F%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-number">2.3.</span> <span class="toc-text">Flush 对系统的影响</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E6%95%B0%E6%8D%AE%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">2.3.1.</span> <span class="toc-text">1. 数据持久化</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E5%85%83%E6%95%B0%E6%8D%AE%E6%9B%B4%E6%96%B0"><span class="toc-number">2.3.2.</span> <span class="toc-text">2. 元数据更新</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-%E5%86%85%E5%AD%98%E9%87%8A%E6%94%BE"><span class="toc-number">2.3.3.</span> <span class="toc-text">3. 内存释放</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">2.3.4.</span> <span class="toc-text">4. 监控指标</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Checkpoint-%E6%9C%BA%E5%88%B6"><span class="toc-number">3.</span> <span class="toc-text">Checkpoint 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoint-%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-number">3.1.</span> <span class="toc-text">Checkpoint 的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoint-%E6%9B%B4%E6%96%B0%E6%B5%81%E7%A8%8B"><span class="toc-number">3.2.</span> <span class="toc-text">Checkpoint 更新流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoint-%E8%8E%B7%E5%8F%96%E9%80%BB%E8%BE%91"><span class="toc-number">3.3.</span> <span class="toc-text">Checkpoint 获取逻辑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Flush-%E4%B8%8E-Checkpoint-%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="toc-number">4.</span> <span class="toc-text">Flush 与 Checkpoint 的关系</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E5%90%8C%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-number">4.1.</span> <span class="toc-text">协同工作流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%9D%A1%E4%BB%B6%EF%BC%9Ats-flushTs"><span class="toc-number">4.2.</span> <span class="toc-text">关键条件：ts &gt; flushTs</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E5%BC%82%E6%AD%A5%E6%93%8D%E4%BD%9C%E7%9A%84%E6%97%B6%E5%BA%8F%E9%97%AE%E9%A2%98"><span class="toc-number">4.2.1.</span> <span class="toc-text">1. 异步操作的时序问题</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E8%BE%B9%E7%95%8C%E6%83%85%E5%86%B5%E5%A4%84%E7%90%86"><span class="toc-number">4.2.2.</span> <span class="toc-text">2. 边界情况处理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7%E4%BF%9D%E8%AF%81"><span class="toc-number">4.2.3.</span> <span class="toc-text">3. 数据一致性保证</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Checkpoint-%E5%A4%B1%E8%B4%A5%E5%A4%84%E7%90%86"><span class="toc-number">5.</span> <span class="toc-text">Checkpoint 失败处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%B1%E8%B4%A5%E5%9C%BA%E6%99%AF"><span class="toc-number">5.1.</span> <span class="toc-text">失败场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%84%E7%90%86%E6%9C%BA%E5%88%B6"><span class="toc-number">5.2.</span> <span class="toc-text">处理机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E5%90%88%E5%B9%B6"><span class="toc-number">5.3.</span> <span class="toc-text">任务合并</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7%E4%BF%9D%E8%AF%81"><span class="toc-number">6.</span> <span class="toc-text">数据一致性保证</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%88%B7%E6%96%B0%E5%AE%8C%E6%88%90%E7%A1%AE%E8%AE%A4"><span class="toc-number">6.1.</span> <span class="toc-text">1. 刷新完成确认</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%95%85%E9%9A%9C%E6%81%A2%E5%A4%8D"><span class="toc-number">6.2.</span> <span class="toc-text">2. 故障恢复</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%A3%80%E6%9F%A5%E7%82%B9%E6%8E%A8%E8%BF%9B%E8%A7%84%E5%88%99"><span class="toc-number">6.3.</span> <span class="toc-text">3. 检查点推进规则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%B8%8E%E8%B0%83%E8%AF%95"><span class="toc-number">7.</span> <span class="toc-text">监控与调试</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%8C%87%E6%A0%87"><span class="toc-number">7.1.</span> <span class="toc-text">关键指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E5%85%B3%E9%94%AE%E7%82%B9"><span class="toc-number">7.2.</span> <span class="toc-text">日志关键点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-number">8.</span> <span class="toc-text">最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Flush-%E6%97%B6%E6%9C%BA"><span class="toc-number">8.1.</span> <span class="toc-text">1. Flush 时机</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Checkpoint-%E6%9B%B4%E6%96%B0%E9%A2%91%E7%8E%87"><span class="toc-number">8.2.</span> <span class="toc-text">2. Checkpoint 更新频率</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%95%85%E9%9A%9C%E5%A4%84%E7%90%86"><span class="toc-number">8.3.</span> <span class="toc-text">3. 故障处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">9.</span> <span class="toc-text">相关文档</span></a></li></ol>
+    </div>
+  </span>
+</div>
+
+    
+    <div class="content index py4">
+        
+        <article class="post" itemscope itemtype="http://schema.org/BlogPosting">
+  <header>
+    
+    <h1 class="posttitle" itemprop="name headline">
+        Milvus Flush 与 Checkpoint 机制详解
+    </h1>
+
+
+
+    <div class="meta">
+      <span class="author" itemprop="author" itemscope itemtype="http://schema.org/Person">
+        <span itemprop="name">fibonaccii</span>
+      </span>
+      
+    <div class="postdate">
+      
+        <time datetime="2025-08-09T09:00:00.000Z" itemprop="datePublished">2025-08-09</time>
+        
+      
+    </div>
+
+
+      
+
+      
+    <div class="article-tag">
+        <i class="fas fa-tag"></i>
+        <a class="tag-link-link" href="/tags/Milvus/" rel="tag">Milvus</a>
+    </div>
+
+
+    </div>
+  </header>
+  
+
+  <div class="content" itemprop="articleBody">
+    <h2 id="概述"><a href="#概述" class="headerlink" title="概述"></a>概述</h2><p>Flush（刷新）和 Checkpoint（检查点）是 Milvus DataNode 中确保数据可靠性和一致性的两个核心机制。它们协同工作，实现数据从内存到持久化存储的完整流程，并保证故障恢复时的数据一致性。</p>
+<h2 id="Flush-操作全链路影响"><a href="#Flush-操作全链路影响" class="headerlink" title="Flush 操作全链路影响"></a>Flush 操作全链路影响</h2><h3 id="Flush-触发方式"><a href="#Flush-触发方式" class="headerlink" title="Flush 触发方式"></a>Flush 触发方式</h3><h4 id="1-手动刷新（Manual-Flush）"><a href="#1-手动刷新（Manual-Flush）" class="headerlink" title="1. 手动刷新（Manual Flush）"></a>1. 手动刷新（Manual Flush）</h4><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 通过 DDL 消息触发</span></span><br><span class="line"><span class="keyword">case</span> commonpb.MsgType_ManualFlush:</span><br><span class="line">    manualFlushMsg := msg.(*adaptor.ManualFlushMessageBody)</span><br><span class="line">    ddn.msgHandler.HandleManualFlush(manualFlushMsg.ManualFlushMessage)</span><br></pre></td></tr></table></figure>
+
+<p><strong>流程：</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">DataCoord → ManualFlush 消息 → ddNode → MsgHandler → WriteBufferManager.FlushChannel</span><br></pre></td></tr></table></figure>
+
+<h4 id="2-自动刷新（Auto-Flush）"><a href="#2-自动刷新（Auto-Flush）" class="headerlink" title="2. 自动刷新（Auto Flush）"></a>2. 自动刷新（Auto Flush）</h4><p><strong>触发条件：</strong></p>
+<ul>
+<li>内存超过阈值（<code>MemoryForceSyncWatermark</code>）</li>
+<li>缓冲区满（<code>GetFullBufferPolicy</code>）</li>
+<li>时间策略（<code>GetSyncStaleBufferPolicy</code>）</li>
+<li>刷新时间戳（<code>GetFlushTsPolicy</code>）</li>
+</ul>
+<h3 id="Flush-执行流程"><a href="#Flush-执行流程" class="headerlink" title="Flush 执行流程"></a>Flush 执行流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 1. FlushChannel 设置 flushTs                                 │</span><br><span class="line">│    WriteBufferManager.FlushChannel(channel, flushTs)        │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 2. WriteBuffer 应用刷新策略                                  │</span><br><span class="line">│    GetFlushTsPolicy: ts &gt;= flushTs 时选择段                 │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 3. 创建 SyncTask（isFlush = true）                           │</span><br><span class="line">│    SyncPack.WithFlush()                                      │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 4. SyncTask.Run() 执行                                       │</span><br><span class="line">│    - 写入数据到对象存储                                       │</span><br><span class="line">│    - 更新元数据到 DataCoord                                   │</span><br><span class="line">│    - 更新本地 MetaCache（状态 → Flushed）                    │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 5. 从 MetaCache 移除段                                        │</span><br><span class="line">│    metaCache.RemoveSegments(segmentID)                      │</span><br><span class="line">└─────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="Flush-对系统的影响"><a href="#Flush-对系统的影响" class="headerlink" title="Flush 对系统的影响"></a>Flush 对系统的影响</h3><h4 id="1-数据持久化"><a href="#1-数据持久化" class="headerlink" title="1. 数据持久化"></a>1. 数据持久化</h4><ul>
+<li><strong>对象存储</strong>: 数据写入到对象存储（S3&#x2F;MinIO 等）</li>
+<li><strong>Binlog 生成</strong>: 生成 InsertLogs、StatsLogs、DeltaLogs</li>
+<li><strong>Manifest</strong>: StorageV2 模式下生成 Manifest 文件</li>
+</ul>
+<h4 id="2-元数据更新"><a href="#2-元数据更新" class="headerlink" title="2. 元数据更新"></a>2. 元数据更新</h4><ul>
+<li><strong>DataCoord</strong>: 通过 <code>SaveBinlogPaths</code> RPC 更新段元数据</li>
+<li><strong>MetaCache</strong>: 更新段状态为 <code>Flushed</code>，并移除段</li>
+</ul>
+<h4 id="3-内存释放"><a href="#3-内存释放" class="headerlink" title="3. 内存释放"></a>3. 内存释放</h4><ul>
+<li><strong>WriteBuffer</strong>: 释放段缓冲区内存</li>
+<li><strong>MetaCache</strong>: 移除段元数据</li>
+</ul>
+<h4 id="4-监控指标"><a href="#4-监控指标" class="headerlink" title="4. 监控指标"></a>4. 监控指标</h4><ul>
+<li><code>DataNodeFlushBufferCount</code>: 刷新计数</li>
+<li><code>DataNodeFlushedSize</code>: 刷新数据大小</li>
+<li><code>DataNodeFlushedRows</code>: 刷新行数</li>
+<li><code>DataNodeSave2StorageLatency</code>: 存储延迟</li>
+</ul>
+<h2 id="Checkpoint-机制"><a href="#Checkpoint-机制" class="headerlink" title="Checkpoint 机制"></a>Checkpoint 机制</h2><h3 id="Checkpoint-的作用"><a href="#Checkpoint-的作用" class="headerlink" title="Checkpoint 的作用"></a>Checkpoint 的作用</h3><ol>
+<li><strong>数据消费位置</strong>: 记录通道的数据消费位置</li>
+<li><strong>故障恢复</strong>: 节点重启后从检查点恢复</li>
+<li><strong>数据一致性</strong>: 确保数据不丢失、不重复</li>
+</ol>
+<h3 id="Checkpoint-更新流程"><a href="#Checkpoint-更新流程" class="headerlink" title="Checkpoint 更新流程"></a>Checkpoint 更新流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 1. ttNode 获取检查点                                         │</span><br><span class="line">│    channelPos, needUpdate := GetCheckpoint(channel)         │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 2. 判断是否需要更新                                         │</span><br><span class="line">│    needUpdate = (flushTs != 0 &amp;&amp; cp.Timestamp &gt;= flushTs)   │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 3. 添加到 CheckpointUpdater                                  │</span><br><span class="line">│    cpUpdater.AddTask(channelPos, flush=true, callback)      │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 4. 异步更新到 DataCoord                                       │</span><br><span class="line">│    broker.UpdateChannelCheckpoint(ctx, channelCPs)          │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 5. 更新成功回调                                              │</span><br><span class="line">│    NotifyCheckpointUpdated(channel, ts)                     │</span><br><span class="line">│    if ts &gt; flushTs: reset flushTs                            │</span><br><span class="line">└─────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="Checkpoint-获取逻辑"><a href="#Checkpoint-获取逻辑" class="headerlink" title="Checkpoint 获取逻辑"></a>Checkpoint 获取逻辑</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(wb *writeBufferBase)</span></span> GetCheckpoint() *msgpb.MsgPosition &#123;</span><br><span class="line">    <span class="comment">// 1. 如果有非空缓冲区，返回最早的起始位置</span></span><br><span class="line">    <span class="keyword">var</span> earliest *checkpointCandidate</span><br><span class="line">    <span class="keyword">for</span> _, buf := <span class="keyword">range</span> wb.segmentBuffers &#123;</span><br><span class="line">        <span class="keyword">if</span> buf.insertBuffer.rows &gt; <span class="number">0</span> || buf.deltaBuffer.Size() &gt; <span class="number">0</span> &#123;</span><br><span class="line">            <span class="keyword">if</span> earliest == <span class="literal">nil</span> || buf.startPosition.GetTimestamp() &lt; earliest.position.GetTimestamp() &#123;</span><br><span class="line">                earliest = &amp;checkpointCandidate&#123;</span><br><span class="line">                    segmentID: buf.segmentID,</span><br><span class="line">                    position:  buf.startPosition,</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 2. 否则返回最新检查点</span></span><br><span class="line">    <span class="keyword">if</span> earliest != <span class="literal">nil</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> earliest.position</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> wb.checkpoint</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>设计原理：</strong></p>
+<ul>
+<li>有未同步数据时，检查点不能超过最早未同步数据的起始位置</li>
+<li>确保故障恢复时不会丢失数据</li>
+</ul>
+<h2 id="Flush-与-Checkpoint-的关系"><a href="#Flush-与-Checkpoint-的关系" class="headerlink" title="Flush 与 Checkpoint 的关系"></a>Flush 与 Checkpoint 的关系</h2><h3 id="协同工作流程"><a href="#协同工作流程" class="headerlink" title="协同工作流程"></a>协同工作流程</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│                    Flush 操作                                │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 1. 设置 flushTs = T1                                         │</span><br><span class="line">│    FlushChannel(channel, flushTs=T1)                        │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 2. 触发数据同步                                              │</span><br><span class="line">│    SyncTask 执行，数据写入对象存储                           │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 3. 检查点推进到 T2 (T2 &gt;= T1)                                │</span><br><span class="line">│    GetCheckpoint() 返回 checkpoint = T2                     │</span><br><span class="line">│    needUpdate = (T2 &gt;= T1) = true                            │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 4. 更新检查点到 DataCoord                                    │</span><br><span class="line">│    UpdateChannelCheckpoint(T2)                                │</span><br><span class="line">└──────────────────────┬──────────────────────────────────────┘</span><br><span class="line">                       │</span><br><span class="line">                       ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 5. 重置 flushTs                                              │</span><br><span class="line">│    NotifyCheckpointUpdated(channel, T2)                     │</span><br><span class="line">│    if T2 &gt; T1: flushTs = 0                                  │</span><br><span class="line">└─────────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+
+<h3 id="关键条件：ts-flushTs"><a href="#关键条件：ts-flushTs" class="headerlink" title="关键条件：ts &gt; flushTs"></a>关键条件：ts &gt; flushTs</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="keyword">func</span> <span class="params">(m *bufferManager)</span></span> NotifyCheckpointUpdated(channel <span class="type">string</span>, ts <span class="type">uint64</span>) &#123;</span><br><span class="line">    buf, loaded := m.buffers.Get(channel)</span><br><span class="line">    <span class="keyword">if</span> !loaded &#123;</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line">    &#125;</span><br><span class="line">    flushTs := buf.GetFlushTimestamp()</span><br><span class="line">    </span><br><span class="line">    <span class="comment">// 关键条件：严格大于</span></span><br><span class="line">    <span class="keyword">if</span> flushTs != nonFlushTS &amp;&amp; ts &gt; flushTs &#123;</span><br><span class="line">        buf.SetFlushTimestamp(nonFlushTS)</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>为什么需要 <code>ts &gt; flushTs</code>（严格大于）？</strong></p>
+<h4 id="1-异步操作的时序问题"><a href="#1-异步操作的时序问题" class="headerlink" title="1. 异步操作的时序问题"></a>1. 异步操作的时序问题</h4><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">时间线：</span><br><span class="line">T1: FlushChannel(flushTs=T1) 设置刷新时间戳</span><br><span class="line">T2: SyncTask 开始执行（异步）</span><br><span class="line">T3: SyncTask 完成，数据已写入</span><br><span class="line">T4: Checkpoint 更新到 T1（刚好等于 flushTs）</span><br><span class="line">T5: Checkpoint 更新到 T2（大于 flushTs）</span><br></pre></td></tr></table></figure>
+
+<p><strong>如果使用 <code>ts &gt;= flushTs</code>：</strong></p>
+<ul>
+<li>在 T4 时刻，<code>T1 &gt;= T1</code> 为真，会重置 <code>flushTs</code></li>
+<li>但此时 SyncTask 可能还未完成，导致数据不一致</li>
+</ul>
+<p><strong>使用 <code>ts &gt; flushTs</code>：</strong></p>
+<ul>
+<li>在 T4 时刻，<code>T1 &gt; T1</code> 为假，不会重置</li>
+<li>在 T5 时刻，<code>T2 &gt; T1</code> 为真，此时 SyncTask 已完成，安全重置</li>
+</ul>
+<h4 id="2-边界情况处理"><a href="#2-边界情况处理" class="headerlink" title="2. 边界情况处理"></a>2. 边界情况处理</h4><p><strong>场景：检查点时间戳等于 flushTs</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">flushTs = 1000</span><br><span class="line">checkpoint = 1000  // 刚好等于</span><br></pre></td></tr></table></figure>
+
+<p><strong>问题：</strong> 此时数据可能还在同步中，不能确定刷新已完成</p>
+<p><strong>解决：</strong> 等待检查点超过 flushTs，确保刷新已完成</p>
+<h4 id="3-数据一致性保证"><a href="#3-数据一致性保证" class="headerlink" title="3. 数据一致性保证"></a>3. 数据一致性保证</h4><p><strong>使用严格大于的好处：</strong></p>
+<ul>
+<li>确保刷新操作完全完成</li>
+<li>避免过早重置 flushTs</li>
+<li>保证数据一致性</li>
+</ul>
+<p><strong>对比：</strong></p>
+<ul>
+<li><code>GetFlushTsPolicy</code> 使用 <code>ts &gt;= flushTs</code>：触发刷新（包含边界）</li>
+<li><code>NotifyCheckpointUpdated</code> 使用 <code>ts &gt; flushTs</code>：确认完成（排除边界）</li>
+</ul>
+<h2 id="Checkpoint-失败处理"><a href="#Checkpoint-失败处理" class="headerlink" title="Checkpoint 失败处理"></a>Checkpoint 失败处理</h2><h3 id="失败场景"><a href="#失败场景" class="headerlink" title="失败场景"></a>失败场景</h3><ol>
+<li><strong>网络故障</strong>: RPC 调用失败</li>
+<li><strong>DataCoord 不可用</strong>: 服务暂时不可用</li>
+<li><strong>超时</strong>: RPC 超时</li>
+</ol>
+<h3 id="处理机制"><a href="#处理机制" class="headerlink" title="处理机制"></a>处理机制</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">err := ccu.broker.UpdateChannelCheckpoint(ctx, channelCPs)</span><br><span class="line"><span class="keyword">if</span> err != <span class="literal">nil</span> &#123;</span><br><span class="line">    log.Warn(<span class="string">&quot;update channel checkpoint failed&quot;</span>, zap.Error(err))</span><br><span class="line">    <span class="keyword">return</span>  <span class="comment">// 不删除任务，等待重试</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>特点：</strong></p>
+<ul>
+<li>失败时不删除任务</li>
+<li>任务保留在 <code>ccu.tasks</code> 中</li>
+<li>下次 <code>execute()</code> 或 <code>notifyChan</code> 触发时自动重试</li>
+</ul>
+<h3 id="任务合并"><a href="#任务合并" class="headerlink" title="任务合并"></a>任务合并</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// 合并逻辑：取最大时间戳，保留刷新标志</span></span><br><span class="line"><span class="keyword">if</span> task.pos.GetTimestamp() &lt; channelPos.GetTimestamp() || (flush &amp;&amp; !task.flush) &#123;</span><br><span class="line">    ccu.tasks[channel] = &amp;channelCPUpdateTask&#123;</span><br><span class="line">        pos:      max(channelPos, task.pos),</span><br><span class="line">        callback: callback,</span><br><span class="line">        flush:    flush || task.flush,</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><strong>优势：</strong></p>
+<ul>
+<li>避免重复更新</li>
+<li>确保使用最新的检查点</li>
+<li>保留刷新触发标志</li>
+</ul>
+<h2 id="数据一致性保证"><a href="#数据一致性保证" class="headerlink" title="数据一致性保证"></a>数据一致性保证</h2><h3 id="1-刷新完成确认"><a href="#1-刷新完成确认" class="headerlink" title="1. 刷新完成确认"></a>1. 刷新完成确认</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">FlushChannel(flushTs=T1)</span><br><span class="line">    ↓</span><br><span class="line">SyncTask 执行（异步）</span><br><span class="line">    ↓</span><br><span class="line">Checkpoint 更新到 T2 (T2 &gt; T1)</span><br><span class="line">    ↓</span><br><span class="line">NotifyCheckpointUpdated(T2)</span><br><span class="line">    ↓</span><br><span class="line">重置 flushTs（确认刷新完成）</span><br></pre></td></tr></table></figure>
+
+<h3 id="2-故障恢复"><a href="#2-故障恢复" class="headerlink" title="2. 故障恢复"></a>2. 故障恢复</h3><figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">节点重启</span><br><span class="line">    ↓</span><br><span class="line">从 DataCoord 获取检查点</span><br><span class="line">    ↓</span><br><span class="line">从检查点位置恢复数据消费</span><br><span class="line">    ↓</span><br><span class="line">确保数据不丢失、不重复</span><br></pre></td></tr></table></figure>
+
+<h3 id="3-检查点推进规则"><a href="#3-检查点推进规则" class="headerlink" title="3. 检查点推进规则"></a>3. 检查点推进规则</h3><ul>
+<li><strong>有未同步数据</strong>: 检查点不能超过最早未同步数据的起始位置</li>
+<li><strong>无未同步数据</strong>: 检查点推进到最新位置</li>
+</ul>
+<h2 id="监控与调试"><a href="#监控与调试" class="headerlink" title="监控与调试"></a>监控与调试</h2><h3 id="关键指标"><a href="#关键指标" class="headerlink" title="关键指标"></a>关键指标</h3><ul>
+<li><code>DataNodeFlushBufferCount</code>: 刷新计数</li>
+<li><code>DataNodeFlushedSize</code>: 刷新数据大小</li>
+<li><code>DataNodeSave2StorageLatency</code>: 存储延迟</li>
+<li><code>UpdateChannelCheckpoint</code>: 检查点更新次数</li>
+</ul>
+<h3 id="日志关键点"><a href="#日志关键点" class="headerlink" title="日志关键点"></a>日志关键点</h3><figure class="highlight go"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// Flush 触发</span></span><br><span class="line">log.Info(<span class="string">&quot;receive manual flush message&quot;</span>, zap.Uint64(<span class="string">&quot;flushTs&quot;</span>, flushTs))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 检查点更新</span></span><br><span class="line">log.Info(<span class="string">&quot;reset channel flushTs&quot;</span>, zap.String(<span class="string">&quot;channel&quot;</span>, channel))</span><br><span class="line"></span><br><span class="line"><span class="comment">// 检查点更新成功</span></span><br><span class="line">log.Debug(<span class="string">&quot;UpdateChannelCheckpoint success&quot;</span>, zap.Uint64(<span class="string">&quot;cpTs&quot;</span>, ts))</span><br></pre></td></tr></table></figure>
+
+<h2 id="最佳实践"><a href="#最佳实践" class="headerlink" title="最佳实践"></a>最佳实践</h2><h3 id="1-Flush-时机"><a href="#1-Flush-时机" class="headerlink" title="1. Flush 时机"></a>1. Flush 时机</h3><ul>
+<li><strong>手动刷新</strong>: 数据导入完成后</li>
+<li><strong>自动刷新</strong>: 基于内存阈值和时间策略</li>
+</ul>
+<h3 id="2-Checkpoint-更新频率"><a href="#2-Checkpoint-更新频率" class="headerlink" title="2. Checkpoint 更新频率"></a>2. Checkpoint 更新频率</h3><ul>
+<li><strong>定期更新</strong>: 避免过于频繁的 RPC</li>
+<li><strong>刷新触发</strong>: 立即更新，加速刷新完成确认</li>
+</ul>
+<h3 id="3-故障处理"><a href="#3-故障处理" class="headerlink" title="3. 故障处理"></a>3. 故障处理</h3><ul>
+<li><strong>重试机制</strong>: 自动重试失败的检查点更新</li>
+<li><strong>任务合并</strong>: 避免重复更新</li>
+</ul>
+<h2 id="相关文档"><a href="#相关文档" class="headerlink" title="相关文档"></a>相关文档</h2><ul>
+<li><a href="./flush_pipeline_write_buffer_manager.md">WriteBuffer 管理器</a></li>
+<li><a href="./flush_pipeline_sync_manager.md">SyncManager 详解</a></li>
+<li><a href="./flush_pipeline_tt_node.md">TT Node 详解</a></li>
+<li><a href="./flush_pipeline_overview.md">总览文档</a></li>
+</ul>
+
+  </div>
+</article>
+
+
+
+        
+          <div id="footer-post-container">
+  <div id="footer-post">
+
+    <div id="nav-footer" style="display: none">
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </div>
+
+    <div id="toc-footer" style="display: none">
+      <ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%A6%82%E8%BF%B0"><span class="toc-number">1.</span> <span class="toc-text">概述</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Flush-%E6%93%8D%E4%BD%9C%E5%85%A8%E9%93%BE%E8%B7%AF%E5%BD%B1%E5%93%8D"><span class="toc-number">2.</span> <span class="toc-text">Flush 操作全链路影响</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E8%A7%A6%E5%8F%91%E6%96%B9%E5%BC%8F"><span class="toc-number">2.1.</span> <span class="toc-text">Flush 触发方式</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E6%89%8B%E5%8A%A8%E5%88%B7%E6%96%B0%EF%BC%88Manual-Flush%EF%BC%89"><span class="toc-number">2.1.1.</span> <span class="toc-text">1. 手动刷新（Manual Flush）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E8%87%AA%E5%8A%A8%E5%88%B7%E6%96%B0%EF%BC%88Auto-Flush%EF%BC%89"><span class="toc-number">2.1.2.</span> <span class="toc-text">2. 自动刷新（Auto Flush）</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E6%89%A7%E8%A1%8C%E6%B5%81%E7%A8%8B"><span class="toc-number">2.2.</span> <span class="toc-text">Flush 执行流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Flush-%E5%AF%B9%E7%B3%BB%E7%BB%9F%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="toc-number">2.3.</span> <span class="toc-text">Flush 对系统的影响</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E6%95%B0%E6%8D%AE%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">2.3.1.</span> <span class="toc-text">1. 数据持久化</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E5%85%83%E6%95%B0%E6%8D%AE%E6%9B%B4%E6%96%B0"><span class="toc-number">2.3.2.</span> <span class="toc-text">2. 元数据更新</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-%E5%86%85%E5%AD%98%E9%87%8A%E6%94%BE"><span class="toc-number">2.3.3.</span> <span class="toc-text">3. 内存释放</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#4-%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87"><span class="toc-number">2.3.4.</span> <span class="toc-text">4. 监控指标</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Checkpoint-%E6%9C%BA%E5%88%B6"><span class="toc-number">3.</span> <span class="toc-text">Checkpoint 机制</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoint-%E7%9A%84%E4%BD%9C%E7%94%A8"><span class="toc-number">3.1.</span> <span class="toc-text">Checkpoint 的作用</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoint-%E6%9B%B4%E6%96%B0%E6%B5%81%E7%A8%8B"><span class="toc-number">3.2.</span> <span class="toc-text">Checkpoint 更新流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Checkpoint-%E8%8E%B7%E5%8F%96%E9%80%BB%E8%BE%91"><span class="toc-number">3.3.</span> <span class="toc-text">Checkpoint 获取逻辑</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Flush-%E4%B8%8E-Checkpoint-%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="toc-number">4.</span> <span class="toc-text">Flush 与 Checkpoint 的关系</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%8F%E5%90%8C%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B"><span class="toc-number">4.1.</span> <span class="toc-text">协同工作流程</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%9D%A1%E4%BB%B6%EF%BC%9Ats-flushTs"><span class="toc-number">4.2.</span> <span class="toc-text">关键条件：ts &gt; flushTs</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-%E5%BC%82%E6%AD%A5%E6%93%8D%E4%BD%9C%E7%9A%84%E6%97%B6%E5%BA%8F%E9%97%AE%E9%A2%98"><span class="toc-number">4.2.1.</span> <span class="toc-text">1. 异步操作的时序问题</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-%E8%BE%B9%E7%95%8C%E6%83%85%E5%86%B5%E5%A4%84%E7%90%86"><span class="toc-number">4.2.2.</span> <span class="toc-text">2. 边界情况处理</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7%E4%BF%9D%E8%AF%81"><span class="toc-number">4.2.3.</span> <span class="toc-text">3. 数据一致性保证</span></a></li></ol></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#Checkpoint-%E5%A4%B1%E8%B4%A5%E5%A4%84%E7%90%86"><span class="toc-number">5.</span> <span class="toc-text">Checkpoint 失败处理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%B1%E8%B4%A5%E5%9C%BA%E6%99%AF"><span class="toc-number">5.1.</span> <span class="toc-text">失败场景</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%A4%84%E7%90%86%E6%9C%BA%E5%88%B6"><span class="toc-number">5.2.</span> <span class="toc-text">处理机制</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BB%BB%E5%8A%A1%E5%90%88%E5%B9%B6"><span class="toc-number">5.3.</span> <span class="toc-text">任务合并</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7%E4%BF%9D%E8%AF%81"><span class="toc-number">6.</span> <span class="toc-text">数据一致性保证</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-%E5%88%B7%E6%96%B0%E5%AE%8C%E6%88%90%E7%A1%AE%E8%AE%A4"><span class="toc-number">6.1.</span> <span class="toc-text">1. 刷新完成确认</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-%E6%95%85%E9%9A%9C%E6%81%A2%E5%A4%8D"><span class="toc-number">6.2.</span> <span class="toc-text">2. 故障恢复</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%A3%80%E6%9F%A5%E7%82%B9%E6%8E%A8%E8%BF%9B%E8%A7%84%E5%88%99"><span class="toc-number">6.3.</span> <span class="toc-text">3. 检查点推进规则</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%91%E6%8E%A7%E4%B8%8E%E8%B0%83%E8%AF%95"><span class="toc-number">7.</span> <span class="toc-text">监控与调试</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%85%B3%E9%94%AE%E6%8C%87%E6%A0%87"><span class="toc-number">7.1.</span> <span class="toc-text">关键指标</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%97%A5%E5%BF%97%E5%85%B3%E9%94%AE%E7%82%B9"><span class="toc-number">7.2.</span> <span class="toc-text">日志关键点</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%9C%80%E4%BD%B3%E5%AE%9E%E8%B7%B5"><span class="toc-number">8.</span> <span class="toc-text">最佳实践</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#1-Flush-%E6%97%B6%E6%9C%BA"><span class="toc-number">8.1.</span> <span class="toc-text">1. Flush 时机</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#2-Checkpoint-%E6%9B%B4%E6%96%B0%E9%A2%91%E7%8E%87"><span class="toc-number">8.2.</span> <span class="toc-text">2. Checkpoint 更新频率</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#3-%E6%95%85%E9%9A%9C%E5%A4%84%E7%90%86"><span class="toc-number">8.3.</span> <span class="toc-text">3. 故障处理</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%9B%B8%E5%85%B3%E6%96%87%E6%A1%A3"><span class="toc-number">9.</span> <span class="toc-text">相关文档</span></a></li></ol>
+    </div>
+
+    <div id="share-footer" style="display: none">
+      <ul>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.facebook.com/sharer.php?u=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/"><i class="fab fa-facebook fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://twitter.com/share?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&text=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-twitter fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.linkedin.com/shareArticle?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-linkedin fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://pinterest.com/pin/create/bookmarklet/?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&is_video=false&description=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-pinterest fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" href="mailto:?subject=Milvus Flush 与 Checkpoint 机制详解&body=Check out this article: https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/"><i class="fas fa-envelope fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://getpocket.com/save?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-get-pocket fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://reddit.com/submit?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-reddit fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.stumbleupon.com/submit?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-stumbleupon fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://digg.com/submit?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&title=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-digg fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="http://www.tumblr.com/share/link?url=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&name=Milvus Flush 与 Checkpoint 机制详解&description="><i class="fab fa-tumblr fa-lg" aria-hidden="true"></i></a></li>
+  <li><a class="icon" target="_blank" rel="noopener" href="https://news.ycombinator.com/submitlink?u=https://szza.github.io/2025/08/09/Milvus/8_flush_pipeline_flush_checkpoint/&t=Milvus Flush 与 Checkpoint 机制详解"><i class="fab fa-hacker-news fa-lg" aria-hidden="true"></i></a></li>
+</ul>
+
+    </div>
+
+    <div id="actions-footer">
+        <a id="menu" class="icon" href="#" onclick="$('#nav-footer').toggle();return false;"><i class="fas fa-bars fa-lg" aria-hidden="true"></i> Menu</a>
+        <a id="toc" class="icon" href="#" onclick="$('#toc-footer').toggle();return false;"><i class="fas fa-list fa-lg" aria-hidden="true"></i> TOC</a>
+        <a id="share" class="icon" href="#" onclick="$('#share-footer').toggle();return false;"><i class="fas fa-share-alt fa-lg" aria-hidden="true"></i> Share</a>
+        <a id="top" style="display:none" class="icon" href="#" onclick="$('html, body').animate({ scrollTop: 0 }, 'fast');"><i class="fas fa-chevron-up fa-lg" aria-hidden="true"></i> Top</a>
+    </div>
+
+  </div>
+</div>
+
+        
+        <footer id="footer">
+  <div class="footer-left">
+    Copyright &copy;
+    
+    
+    2021-2026
+    fibonaccii
+  </div>
+  <div class="footer-right">
+    <nav>
+      <ul>
+         
+          <li><a href="/">Home</a></li>
+         
+          <li><a href="/archives">archives</a></li>
+        
+      </ul>
+    </nav>
+  </div>
+</footer>
+
+    </div>
+    <!-- styles -->
+
+<link rel="stylesheet" href="/lib/font-awesome/css/all.min.css">
+
+
+<link rel="stylesheet" href="/lib/justified-gallery/css/justifiedGallery.min.css">
+
+
+    <!-- jquery -->
+
+<script src="/lib/jquery/jquery.min.js"></script>
+
+
+<script src="/lib/justified-gallery/js/jquery.justifiedGallery.min.js"></script>
+
+<!-- clipboard -->
+
+  
+<script src="/lib/clipboard/clipboard.min.js"></script>
+
+  <script type="text/javascript">
+  $(function() {
+    // copy-btn HTML
+    var btn = "<span class=\"btn-copy tooltipped tooltipped-sw\" aria-label=\"Copy to clipboard!\">";
+    btn += '<i class="far fa-clone"></i>';
+    btn += '</span>'; 
+    // mount it!
+    $(".highlight table").before(btn);
+    var clip = new ClipboardJS('.btn-copy', {
+      text: function(trigger) {
+        return Array.from(trigger.nextElementSibling.querySelectorAll('.code')).reduce((str,it)=>str+it.innerText+'\n','')
+      }
+    });
+    clip.on('success', function(e) {
+      e.trigger.setAttribute('aria-label', "Copied!");
+      e.clearSelection();
+    })
+  })
+  </script>
+
+
+<script src="/js/main.js"></script>
+
+<!-- search -->
+
+<!-- Google Analytics -->
+
+    <script async src="https://www.googletagmanager.com/gtag/js?id=szza"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+        gtag('config', 'szza');
+    </script>
+
+<!-- Baidu Analytics -->
+
+<!-- Cloudflare Analytics -->
+
+<!-- Umami Analytics -->
+
+<!-- Disqus Comments -->
+
+
+</body>
+</html>
